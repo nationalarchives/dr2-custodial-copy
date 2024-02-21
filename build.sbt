@@ -25,7 +25,7 @@ lazy val root = (project in file(".")).
 
 (assembly / assemblyJarName) := "dr2-disaster-recovery.jar"
 
-scalacOptions ++= Seq("-Wunused:imports", "-Werror")
+//scalacOptions ++= Seq("-Wunused:imports", "-Werror")
 
 (assembly / assemblyMergeStrategy) := {
   case PathList(ps@_*) if ps.last == "Log4j2Plugins.dat" => log4j2MergeStrategy

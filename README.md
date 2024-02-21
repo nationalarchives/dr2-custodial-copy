@@ -15,9 +15,9 @@ The queue sends messages in this format
 }
 ```
 
-The entity type can be `io`, `co` or `so` depending on the entity type. They are dealt with differently.
+The prefix of the id can be `io`, `co` or `so` depending on the entity type. They are dealt with differently.
 
-### Information object messages
+### Handling Information object messages
 
 * Get the metadata from the Preservica API
 * Wrap all returned metadata fragments in a `<AllMetadata/>` tag
@@ -30,7 +30,7 @@ The entity type can be `io`, `co` or `so` depending on the entity type. They are
         * If they are the same, do nothing.
         * If they are different, add a new version to the OCFL repository.
 
-### Content object messages
+### Handling Content object messages
 
 * Get the bitstream information from the Preservica API.
 * Get the entity, so we can find the IO parent ID.
@@ -45,13 +45,13 @@ The entity type can be `io`, `co` or `so` depending on the entity type. They are
 
 These are ignored as there is nothing in the structural objects we want to store.
 
-## Deleting SQS messages
+### Deleting SQS messages
 
 If the disaster recovery process completes successfully, the messages are deleted from the SQS queue.
 If any messages in a batch fail, all messages are left to try again. This avoids having to work out which ones were
 successful which could be error-prone.
 
-### Infrastructure
+## Infrastructure
 
 This will be hosted on a machine at Kew rather than in the cloud so the only infrastructure resource needed is the
 repository to store the docker image.

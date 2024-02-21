@@ -71,9 +71,11 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val preservicaClient = mock[EntityClient[IO, Fs2Streams[IO]]]
     when(preservicaClient.getBitstreamInfo(ArgumentMatchers.eq(coId))).thenReturn(IO(bitstreams))
     when(preservicaClient.getEntity(coId, EntityClient.ContentObject))
-      .thenReturn(fromType[IO]("CO", coId, None, None, false, parent = Option(ioId)))
+      .thenReturn(
+        fromType[IO](EntityClient.ContentObject.entityTypeShort, coId, None, None, false, parent = Option(ioId))
+      )
 
-    bitstreams.map(bitstream => {
+    bitstreams.map { bitstream =>
       when(
         preservicaClient
           .streamBitstreamContent(any[Fs2Streams[IO]])(any[String], any[Fs2Streams[IO]#BinaryStream => IO[Unit]])
@@ -83,7 +85,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
         }
         IO.unit
       })
-    })
+    }
 
     preservicaClient
   }
@@ -113,25 +115,25 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     Files.createDirectories(Paths.get(path.toString, id.toString))
     val fullFilePath = Paths.get(path.toString, filePath)
     Files.write(fullFilePath, bodyAsString.getBytes)
-    new OcflService(repo).writeObjects(List(IdWithPath(id, fullFilePath))).unsafeRunSync()
+    new OcflService(repo).createObjects(List(IdWithPath(id, fullFilePath))).unsafeRunSync()
   }
 
   private def latestVersion(repo: OcflRepository, id: UUID): Long =
     repo.getObject(id.toHeadVersion).getObjectVersionId.getVersionNum.getVersionNum
 
-  "runDisasterRecovery" should "write the metadata to a file for an IO update" in {
+  "runDisasterRecovery" should "write a new metadata object to the repository if it doesn't already exist" in {
     val id = UUID.randomUUID()
     val repo = createTestRepo()
-    val sqsClient = mockSqs(InformationObjectMessage(id) :: Nil)
+    val sqsClient = mockSqs(InformationObjectMessage(id, s"io:$id") :: Nil)
     val preservicaClient = mockPreservicaMetadata(Seq(<Test></Test>))
     runDisasterRecovery(sqsClient, preservicaClient, repo)
     repo.containsObject(id.toString) must be(true)
     repo.getObject(id.toHeadVersion).containsFile(metadataFile(id)) must be(true)
   }
 
-  "runDisasterRecovery" should "not write a new version if there is an IO update with the same metadata" in {
+  "runDisasterRecovery" should "not write a new version if there is an IO update message with the same metadata" in {
     val id = UUID.randomUUID()
-    val sqsClient = mockSqs(InformationObjectMessage(id) :: Nil)
+    val sqsClient = mockSqs(InformationObjectMessage(id, s"io:$id") :: Nil)
     val metadata = <Test></Test>
     val preservicaClient = mockPreservicaMetadata(Seq(metadata))
     val repo = createTestRepo()
@@ -142,7 +144,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
   "runDisasterRecovery" should "write a new version if there is an IO update with different metadata" in {
     val id = UUID.randomUUID()
-    val sqsClient = mockSqs(InformationObjectMessage(id) :: Nil)
+    val sqsClient = mockSqs(InformationObjectMessage(id, s"io:$id") :: Nil)
     val metadata = <Test></Test>
     val preservicaClient = mockPreservicaMetadata(Seq(<DifferentMetadata></DifferentMetadata>))
     val repo = createTestRepo()
@@ -155,7 +157,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val id = UUID.randomUUID()
     val repoDir = Files.createTempDirectory("repo")
     val repo = createTestRepo(repoDir)
-    val sqsClient = mockSqs(InformationObjectMessage(id) :: Nil)
+    val sqsClient = mockSqs(InformationObjectMessage(id, s"io:$id") :: Nil)
     val preservicaClient = mockPreservicaMetadata(Seq(<Test1></Test1>, <Test2></Test2>, <Test3></Test3>))
     runDisasterRecovery(sqsClient, preservicaClient, repo)
     val storagePath = repo.getObject(id.toHeadVersion).getFile(metadataFile(id)).getStorageRelativePath
@@ -171,7 +173,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
   "runDisasterRecovery" should "only write one version if there are two identical IO messages" in {
     val id = UUID.randomUUID()
     val repo = createTestRepo()
-    val sqsClient = mockSqs(List(InformationObjectMessage(id), InformationObjectMessage(id)))
+    val sqsClient = mockSqs(List(InformationObjectMessage(id, s"io:$id"), InformationObjectMessage(id, s"io:$id")))
     val preservicaClient = mockPreservicaMetadata(Seq(<Test></Test>))
     runDisasterRecovery(sqsClient, preservicaClient, repo)
     latestVersion(repo, id) must equal(1)
@@ -181,7 +183,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val preservicaClient = mock[EntityClient[IO, Fs2Streams[IO]]]
     val id = UUID.randomUUID()
     val repo = createTestRepo()
-    val sqsClient = mockSqs(List(InformationObjectMessage(id)))
+    val sqsClient = mockSqs(List(InformationObjectMessage(id, s"io:$id")))
     when(preservicaClient.metadataForEntity(any[Entity])).thenThrow(new Exception("Error getting metadata"))
 
     val ocflService = new OcflService(repo)
@@ -196,7 +198,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val ioId = UUID.randomUUID()
     val repoDir = Files.createTempDirectory("repo")
     val repo = createTestRepo(repoDir)
-    val sqsClient = mockSqs(ContentObjectMessage(coId) :: Nil)
+    val sqsClient = mockSqs(ContentObjectMessage(coId, s"co:$coId") :: Nil)
     val bitStreamInfo = BitStreamInfo("name", 1, "", Fixity("SHA256", ""))
     val preservicaClient = mockPreservicaBitstreams(ioId, coId, List(bitStreamInfo))
     runDisasterRecovery(sqsClient, preservicaClient, repo)
@@ -215,7 +217,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val checksum = DigestUtils.sha256Hex(data)
     val repo = createTestRepo()
     addToRepo(ioId, repo, data, s"$ioId/name")
-    val sqsClient = mockSqs(ContentObjectMessage(coId) :: Nil)
+    val sqsClient = mockSqs(ContentObjectMessage(coId, s"co:$coId") :: Nil)
     val bitStreamInfo = BitStreamInfo("name", 1, "", Fixity("SHA256", checksum))
     val preservicaClient = mockPreservicaBitstreams(ioId, coId, Seq(bitStreamInfo))
 
@@ -230,7 +232,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val coId = UUID.randomUUID()
     val repo = createTestRepo()
     addToRepo(ioId, repo, data, s"$ioId/name")
-    val sqsClient = mockSqs(ContentObjectMessage(coId) :: Nil)
+    val sqsClient = mockSqs(ContentObjectMessage(coId, s"co:$coId") :: Nil)
     val checksum = DigestUtils.sha256Hex("DifferentData")
     val bitStreamInfo = BitStreamInfo("name", 1, "", Fixity("SHA256", checksum))
     val preservicaClient = mockPreservicaBitstreams(ioId, coId, Seq(bitStreamInfo))
@@ -244,7 +246,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val ioId = UUID.randomUUID()
     val coId = UUID.randomUUID()
     val repo = createTestRepo()
-    val sqsClient = mockSqs(ContentObjectMessage(coId) :: Nil)
+    val sqsClient = mockSqs(ContentObjectMessage(coId, s"co:$coId") :: Nil)
     val fixity = Fixity("SHA256", "")
     val bitStreamInfoList = Seq(
       BitStreamInfo("name1", 1, "", fixity),
@@ -263,7 +265,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val ioId = UUID.randomUUID()
     val coId = UUID.randomUUID()
     val repo = createTestRepo()
-    val sqsClient = mockSqs(List(ContentObjectMessage(coId), ContentObjectMessage(coId)))
+    val sqsClient = mockSqs(List(ContentObjectMessage(coId, s"co:$coId"), ContentObjectMessage(coId, s"co:$coId")))
     val preservicaClient = mockPreservicaBitstreams(ioId, coId, Seq(BitStreamInfo("name", 1, "", Fixity("SHA256", ""))))
     runDisasterRecovery(sqsClient, preservicaClient, repo)
     latestVersion(repo, ioId) must equal(1)
@@ -273,7 +275,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val preservicaClient = mock[EntityClient[IO, Fs2Streams[IO]]]
     val id = UUID.randomUUID()
     val repo = createTestRepo()
-    val sqsClient = mockSqs(List(ContentObjectMessage(id)))
+    val sqsClient = mockSqs(List(ContentObjectMessage(id, s"co:$id")))
     when(preservicaClient.getBitstreamInfo(any[UUID])).thenThrow(new Exception("Error getting bitstream info"))
 
     val ocflService = new OcflService(repo)

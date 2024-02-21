@@ -6,7 +6,7 @@ import fs2.io.file._
 import java.util.UUID
 import scala.xml.Elem
 
-sealed trait DisasterRecoveryItem {
+sealed trait DisasterRecoveryObject {
   def id: UUID
   def checksum: String
   def name: String
@@ -16,7 +16,7 @@ sealed trait DisasterRecoveryItem {
     Files[IO].createDirectories(path).map(_ => path)
   }
 }
-object DisasterRecoveryItem {
-  case class FileItem(id: UUID, name: String, checksum: String, url: String) extends DisasterRecoveryItem
-  case class MetadataItem(id: UUID, name: String, checksum: String, metadata: Elem) extends DisasterRecoveryItem
+object DisasterRecoveryObject {
+  case class FileObject(id: UUID, name: String, checksum: String, url: String) extends DisasterRecoveryObject
+  case class MetadataObject(id: UUID, name: String, checksum: String, metadata: Elem) extends DisasterRecoveryObject
 }

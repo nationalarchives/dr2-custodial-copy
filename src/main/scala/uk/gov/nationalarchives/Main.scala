@@ -32,14 +32,14 @@ object Main extends IOApp {
 
   implicit val decoder: Decoder[Option[Message]] = (c: HCursor) =>
     for {
-      ref <- c.downField("id").as[String]
+      id <- c.downField("id").as[String]
     } yield {
-      val idAndType = ref.split(":")
-      val id = UUID.fromString(idAndType.last)
-      val entityType = idAndType.head
+      val typeAndRef = id.split(":")
+      val ref = UUID.fromString(typeAndRef.last)
+      val entityType = typeAndRef.head
       entityType match {
-        case "io" => Option(InformationObjectMessage(id))
-        case "co" => Option(ContentObjectMessage(id))
+        case "io" => Option(InformationObjectMessage(ref, id))
+        case "co" => Option(ContentObjectMessage(ref, id))
         case _    => None
       }
     }
