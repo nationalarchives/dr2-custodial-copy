@@ -2,16 +2,11 @@ package uk.gov.nationalarchives
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import fs2.Stream
-import io.ocfl.api.OcflRepository
-import io.ocfl.api.model.ObjectVersionId
 import org.mockito.ArgumentMatchers.any
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, MockitoSugar}
-import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers._
 import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
-import sttp.capabilities
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.DisasterRecoveryObject.MetadataObject
@@ -19,16 +14,11 @@ import uk.gov.nationalarchives.Main.{Config, IdWithPath}
 import uk.gov.nationalarchives.Message.{ContentObjectMessage, InformationObjectMessage}
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.{Entity, fromType}
+import uk.gov.nationalarchives.dp.client.EntityClient
 import uk.gov.nationalarchives.dp.client.EntityClient.ContentObject
-import uk.gov.nationalarchives.dp.client.{Client, DataProcessor, Entities, EntityClient}
 
 import java.net.URI
-import java.nio.file.Paths
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 import java.util.UUID
-import scala.collection.mutable.ListBuffer
-import scala.xml.Elem
 
 class ProcessorTest extends AnyFlatSpec with MockitoSugar {
   val config: Config = Config("", "", "queueUrl", "", "", Option(URI.create("https://example.com")))
