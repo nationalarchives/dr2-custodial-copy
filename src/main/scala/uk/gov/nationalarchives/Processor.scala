@@ -27,11 +27,9 @@ class Processor(
   private def deleteMessages(receiptHandles: List[String]): IO[List[DeleteMessageResponse]] =
     receiptHandles.map(handle => sqsClient.deleteMessage(config.sqsQueueUrl, handle)).sequence
 
-  private def dedupeMessages(messages: List[Message]): List[Message] = {
-    messages.distinctBy(_.messageText)
-  }
+  private def dedupeMessages(messages: List[Message]): List[Message] = messages.distinctBy(_.messageText)
 
-  private def createObject(entity: Entities.Entity, metadata: Seq[Elem]): List[MetadataObject] = {
+  private def createMetadataObject(entity: Entities.Entity, metadata: Seq[Elem]): List[MetadataObject] = {
     val newMetadata = <AllMetadata>
       {metadata}
     </AllMetadata>
@@ -45,7 +43,7 @@ class Processor(
       for {
         entity <- fromType[IO](EntityClient.InformationObject.entityTypeShort, ref, None, None, deleted = false)
         metadata <- entityClient.metadataForEntity(entity).map { metadata =>
-          createObject(entity, metadata)
+          createMetadataObject(entity, metadata)
         }
       } yield metadata
     case ContentObjectMessage(ref, _) =>
@@ -59,25 +57,25 @@ class Processor(
   }
 
   private def download(disasterRecoveryObject: DisasterRecoveryObject) = disasterRecoveryObject match {
-    case fi: FileObject =>
+    case fo: FileObject =>
       for {
-        writePath <- fi.path
+        writePath <- fo.path
         _ <- entityClient.streamBitstreamContent[Unit](Fs2Streams.apply)(
-          fi.url,
+          fo.url,
           s => s.through(Files[IO].writeAll(writePath, Flags.Write)).compile.drain
         )
-      } yield IdWithPath(fi.id, writePath.toNioPath)
-    case mi: MetadataObject =>
+      } yield IdWithPath(fo.id, writePath.toNioPath)
+    case mo: MetadataObject =>
       val prettyPrinter = new PrettyPrinter(80, 2)
-      val formattedMetadata = prettyPrinter.format(mi.metadata)
+      val formattedMetadata = prettyPrinter.format(mo.metadata)
       for {
-        writePath <- mi.path
+        writePath <- mo.path
         _ <- Stream
           .emit(formattedMetadata)
           .through(Files[IO].writeUtf8(writePath))
           .compile
           .drain
-      } yield IdWithPath(mi.id, writePath.toNioPath)
+      } yield IdWithPath(mo.id, writePath.toNioPath)
   }
 
   def process(messageResponses: List[MessageResponse[Option[Message]]]): IO[Unit] = {

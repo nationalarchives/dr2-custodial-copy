@@ -47,18 +47,17 @@ class OcflService(ocflRepository: OcflRepository) {
   def filterChangedObjects(objects: List[DisasterRecoveryObject]): List[DisasterRecoveryObject] =
     objects.filter(obj => isChecksumMismatched(obj.id, obj.name, obj.checksum))
 
-  private def isChecksumMismatched(ioId: UUID, fileName: String, checksum: String): Boolean =
+  private def isChecksumMismatched(objectId: UUID, fileName: String, checksum: String): Boolean =
     Option
-      .when(ocflRepository.containsObject(ioId.toString)) {
-        Option(ocflRepository.getObject(ioId.toHeadVersion).getFile(s"$ioId/$fileName"))
-          .map(a => a.getFixity.get(DigestAlgorithm.sha256))
+      .when(ocflRepository.containsObject(objectId.toString)) {
+        Option(ocflRepository.getObject(objectId.toHeadVersion).getFile(s"$objectId/$fileName"))
+          .map(ocflFileObject => ocflFileObject.getFixity.get(DigestAlgorithm.sha256))
           .filterNot(_ == checksum)
           .toList
           .headOption
       }
       .flatten
       .isDefined
-
 }
 object OcflService {
   implicit class UuidUtils(uuid: UUID) {
@@ -74,7 +73,7 @@ object OcflService {
 
     val repo: OcflRepository = new OcflRepositoryBuilder()
       .defaultLayoutConfig(new HashedNTupleLayoutConfig())
-      .storage(asJavaConsumer[OcflStorageBuilder](s => s.fileSystem(repoDir)))
+      .storage(asJavaConsumer[OcflStorageBuilder](osb => osb.fileSystem(repoDir)))
       .ocflConfig(asJavaConsumer[OcflConfig](config => config.setDefaultDigestAlgorithm(DigestAlgorithm.sha256)))
       .prettyPrintJson()
       .workDir(workDir)
