@@ -10,6 +10,7 @@ import uk.gov.nationalarchives.Main.{Config, IdWithPath}
 import uk.gov.nationalarchives.OcflService._
 import java.nio.file.Paths
 import java.util.UUID
+import scala.util.{Try, Success, Failure}
 import scala.compat.java8.FunctionConverters._
 
 class OcflService(ocflRepository: OcflRepository) {
@@ -46,6 +47,32 @@ class OcflService(ocflRepository: OcflRepository) {
 
   def filterChangedObjects(objects: List[DisasterRecoveryObject]): List[DisasterRecoveryObject] =
     objects.filter(obj => isChecksumMismatched(obj.id, obj.name, obj.checksum))
+
+  def getMissingAndChangedObjects(
+      objects: List[DisasterRecoveryObject]
+  ): (List[DisasterRecoveryObject], List[DisasterRecoveryObject]) = {
+    val missingAndNonMissingObjects: Map[String, List[DisasterRecoveryObject]] =
+      objects.foldLeft(Map[String, List[DisasterRecoveryObject]]("missingObjects" -> Nil, "changedObjects" -> Nil)) {
+        case (objectMap, obj) =>
+          val objectId = obj.id
+          val potentialOcflObject = Try(ocflRepository.getObject(objectId.toHeadVersion))
+          lazy val missedObjects = objectMap("missingObjects")
+          lazy val changedObjects = objectMap("changedObjects")
+
+          potentialOcflObject match {
+            case Success(ocflObject) =>
+              val checksumUnchanged =
+                Option(ocflObject.getFile(s"$objectId/${obj.name}"))
+                  .map(ocflFileObject => ocflFileObject.getFixity.get(DigestAlgorithm.sha256))
+                  .contains(obj.checksum)
+              if (checksumUnchanged) objectMap else objectMap + ("changedObjects" -> (obj :: changedObjects))
+
+            case Failure(_) => objectMap + ("missingObjects" -> (obj :: missedObjects))
+          }
+      }
+
+    (missingAndNonMissingObjects("missingObjects"), missingAndNonMissingObjects("changedObjects"))
+  }
 
   private def isChecksumMismatched(objectId: UUID, fileName: String, checksum: String): Boolean =
     Option

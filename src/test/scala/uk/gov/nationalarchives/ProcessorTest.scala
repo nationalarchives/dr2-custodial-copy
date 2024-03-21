@@ -28,8 +28,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       changedObjects: List[DisasterRecoveryObject] = Nil
   ): OcflService = {
     val ocflService = mock[OcflService]
-    when(ocflService.filterMissingObjects(any[List[MetadataObject]])).thenReturn(missingObjects)
-    when(ocflService.filterChangedObjects(any[List[MetadataObject]])).thenReturn(changedObjects)
+    when(ocflService.getMissingAndChangedObjects(any[List[MetadataObject]]))
+      .thenReturn((missingObjects, changedObjects))
     when(ocflService.updateObjects(any[List[IdWithPath]])).thenReturn(IO(Nil))
     when(ocflService.createObjects(any[List[IdWithPath]])).thenReturn(IO(Nil))
 

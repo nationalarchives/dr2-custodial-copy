@@ -78,24 +78,24 @@ class Processor(
       } yield IdWithPath(mo.id, writePath.toNioPath)
   }
 
-  def process(messageResponses: List[MessageResponse[Option[Message]]]): IO[Unit] = {
-    val messages = dedupeMessages(messageResponses.flatMap(_.message))
+  def process(messageResponses: List[MessageResponse[Option[Message]]]): IO[Unit] =
     for {
       logger <- Slf4jLogger.create[IO]
       _ <- logger.info(s"Processing ${messageResponses.length} messages")
+      messages = dedupeMessages(messageResponses.flatMap(_.message))
       _ <- logger.info(s"Size after de-duplication ${messages.length}")
       _ <- logger.info(messages.map(_.messageText).mkString(","))
       disasterRecoveryObjects <- messages.map(toDisasterRecoveryObject).sequence
       flatDisasterRecoveryObjects = disasterRecoveryObjects.flatten
-      changedObjectsPaths <- ocflService.filterChangedObjects(flatDisasterRecoveryObjects).map(download).sequence
-      missingObjectsPaths <- ocflService.filterMissingObjects(flatDisasterRecoveryObjects).map(download).sequence
+      (missingObjects, changedObjects) = ocflService.getMissingAndChangedObjects(flatDisasterRecoveryObjects)
+      missingObjectsPaths <- missingObjects.map(download).sequence
+      changedObjectsPaths <- changedObjects.map(download).sequence
       _ <- ocflService.createObjects(missingObjectsPaths)
       _ <- logger.info(s"${missingObjectsPaths.length} objects created")
       _ <- ocflService.updateObjects(changedObjectsPaths)
       _ <- logger.info(s"${changedObjectsPaths.length} objects updated")
       _ <- deleteMessages(messageResponses.map(_.receiptHandle))
     } yield ()
-  }
 }
 object Processor {
   def apply(
