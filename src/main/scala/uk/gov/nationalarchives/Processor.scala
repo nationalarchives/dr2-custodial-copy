@@ -16,7 +16,7 @@ import uk.gov.nationalarchives.dp.client.Entities.fromType
 import uk.gov.nationalarchives.dp.client.EntityClient.ContentObject
 import uk.gov.nationalarchives.dp.client.{Entities, EntityClient}
 
-import scala.xml.{Elem, PrettyPrinter}
+import scala.xml.Elem
 
 class Processor(
     config: Config,
@@ -33,7 +33,7 @@ class Processor(
     val newMetadata = <AllMetadata>
       {metadata}
     </AllMetadata>
-    val xmlAsString = new PrettyPrinter(80, 2).format(newMetadata)
+    val xmlAsString = newMetadata.toString()
     val checksum = DigestUtils.sha256Hex(xmlAsString)
     List(MetadataObject(entity.ref, "tna-dr2-disaster-recovery-metadata.xml", checksum, newMetadata))
   }
@@ -66,12 +66,11 @@ class Processor(
         )
       } yield IdWithPath(fo.id, writePath.toNioPath)
     case mo: MetadataObject =>
-      val prettyPrinter = new PrettyPrinter(80, 2)
-      val formattedMetadata = prettyPrinter.format(mo.metadata)
+      val metadataXmlAsString = mo.metadata.toString
       for {
         writePath <- mo.path
         _ <- Stream
-          .emit(formattedMetadata)
+          .emit(metadataXmlAsString)
           .through(Files[IO].writeUtf8(writePath))
           .compile
           .drain

@@ -28,7 +28,7 @@ import uk.gov.nationalarchives.dp.client.EntityClient
 import java.nio.file.{Files, Path, Paths}
 import java.util.UUID
 import scala.compat.java8.FunctionConverters.asJavaConsumer
-import scala.xml.{Elem, PrettyPrinter}
+import scala.xml.Elem
 
 class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
   private def createTestRepo(repoDir: Path = Files.createTempDirectory("repo")) = {
@@ -106,7 +106,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val existingMetadata = <AllMetadata>
       {elem}
     </AllMetadata>
-    val xmlAsString = new PrettyPrinter(80, 2).format(existingMetadata)
+    val xmlAsString = existingMetadata.toString()
     addToRepo(id, repo, xmlAsString, metadataFile(id))
   }
 
@@ -163,10 +163,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val storagePath = repo.getObject(id.toHeadVersion).getFile(metadataFile(id)).getStorageRelativePath
     val xml = Files.readAllBytes(Paths.get(repoDir.toString, storagePath)).map(_.toChar).mkString
     val expectedXml = """<AllMetadata>
-                        |  <Test1></Test1>
-                        |  <Test2></Test2>
-                        |  <Test3></Test3>
-                        |</AllMetadata>""".stripMargin
+                        |      <Test1></Test1><Test2></Test2><Test3></Test3>
+                        |    </AllMetadata>""".stripMargin
     xml must equal(expectedXml)
   }
 
