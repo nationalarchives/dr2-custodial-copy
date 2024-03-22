@@ -86,9 +86,9 @@ class Processor(
       _ <- logger.info(messages.map(_.messageText).mkString(","))
       disasterRecoveryObjects <- messages.map(toDisasterRecoveryObject).sequence
       flatDisasterRecoveryObjects = disasterRecoveryObjects.flatten
-      (missingObjects, changedObjects) = ocflService.getMissingAndChangedObjects(flatDisasterRecoveryObjects)
-      missingObjectsPaths <- missingObjects.map(download).sequence
-      changedObjectsPaths <- changedObjects.map(download).sequence
+      missingAndChangedObjects <- ocflService.getMissingAndChangedObjects(flatDisasterRecoveryObjects)
+      missingObjectsPaths <- missingAndChangedObjects.missingObjects.map(download).sequence
+      changedObjectsPaths <- missingAndChangedObjects.changedObjects.map(download).sequence
       _ <- ocflService.createObjects(missingObjectsPaths)
       _ <- logger.info(s"${missingObjectsPaths.length} objects created")
       _ <- ocflService.updateObjects(changedObjectsPaths)

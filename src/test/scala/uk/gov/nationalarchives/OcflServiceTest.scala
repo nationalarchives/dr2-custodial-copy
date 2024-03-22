@@ -61,13 +61,14 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     val service = new OcflService(ocflRepository)
     val fileObjectThatShouldBeMissing = FileObject(id, name, checksum, url)
 
-    val (missingObjects, changedObjects) = service.getMissingAndChangedObjects(List(fileObjectThatShouldBeMissing))
-    val missingObject = missingObjects.head
+    val missingAndChangedObjects =
+      service.getMissingAndChangedObjects(List(fileObjectThatShouldBeMissing)).unsafeRunSync()
+    val missingObject = missingAndChangedObjects.missingObjects.head
 
-    missingObjects.size should equal(1)
+    missingAndChangedObjects.missingObjects.size should equal(1)
     missingObject should equal(fileObjectThatShouldBeMissing)
 
-    changedObjects.size should equal(0)
+    missingAndChangedObjects.changedObjects.size should equal(0)
   }
 
   "getMissingAndChangedObjects" should "return 0 missing objects and 0 changed objects if the repository contains the object " +
@@ -78,11 +79,11 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
 
       val service = new OcflService(ocflRepository)
 
-      val (missingObjects, changedObjects) =
-        service.getMissingAndChangedObjects(List(FileObject(id, name, checksum, url)))
+      val missingAndChangedObjects =
+        service.getMissingAndChangedObjects(List(FileObject(id, name, checksum, url))).unsafeRunSync()
 
-      missingObjects.size should equal(0)
-      changedObjects.size should equal(0)
+      missingAndChangedObjects.missingObjects.size should equal(0)
+      missingAndChangedObjects.changedObjects.size should equal(0)
     }
 
   "getMissingAndChangedObjects" should "return 0 missing objects and 1 changed objects if the repository contains the object " +
@@ -94,12 +95,12 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
       val service = new OcflService(ocflRepository)
       val fileObjectThatShouldHaveChangedChecksum = FileObject(id, name, "anotherChecksum", url)
 
-      val (missingObjects, changedObjects) =
-        service.getMissingAndChangedObjects(List(fileObjectThatShouldHaveChangedChecksum))
+      val missingAndChangedObjects =
+        service.getMissingAndChangedObjects(List(fileObjectThatShouldHaveChangedChecksum)).unsafeRunSync()
 
-      missingObjects.size should equal(0)
-      changedObjects.size should equal(1)
-      val changedObject = changedObjects.head
+      missingAndChangedObjects.missingObjects.size should equal(0)
+      missingAndChangedObjects.changedObjects.size should equal(1)
+      val changedObject = missingAndChangedObjects.changedObjects.head
       changedObject should equal(fileObjectThatShouldHaveChangedChecksum)
     }
 

@@ -1,7 +1,6 @@
 package uk.gov.nationalarchives
 
 import cats.effect.IO
-import io.ocfl.api.exception.NotFoundException
 import io.ocfl.api.model.{DigestAlgorithm, ObjectVersionId, VersionInfo}
 import io.ocfl.api.{OcflConfig, OcflObjectUpdater, OcflRepository}
 import io.ocfl.core.OcflRepositoryBuilder
@@ -42,7 +41,7 @@ class OcflService(ocflRepository: OcflRepository) {
 
   def getMissingAndChangedObjects(
       objects: List[DisasterRecoveryObject]
-  ): (List[DisasterRecoveryObject], List[DisasterRecoveryObject]) = {
+  ): IO[MissingAndChangedObjects] = IO.blocking {
     val missingAndNonMissingObjects: Map[String, List[DisasterRecoveryObject]] =
       objects.foldLeft(Map[String, List[DisasterRecoveryObject]]("missingObjects" -> Nil, "changedObjects" -> Nil)) {
         case (objectMap, obj) =>
@@ -63,7 +62,10 @@ class OcflService(ocflRepository: OcflRepository) {
           }
       }
 
-    (missingAndNonMissingObjects("missingObjects"), missingAndNonMissingObjects("changedObjects"))
+    MissingAndChangedObjects(
+      missingAndNonMissingObjects("missingObjects"),
+      missingAndNonMissingObjects("changedObjects")
+    )
   }
 }
 object OcflService {
@@ -87,4 +89,8 @@ object OcflService {
       .build()
     new OcflService(repo)
   }
+  case class MissingAndChangedObjects(
+      missingObjects: List[DisasterRecoveryObject],
+      changedObjects: List[DisasterRecoveryObject]
+  )
 }
