@@ -55,7 +55,7 @@ class OcflService(ocflRepository: OcflRepository) {
             case Success(ocflObject) =>
               val checksumUnchanged =
                 Option(ocflObject.getFile(s"$objectId/${obj.name}"))
-                  .map(ocflFileObject => ocflFileObject.getFixity.get(DigestAlgorithm.sha256))
+                  .map(_.getFixity.get(DigestAlgorithm.sha256))
                   .contains(obj.checksum)
               if (checksumUnchanged) objectMap else objectMap + ("changedObjects" -> (obj :: changedObjects))
 
