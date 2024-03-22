@@ -48,10 +48,10 @@ class Processor(
       } yield metadata
     case ContentObjectMessage(ref, _) =>
       for {
-        bitstreams <- entityClient.getBitstreamInfo(ref)
+        bitstreamInfoPerCo <- entityClient.getBitstreamInfo(ref)
         entity <- entityClient.getEntity(ref, ContentObject)
         parentRef <- IO.fromOption(entity.parent)(new Exception("Cannot get IO reference from CO"))
-      } yield bitstreams.toList.map(bitStreamInfo =>
+      } yield bitstreamInfoPerCo.toList.map(bitStreamInfo =>
         FileObject(parentRef, bitStreamInfo.name, bitStreamInfo.fixity.value, bitStreamInfo.url)
       )
   }
