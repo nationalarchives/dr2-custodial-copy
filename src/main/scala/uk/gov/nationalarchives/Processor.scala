@@ -50,9 +50,9 @@ class Processor(
       for {
         bitstreams <- entityClient.getBitstreamInfo(ref)
         entity <- entityClient.getEntity(ref, ContentObject)
-        parent <- IO.fromOption(entity.parent)(new Exception("Cannot get IO reference from CO"))
+        parentRef <- IO.fromOption(entity.parent)(new Exception("Cannot get IO reference from CO"))
       } yield bitstreams.toList.map(bitStreamInfo =>
-        FileObject(parent, bitStreamInfo.name, bitStreamInfo.fixity.value, bitStreamInfo.url)
+        FileObject(parentRef, bitStreamInfo.name, bitStreamInfo.fixity.value, bitStreamInfo.url)
       )
   }
 
