@@ -104,6 +104,23 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
       changedObject should equal(fileObjectThatShouldHaveChangedChecksum)
     }
 
+  "getMissingAndChangedObjects" should "throw an exception if 'ocflRepository.getObject' returns an unexpected Exception" in {
+    val id = UUID.randomUUID()
+    val ocflRepository = mock[OcflRepository]
+    when(ocflRepository.getObject(any[ObjectVersionId])).thenThrow(new Exception("unexpected Exception"))
+
+    val service = new OcflService(ocflRepository)
+    val fileObjectThatShouldHaveChangedChecksum = FileObject(id, name, checksum, url)
+
+    val ex = intercept[Exception] {
+      service.getMissingAndChangedObjects(List(fileObjectThatShouldHaveChangedChecksum)).unsafeRunSync()
+    }
+
+    ex.getMessage should equal(
+      s"'getObject' returned an unexpected error 'java.lang.Exception: unexpected Exception' when called with object id $id"
+    )
+  }
+
   "createObjects" should "create objects in the OCFL repository" in {
     val id = UUID.randomUUID()
     val ocflRepository = mock[OcflRepository]

@@ -1,6 +1,7 @@
 package uk.gov.nationalarchives
 
 import cats.effect.IO
+import io.ocfl.api.exception.NotFoundException
 import io.ocfl.api.model.{DigestAlgorithm, ObjectVersionId, VersionInfo}
 import io.ocfl.api.{OcflConfig, OcflObjectUpdater, OcflRepository}
 import io.ocfl.core.OcflRepositoryBuilder
@@ -58,7 +59,11 @@ class OcflService(ocflRepository: OcflRepository) {
                   .contains(obj.checksum)
               if (checksumUnchanged) objectMap else objectMap + ("changedObjects" -> (obj :: changedObjects))
 
-            case Failure(_) => objectMap + ("missingObjects" -> (obj :: missedObjects))
+            case Failure(objectNotFound: NotFoundException) => objectMap + ("missingObjects" -> (obj :: missedObjects))
+            case Failure(unexpectedError) =>
+              throw new Exception(
+                s"'getObject' returned an unexpected error '$unexpectedError' when called with object id $objectId"
+              )
           }
       }
 
