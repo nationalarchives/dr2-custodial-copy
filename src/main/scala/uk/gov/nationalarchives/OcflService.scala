@@ -1,6 +1,7 @@
 package uk.gov.nationalarchives
 
 import cats.effect.IO
+import io.ocfl.api.exception.NotFoundException
 import io.ocfl.api.model.{DigestAlgorithm, ObjectVersionId, VersionInfo}
 import io.ocfl.api.{OcflConfig, OcflObjectUpdater, OcflRepository}
 import io.ocfl.core.OcflRepositoryBuilder
@@ -8,9 +9,10 @@ import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.storage.OcflStorageBuilder
 import uk.gov.nationalarchives.Main.{Config, IdWithPath}
 import uk.gov.nationalarchives.OcflService._
+
 import java.nio.file.Paths
 import java.util.UUID
-import scala.util.{Try, Success, Failure}
+import scala.util.{Failure, Success, Try}
 import scala.compat.java8.FunctionConverters._
 
 class OcflService(ocflRepository: OcflRepository) {
@@ -38,16 +40,6 @@ class OcflService(ocflRepository: OcflRepository) {
     paths.map(path => ocflRepository.putObject(path.id.toHeadVersion, path.path, new VersionInfo()))
   }
 
-  def filterMissingObjects(objects: List[DisasterRecoveryObject]): List[DisasterRecoveryObject] =
-    objects.filter { obj =>
-      if (ocflRepository.containsObject(obj.id.toString))
-        !ocflRepository.getObject(obj.id.toHeadVersion).containsFile(s"${obj.id}/${obj.name}")
-      else true
-    }
-
-  def filterChangedObjects(objects: List[DisasterRecoveryObject]): List[DisasterRecoveryObject] =
-    objects.filter(obj => isChecksumMismatched(obj.id, obj.name, obj.checksum))
-
   def getMissingAndChangedObjects(
       objects: List[DisasterRecoveryObject]
   ): (List[DisasterRecoveryObject], List[DisasterRecoveryObject]) = {
@@ -73,18 +65,6 @@ class OcflService(ocflRepository: OcflRepository) {
 
     (missingAndNonMissingObjects("missingObjects"), missingAndNonMissingObjects("changedObjects"))
   }
-
-  private def isChecksumMismatched(objectId: UUID, fileName: String, checksum: String): Boolean =
-    Option
-      .when(ocflRepository.containsObject(objectId.toString)) {
-        Option(ocflRepository.getObject(objectId.toHeadVersion).getFile(s"$objectId/$fileName"))
-          .map(ocflFileObject => ocflFileObject.getFixity.get(DigestAlgorithm.sha256))
-          .filterNot(_ == checksum)
-          .toList
-          .headOption
-      }
-      .flatten
-      .isDefined
 }
 object OcflService {
   implicit class UuidUtils(uuid: UUID) {
