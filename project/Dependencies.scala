@@ -1,6 +1,6 @@
 import sbt._
 object Dependencies {
-  lazy val logbackVersion = "2.20.0"
+  lazy val logbackVersion = "2.23.1"
   private val log4CatsVersion = "2.6.0"
 
   lazy val fs2Core = "co.fs2" %% "fs2-core" % "3.9.3"
