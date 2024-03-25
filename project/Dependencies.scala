@@ -11,7 +11,7 @@ object Dependencies {
   lazy val log4CatsSlf4j = "org.typelevel" %% "log4cats-slf4j" % log4CatsVersion
   lazy val ocfl = "io.ocfl" % "ocfl-java-core" % "2.0.0"
   lazy val preservicaClient = "uk.gov.nationalarchives" %% "preservica-client-fs2" % "0.0.49"
-  lazy val pureConfig = "com.github.pureconfig" %% "pureconfig" % "0.17.5"
+  lazy val pureConfig = "com.github.pureconfig" %% "pureconfig" % "0.17.6"
   lazy val pureConfigCatsEffect = "com.github.pureconfig" %% "pureconfig-cats-effect" % "0.17.2"
   lazy val lambdaCore = "com.amazonaws" % "aws-lambda-java-core" % "1.2.2"
   lazy val lambdaJavaEvents = "com.amazonaws" % "aws-lambda-java-events" % "3.11.1"
