@@ -1,6 +1,7 @@
 package uk.gov.nationalarchives
 
 import cats.effect.unsafe.implicits.global
+import io.ocfl.api.exception.NotFoundException
 import io.ocfl.api.io.FixityCheckInputStream
 import io.ocfl.api.{OcflFileRetriever, OcflObjectUpdater, OcflRepository}
 import io.ocfl.api.model.{
@@ -14,7 +15,7 @@ import io.ocfl.api.model.{
   VersionNum
 }
 import org.mockito.ArgumentMatchers.any
-import org.mockito.{ArgumentCaptor, ArgumentMatchers, MockitoSugar}
+import org.mockito.{ArgumentCaptor, MockitoSugar}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers._
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -52,86 +53,72 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     when(ocflRepository.getObject(any[ObjectVersionId])).thenReturn(objectVersion)
   }
 
-  "filterChangedObjects" should "not return the object if the repository doesn't contain the object" in {
+  "getMissingAndChangedObjects" should "return 1 missing object and 0 changed objects if the repository doesn't contain the object" in {
     val id = UUID.randomUUID()
     val ocflRepository = mock[OcflRepository]
-    when(ocflRepository.containsObject(ArgumentMatchers.eq(id.toString))).thenReturn(false)
+    when(ocflRepository.getObject(any[ObjectVersionId])).thenThrow(new NotFoundException)
 
     val service = new OcflService(ocflRepository)
+    val fileObjectThatShouldBeMissing = FileObject(id, name, checksum, url)
 
-    val changedObjects = service.filterChangedObjects(List(FileObject(id, name, "checksum", url)))
-    changedObjects.size should equal(0)
+    val missingAndChangedObjects =
+      service.getMissingAndChangedObjects(List(fileObjectThatShouldBeMissing)).unsafeRunSync()
+    val missingObject = missingAndChangedObjects.missingObjects.head
+
+    missingAndChangedObjects.missingObjects.size should equal(1)
+    missingObject should equal(fileObjectThatShouldBeMissing)
+
+    missingAndChangedObjects.changedObjects.size should equal(0)
   }
 
-  "filterChangedObjects" should "not return an object if it is contained in the repository but the checksums match" in {
+  "getMissingAndChangedObjects" should "return 0 missing objects and 0 changed objects if the repository contains the object " +
+    "but the checksums match" in {
+      val id = UUID.randomUUID()
+      val ocflRepository = mock[OcflRepository]
+      mockGetObjectResponse(ocflRepository, id, name, checksum)
+
+      val service = new OcflService(ocflRepository)
+
+      val missingAndChangedObjects =
+        service.getMissingAndChangedObjects(List(FileObject(id, name, checksum, url))).unsafeRunSync()
+
+      missingAndChangedObjects.missingObjects.size should equal(0)
+      missingAndChangedObjects.changedObjects.size should equal(0)
+    }
+
+  "getMissingAndChangedObjects" should "return 0 missing objects and 1 changed objects if the repository contains the object " +
+    "but the checksums don't match" in {
+      val id = UUID.randomUUID()
+      val ocflRepository = mock[OcflRepository]
+      mockGetObjectResponse(ocflRepository, id, name, checksum)
+
+      val service = new OcflService(ocflRepository)
+      val fileObjectThatShouldHaveChangedChecksum = FileObject(id, name, "anotherChecksum", url)
+
+      val missingAndChangedObjects =
+        service.getMissingAndChangedObjects(List(fileObjectThatShouldHaveChangedChecksum)).unsafeRunSync()
+
+      missingAndChangedObjects.missingObjects.size should equal(0)
+      missingAndChangedObjects.changedObjects.size should equal(1)
+      val changedObject = missingAndChangedObjects.changedObjects.head
+      changedObject should equal(fileObjectThatShouldHaveChangedChecksum)
+    }
+
+  "getMissingAndChangedObjects" should "throw an exception if 'ocflRepository.getObject' returns an unexpected Exception" in {
     val id = UUID.randomUUID()
     val ocflRepository = mock[OcflRepository]
-    when(ocflRepository.containsObject(ArgumentMatchers.eq(id.toString))).thenReturn(true)
-    mockGetObjectResponse(ocflRepository, id, name, checksum)
+    when(ocflRepository.getObject(any[ObjectVersionId])).thenThrow(new Exception("unexpected Exception"))
 
     val service = new OcflService(ocflRepository)
+    val fileObjectThatShouldHaveChangedChecksum = FileObject(id, name, checksum, url)
 
-    val changedObjects = service.filterChangedObjects(List(FileObject(id, name, checksum, url)))
-    changedObjects.size should equal(0)
-  }
+    val ex = intercept[Exception] {
+      service.getMissingAndChangedObjects(List(fileObjectThatShouldHaveChangedChecksum)).unsafeRunSync()
+    }
 
-  "filterChangedObjects" should "return an object if it is contained in the repository and the checksums don't match" in {
-    val id = UUID.randomUUID()
-    val ocflRepository = mock[OcflRepository]
-    when(ocflRepository.containsObject(ArgumentMatchers.eq(id.toString))).thenReturn(true)
-    mockGetObjectResponse(ocflRepository, id, name, checksum)
-
-    val service = new OcflService(ocflRepository)
-
-    val changedObjects = service.filterChangedObjects(List(FileObject(id, name, "anotherChecksum", url)))
-    changedObjects.size should equal(1)
-  }
-
-  "filterChangedObjects" should "not return an object if there is an object in the repository with a different " + name in {
-    val id = UUID.randomUUID()
-    val ocflRepository = mock[OcflRepository]
-    when(ocflRepository.containsObject(ArgumentMatchers.eq(id.toString))).thenReturn(true)
-    mockGetObjectResponse(ocflRepository, id, name, checksum)
-
-    val service = new OcflService(ocflRepository)
-
-    val changedObjects = service.filterChangedObjects(List(FileObject(id, "anotherName", "anotherChecksum", url)))
-    changedObjects.size should equal(0)
-  }
-
-  "filterMissingObjects" should "return an object if it is missing from the repository" in {
-    val id = UUID.randomUUID()
-    val ocflRepository = mock[OcflRepository]
-    when(ocflRepository.containsObject(ArgumentMatchers.eq(id.toString))).thenReturn(false)
-
-    val service = new OcflService(ocflRepository)
-
-    val changedObjects = service.filterMissingObjects(List(FileObject(id, name, "checksum", url)))
-    changedObjects.size should equal(1)
-  }
-
-  "filterMissingObjects" should "return an object if there is an object in the repository with a different " + name in {
-    val id = UUID.randomUUID()
-    val ocflRepository = mock[OcflRepository]
-    when(ocflRepository.containsObject(ArgumentMatchers.eq(id.toString))).thenReturn(true)
-    mockGetObjectResponse(ocflRepository, id, name, "checksum")
-
-    val service = new OcflService(ocflRepository)
-
-    val changedObjects = service.filterMissingObjects(List(FileObject(id, "anotherName", "checksum", url)))
-    changedObjects.size should equal(1)
-  }
-
-  "filterMissingObjects" should "not return an object if there is an object in the repository with the same " + name in {
-    val id = UUID.randomUUID()
-    val ocflRepository = mock[OcflRepository]
-    when(ocflRepository.containsObject(ArgumentMatchers.eq(id.toString))).thenReturn(true)
-    mockGetObjectResponse(ocflRepository, id, name, "checksum")
-
-    val service = new OcflService(ocflRepository)
-
-    val changedObjects = service.filterMissingObjects(List(FileObject(id, name, "checksum", url)))
-    changedObjects.size should equal(0)
+    ex.getMessage should equal(
+      s"'getObject' returned an unexpected error 'java.lang.Exception: unexpected Exception' when called with object id $id"
+    )
   }
 
   "createObjects" should "create objects in the OCFL repository" in {

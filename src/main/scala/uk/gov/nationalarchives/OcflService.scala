@@ -1,6 +1,7 @@
 package uk.gov.nationalarchives
 
 import cats.effect.IO
+import io.ocfl.api.exception.NotFoundException
 import io.ocfl.api.model.{DigestAlgorithm, ObjectVersionId, VersionInfo}
 import io.ocfl.api.{OcflConfig, OcflObjectUpdater, OcflRepository}
 import io.ocfl.core.OcflRepositoryBuilder
@@ -8,8 +9,10 @@ import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.storage.OcflStorageBuilder
 import uk.gov.nationalarchives.Main.{Config, IdWithPath}
 import uk.gov.nationalarchives.OcflService._
+
 import java.nio.file.Paths
 import java.util.UUID
+import scala.util.{Failure, Success, Try}
 import scala.compat.java8.FunctionConverters._
 
 class OcflService(ocflRepository: OcflRepository) {
@@ -37,28 +40,38 @@ class OcflService(ocflRepository: OcflRepository) {
     paths.map(path => ocflRepository.putObject(path.id.toHeadVersion, path.path, new VersionInfo()))
   }
 
-  def filterMissingObjects(objects: List[DisasterRecoveryObject]): List[DisasterRecoveryObject] =
-    objects.filter { obj =>
-      if (ocflRepository.containsObject(obj.id.toString))
-        !ocflRepository.getObject(obj.id.toHeadVersion).containsFile(s"${obj.id}/${obj.name}")
-      else true
-    }
+  def getMissingAndChangedObjects(
+      objects: List[DisasterRecoveryObject]
+  ): IO[MissingAndChangedObjects] = IO.blocking {
+    val missingAndNonMissingObjects: Map[String, List[DisasterRecoveryObject]] =
+      objects.foldLeft(Map[String, List[DisasterRecoveryObject]]("missingObjects" -> Nil, "changedObjects" -> Nil)) {
+        case (objectMap, obj) =>
+          val objectId = obj.id
+          val potentialOcflObject = Try(ocflRepository.getObject(objectId.toHeadVersion))
+          lazy val missedObjects = objectMap("missingObjects")
+          lazy val changedObjects = objectMap("changedObjects")
 
-  def filterChangedObjects(objects: List[DisasterRecoveryObject]): List[DisasterRecoveryObject] =
-    objects.filter(obj => isChecksumMismatched(obj.id, obj.name, obj.checksum))
+          potentialOcflObject match {
+            case Success(ocflObject) =>
+              val checksumUnchanged =
+                Option(ocflObject.getFile(s"$objectId/${obj.name}"))
+                  .map(_.getFixity.get(DigestAlgorithm.sha256))
+                  .contains(obj.checksum)
+              if (checksumUnchanged) objectMap else objectMap + ("changedObjects" -> (obj :: changedObjects))
 
-  private def isChecksumMismatched(ioId: UUID, fileName: String, checksum: String): Boolean =
-    Option
-      .when(ocflRepository.containsObject(ioId.toString)) {
-        Option(ocflRepository.getObject(ioId.toHeadVersion).getFile(s"$ioId/$fileName"))
-          .map(a => a.getFixity.get(DigestAlgorithm.sha256))
-          .filterNot(_ == checksum)
-          .toList
-          .headOption
+            case Failure(objectNotFound: NotFoundException) => objectMap + ("missingObjects" -> (obj :: missedObjects))
+            case Failure(unexpectedError) =>
+              throw new Exception(
+                s"'getObject' returned an unexpected error '$unexpectedError' when called with object id $objectId"
+              )
+          }
       }
-      .flatten
-      .isDefined
 
+    MissingAndChangedObjects(
+      missingAndNonMissingObjects("missingObjects"),
+      missingAndNonMissingObjects("changedObjects")
+    )
+  }
 }
 object OcflService {
   implicit class UuidUtils(uuid: UUID) {
@@ -74,11 +87,15 @@ object OcflService {
 
     val repo: OcflRepository = new OcflRepositoryBuilder()
       .defaultLayoutConfig(new HashedNTupleLayoutConfig())
-      .storage(asJavaConsumer[OcflStorageBuilder](s => s.fileSystem(repoDir)))
+      .storage(asJavaConsumer[OcflStorageBuilder](osb => osb.fileSystem(repoDir)))
       .ocflConfig(asJavaConsumer[OcflConfig](config => config.setDefaultDigestAlgorithm(DigestAlgorithm.sha256)))
       .prettyPrintJson()
       .workDir(workDir)
       .build()
     new OcflService(repo)
   }
+  case class MissingAndChangedObjects(
+      missingObjects: List[DisasterRecoveryObject],
+      changedObjects: List[DisasterRecoveryObject]
+  )
 }

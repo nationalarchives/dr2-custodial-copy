@@ -12,6 +12,7 @@ import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.DisasterRecoveryObject.MetadataObject
 import uk.gov.nationalarchives.Main.{Config, IdWithPath}
 import uk.gov.nationalarchives.Message.{ContentObjectMessage, InformationObjectMessage}
+import uk.gov.nationalarchives.OcflService.MissingAndChangedObjects
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.{Entity, fromType}
 import uk.gov.nationalarchives.dp.client.EntityClient
@@ -28,8 +29,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       changedObjects: List[DisasterRecoveryObject] = Nil
   ): OcflService = {
     val ocflService = mock[OcflService]
-    when(ocflService.filterMissingObjects(any[List[MetadataObject]])).thenReturn(missingObjects)
-    when(ocflService.filterChangedObjects(any[List[MetadataObject]])).thenReturn(changedObjects)
+    when(ocflService.getMissingAndChangedObjects(any[List[MetadataObject]]))
+      .thenReturn(IO.pure(MissingAndChangedObjects(missingObjects, changedObjects)))
     when(ocflService.updateObjects(any[List[IdWithPath]])).thenReturn(IO(Nil))
     when(ocflService.createObjects(any[List[IdWithPath]])).thenReturn(IO(Nil))
 

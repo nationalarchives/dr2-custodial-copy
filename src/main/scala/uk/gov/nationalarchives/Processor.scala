@@ -16,7 +16,7 @@ import uk.gov.nationalarchives.dp.client.Entities.fromType
 import uk.gov.nationalarchives.dp.client.EntityClient.ContentObject
 import uk.gov.nationalarchives.dp.client.{Entities, EntityClient}
 
-import scala.xml.{Elem, PrettyPrinter}
+import scala.xml.Elem
 
 class Processor(
     config: Config,
@@ -27,15 +27,13 @@ class Processor(
   private def deleteMessages(receiptHandles: List[String]): IO[List[DeleteMessageResponse]] =
     receiptHandles.map(handle => sqsClient.deleteMessage(config.sqsQueueUrl, handle)).sequence
 
-  private def dedupeMessages(messages: List[Message]): List[Message] = {
-    messages.distinctBy(_.messageText)
-  }
+  private def dedupeMessages(messages: List[Message]): List[Message] = messages.distinctBy(_.messageText)
 
-  private def createObject(entity: Entities.Entity, metadata: Seq[Elem]): List[MetadataObject] = {
+  private def createMetadataObject(entity: Entities.Entity, metadata: Seq[Elem]): List[MetadataObject] = {
     val newMetadata = <AllMetadata>
       {metadata}
     </AllMetadata>
-    val xmlAsString = new PrettyPrinter(80, 2).format(newMetadata)
+    val xmlAsString = newMetadata.toString()
     val checksum = DigestUtils.sha256Hex(xmlAsString)
     List(MetadataObject(entity.ref, "tna-dr2-disaster-recovery-metadata.xml", checksum, newMetadata))
   }
@@ -45,59 +43,58 @@ class Processor(
       for {
         entity <- fromType[IO](EntityClient.InformationObject.entityTypeShort, ref, None, None, deleted = false)
         metadata <- entityClient.metadataForEntity(entity).map { metadata =>
-          createObject(entity, metadata)
+          createMetadataObject(entity, metadata)
         }
       } yield metadata
     case ContentObjectMessage(ref, _) =>
       for {
-        bitstreams <- entityClient.getBitstreamInfo(ref)
+        bitstreamInfoPerCo <- entityClient.getBitstreamInfo(ref)
         entity <- entityClient.getEntity(ref, ContentObject)
-        parent <- IO.fromOption(entity.parent)(new Exception("Cannot get IO reference from CO"))
-      } yield bitstreams.toList.map(bitStreamInfo =>
-        FileObject(parent, bitStreamInfo.name, bitStreamInfo.fixity.value, bitStreamInfo.url)
+        parentRef <- IO.fromOption(entity.parent)(new Exception("Cannot get IO reference from CO"))
+      } yield bitstreamInfoPerCo.toList.map(bitStreamInfo =>
+        FileObject(parentRef, bitStreamInfo.name, bitStreamInfo.fixity.value, bitStreamInfo.url)
       )
   }
 
   private def download(disasterRecoveryObject: DisasterRecoveryObject) = disasterRecoveryObject match {
-    case fi: FileObject =>
+    case fo: FileObject =>
       for {
-        writePath <- fi.path
+        writePath <- fo.path
         _ <- entityClient.streamBitstreamContent[Unit](Fs2Streams.apply)(
-          fi.url,
+          fo.url,
           s => s.through(Files[IO].writeAll(writePath, Flags.Write)).compile.drain
         )
-      } yield IdWithPath(fi.id, writePath.toNioPath)
-    case mi: MetadataObject =>
-      val prettyPrinter = new PrettyPrinter(80, 2)
-      val formattedMetadata = prettyPrinter.format(mi.metadata)
+      } yield IdWithPath(fo.id, writePath.toNioPath)
+    case mo: MetadataObject =>
+      val metadataXmlAsString = mo.metadata.toString
       for {
-        writePath <- mi.path
+        writePath <- mo.path
         _ <- Stream
-          .emit(formattedMetadata)
+          .emit(metadataXmlAsString)
           .through(Files[IO].writeUtf8(writePath))
           .compile
           .drain
-      } yield IdWithPath(mi.id, writePath.toNioPath)
+      } yield IdWithPath(mo.id, writePath.toNioPath)
   }
 
-  def process(messageResponses: List[MessageResponse[Option[Message]]]): IO[Unit] = {
-    val messages = dedupeMessages(messageResponses.flatMap(_.message))
+  def process(messageResponses: List[MessageResponse[Option[Message]]]): IO[Unit] =
     for {
       logger <- Slf4jLogger.create[IO]
       _ <- logger.info(s"Processing ${messageResponses.length} messages")
+      messages = dedupeMessages(messageResponses.flatMap(_.message))
       _ <- logger.info(s"Size after de-duplication ${messages.length}")
       _ <- logger.info(messages.map(_.messageText).mkString(","))
       disasterRecoveryObjects <- messages.map(toDisasterRecoveryObject).sequence
       flatDisasterRecoveryObjects = disasterRecoveryObjects.flatten
-      changedObjectsPaths <- ocflService.filterChangedObjects(flatDisasterRecoveryObjects).map(download).sequence
-      missingObjectsPaths <- ocflService.filterMissingObjects(flatDisasterRecoveryObjects).map(download).sequence
+      missingAndChangedObjects <- ocflService.getMissingAndChangedObjects(flatDisasterRecoveryObjects)
+      missingObjectsPaths <- missingAndChangedObjects.missingObjects.map(download).sequence
+      changedObjectsPaths <- missingAndChangedObjects.changedObjects.map(download).sequence
       _ <- ocflService.createObjects(missingObjectsPaths)
       _ <- logger.info(s"${missingObjectsPaths.length} objects created")
       _ <- ocflService.updateObjects(changedObjectsPaths)
       _ <- logger.info(s"${changedObjectsPaths.length} objects updated")
       _ <- deleteMessages(messageResponses.map(_.receiptHandle))
     } yield ()
-  }
 }
 object Processor {
   def apply(
