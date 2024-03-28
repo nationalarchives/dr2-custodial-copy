@@ -3,7 +3,7 @@ package uk.gov.nationalarchives
 import cats.effect.unsafe.implicits.global
 import io.ocfl.api.exception.NotFoundException
 import io.ocfl.api.io.FixityCheckInputStream
-import io.ocfl.api.{OcflFileRetriever, OcflObjectUpdater, OcflRepository}
+import io.ocfl.api.{OcflFileRetriever, OcflObjectUpdater, OcflOption, OcflRepository}
 import io.ocfl.api.model.{
   DigestAlgorithm,
   FileDetails,
@@ -128,7 +128,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     val sourcePathCaptor: ArgumentCaptor[Path] = ArgumentCaptor.forClass(classOf[Path])
     val destinationPathCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
     val updater = mock[OcflObjectUpdater]
-    when(updater.addPath(sourcePathCaptor.capture, destinationPathCaptor.capture))
+    when(updater.addPath(sourcePathCaptor.capture, destinationPathCaptor.capture, any[OcflOption]))
       .thenReturn(updater)
 
     when(ocflRepository.updateObject(objectVersionCaptor.capture, any[VersionInfo], any[Consumer[OcflObjectUpdater]]))
@@ -141,23 +141,8 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     service.createObjects(List(IdWithPath(id, Paths.get("test")))).unsafeRunSync()
 
     UUID.fromString(objectVersionCaptor.getValue.getObjectId) should equal(id)
+
     sourcePathCaptor.getValue.toString should equal("test")
     destinationPathCaptor.getValue should equal(s"$id/test")
-  }
-
-  "updateObjects" should "put a new version of an object in the repository" in {
-    val id = UUID.randomUUID()
-    val ocflRepository = mock[OcflRepository]
-    val objectVersionCaptor: ArgumentCaptor[ObjectVersionId] = ArgumentCaptor.forClass(classOf[ObjectVersionId])
-    val sourcePathCaptor: ArgumentCaptor[Path] = ArgumentCaptor.forClass(classOf[Path])
-    when(ocflRepository.putObject(objectVersionCaptor.capture, sourcePathCaptor.capture, any[VersionInfo]))
-      .thenReturn(ObjectVersionId.head(id.toString))
-
-    val service = new OcflService(ocflRepository)
-
-    service.updateObjects(List(IdWithPath(id, Paths.get("test")))).unsafeRunSync()
-
-    UUID.fromString(objectVersionCaptor.getValue.getObjectId) should equal(id)
-    sourcePathCaptor.getValue.toString should equal("test")
   }
 }

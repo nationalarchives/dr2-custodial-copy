@@ -20,6 +20,7 @@ import uk.gov.nationalarchives.dp.client.EntityClient.ContentObject
 
 import java.net.URI
 import java.util.UUID
+import scala.jdk.CollectionConverters.CollectionHasAsScala
 
 class ProcessorTest extends AnyFlatSpec with MockitoSugar {
   val config: Config = Config("", "", "queueUrl", "", "", Option(URI.create("https://example.com")))
@@ -31,7 +32,6 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     val ocflService = mock[OcflService]
     when(ocflService.getMissingAndChangedObjects(any[List[MetadataObject]]))
       .thenReturn(IO.pure(MissingAndChangedObjects(missingObjects, changedObjects)))
-    when(ocflService.updateObjects(any[List[IdWithPath]])).thenReturn(IO(Nil))
     when(ocflService.createObjects(any[List[IdWithPath]])).thenReturn(IO(Nil))
 
     ocflService
@@ -93,8 +93,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       MessageResponse[Option[Message]]("receiptHandle", Option(InformationObjectMessage(id, s"io:$id"))) :: Nil
     processor.process(responses).unsafeRunSync()
 
-    verify(ocflService, times(1)).updateObjects(ArgumentMatchers.eq(Nil))
-    verify(ocflService, times(1)).createObjects(ArgumentMatchers.eq(Nil))
+    verify(ocflService, times(2)).createObjects(ArgumentMatchers.eq(Nil))
   }
 
   "process" should "update but not create if the object has changed" in {
@@ -115,8 +114,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
 
     val updateCaptor: ArgumentCaptor[List[IdWithPath]] = ArgumentCaptor.forClass(classOf[List[IdWithPath]])
 
-    verify(ocflService, times(1)).updateObjects(updateCaptor.capture)
-    verify(ocflService, times(1)).createObjects(ArgumentMatchers.eq(Nil))
+    verify(ocflService, times(2)).createObjects(updateCaptor.capture)
 
     updateCaptor.getValue.length should equal(1)
     updateCaptor.getValue.head.path.toString.endsWith(s"$id/changed") should equal(true)
@@ -140,11 +138,12 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
 
     val createCaptor: ArgumentCaptor[List[IdWithPath]] = ArgumentCaptor.forClass(classOf[List[IdWithPath]])
 
-    verify(ocflService, times(1)).updateObjects(ArgumentMatchers.eq(Nil))
-    verify(ocflService, times(1)).createObjects(createCaptor.capture)
+    verify(ocflService, times(2)).createObjects(createCaptor.capture)
 
-    createCaptor.getValue.length should equal(1)
-    createCaptor.getValue.head.path.toString.endsWith(s"$id/missing") should equal(true)
+    val createValues = createCaptor.getAllValues.asScala
+    createValues.head.length should equal(1)
+    createValues.last.length should equal(0)
+    createValues.head.head.path.toString.endsWith(s"$id/missing") should equal(true)
   }
 
   "process" should "update a changed file and add a missing file" in {
@@ -169,14 +168,13 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     )
     processor.process(responses).unsafeRunSync()
 
-    val updateCaptor: ArgumentCaptor[List[IdWithPath]] = ArgumentCaptor.forClass(classOf[List[IdWithPath]])
     val createCaptor: ArgumentCaptor[List[IdWithPath]] = ArgumentCaptor.forClass(classOf[List[IdWithPath]])
 
-    verify(ocflService, times(1)).updateObjects(updateCaptor.capture)
-    verify(ocflService, times(1)).createObjects(createCaptor.capture)
+    verify(ocflService, times(2)).createObjects(createCaptor.capture)
 
-    val update = updateCaptor.getValue
-    val create = createCaptor.getValue
+    val createValues = createCaptor.getAllValues.asScala
+    val update = createValues.last
+    val create = createValues.head
 
     update.length should equal(1)
     update.head.path.toString.endsWith(s"$changedId/changed") should equal(true)

@@ -91,7 +91,7 @@ class Processor(
       changedObjectsPaths <- missingAndChangedObjects.changedObjects.map(download).sequence
       _ <- ocflService.createObjects(missingObjectsPaths)
       _ <- logger.info(s"${missingObjectsPaths.length} objects created")
-      _ <- ocflService.updateObjects(changedObjectsPaths)
+      _ <- ocflService.createObjects(changedObjectsPaths)
       _ <- logger.info(s"${changedObjectsPaths.length} objects updated")
       _ <- deleteMessages(messageResponses.map(_.receiptHandle))
     } yield ()

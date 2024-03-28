@@ -3,7 +3,7 @@ package uk.gov.nationalarchives
 import cats.effect.IO
 import io.ocfl.api.exception.NotFoundException
 import io.ocfl.api.model.{DigestAlgorithm, ObjectVersionId, VersionInfo}
-import io.ocfl.api.{OcflConfig, OcflObjectUpdater, OcflRepository}
+import io.ocfl.api.{OcflConfig, OcflObjectUpdater, OcflOption, OcflRepository}
 import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.storage.OcflStorageBuilder
@@ -28,16 +28,16 @@ class OcflService(ocflRepository: OcflRepository) {
           new VersionInfo(),
           asJavaConsumer[OcflObjectUpdater] { updater =>
             paths.map { filePath =>
-              updater.addPath(filePath, s"$id/${filePath.getFileName}")
+              updater.addPath(
+                filePath,
+                s"$id/${filePath.getFileName}",
+                OcflOption.OVERWRITE
+              )
             }
           }
         )
       }
       .toList
-  }
-
-  def updateObjects(paths: List[IdWithPath]): IO[List[ObjectVersionId]] = IO.blocking {
-    paths.map(path => ocflRepository.putObject(path.id.toHeadVersion, path.path, new VersionInfo()))
   }
 
   def getMissingAndChangedObjects(
