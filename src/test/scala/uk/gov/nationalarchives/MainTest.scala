@@ -29,7 +29,8 @@ import uk.gov.nationalarchives.dp.client.EntityClient.{Access, Derived, Original
 import java.nio.file.{Files, Path, Paths}
 import java.util.UUID
 import scala.compat.java8.FunctionConverters.asJavaConsumer
-import scala.xml.Elem
+import scala.xml.{Elem, XML}
+import scala.xml.Utility.trim
 
 class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
   private val ioType = "io"
@@ -111,7 +112,11 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
           .streamBitstreamContent(any[Fs2Streams[IO]])(any[String], any[Fs2Streams[IO]#BinaryStream => IO[Unit]])
       ).thenAnswer((_: Fs2Streams[IO], _: String, stream: Fs2Streams[IO]#BinaryStream => IO[Unit]) => {
         if (Option(stream).isDefined) {
-          println("In Stream", s"File content for ${bitstreamInfo.name}".getBytes.length, s"File content for ${bitstreamInfo.name}")
+          println(
+            "In Stream",
+            s"File content for ${bitstreamInfo.name}".getBytes.length,
+            s"File content for ${bitstreamInfo.name}"
+          )
           stream(Stream.emits(s"File content for ${bitstreamInfo.name}".getBytes)).unsafeRunSync()
         }
         IO.unit
@@ -234,12 +239,13 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
     val metadataStoragePath =
       repo.getObject(id.toHeadVersion).getFile(expectedMetadataFileDestinationFilePath).getStorageRelativePath
-    val metadataContent = Files.readAllBytes(Paths.get(repoDir.toString, metadataStoragePath)).map(_.toChar).mkString
+    val metadataContent =
+      trim(XML.loadString(Files.readAllBytes(Paths.get(repoDir.toString, metadataStoragePath)).map(_.toChar).mkString))
 
     metadataContent must equal(
-      <AllMetadata>
-        <DifferentMetadata></DifferentMetadata>
-      </AllMetadata>.toString
+      trim(<AllMetadata>
+        <DifferentMetadata/>
+      </AllMetadata>)
     )
   }
 
@@ -527,12 +533,13 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
     val metadataStoragePath =
       repo.getObject(ioId.toHeadVersion).getFile(expectedMetadataFileDestinationFilePath).getStorageRelativePath
-    val metadataContent = Files.readAllBytes(Paths.get(repoDir.toString, metadataStoragePath)).map(_.toChar).mkString
+    val metadataContent =
+      trim(XML.loadString(Files.readAllBytes(Paths.get(repoDir.toString, metadataStoragePath)).map(_.toChar).mkString))
 
     metadataContent must equal(
-      <AllMetadata>
+      trim(<AllMetadata>
         <DifferentMetadata></DifferentMetadata>
-      </AllMetadata>.toString
+      </AllMetadata>)
     )
   }
 

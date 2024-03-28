@@ -3,7 +3,7 @@ package uk.gov.nationalarchives
 import cats.effect.IO
 import io.ocfl.api.exception.NotFoundException
 import io.ocfl.api.model.{DigestAlgorithm, ObjectVersionId, VersionInfo}
-import io.ocfl.api.{OcflConfig, OcflObjectUpdater, OcflRepository}
+import io.ocfl.api.{OcflConfig, OcflObjectUpdater, OcflOption, OcflRepository}
 import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.storage.OcflStorageBuilder
@@ -32,22 +32,16 @@ class OcflService(ocflRepository: OcflRepository) {
                 idWithSourceAndDestPath.sourceNioFilePath,
                 idWithSourceAndDestPath.destinationPath
               )
-              updater.addPath(idWithSourceAndDestPath.sourceNioFilePath, idWithSourceAndDestPath.destinationPath)
+              updater.addPath(
+                idWithSourceAndDestPath.sourceNioFilePath,
+                idWithSourceAndDestPath.destinationPath,
+                OcflOption.OVERWRITE
+              )
             }
           }
         )
       }
       .toList
-  }
-
-  def updateObjects(paths: List[IdWithSourceAndDestPaths]): IO[List[ObjectVersionId]] = IO.blocking {
-    paths.map { idWithSourceAndDestPath =>
-      ocflRepository.putObject(
-        idWithSourceAndDestPath.id.toHeadVersion,
-        idWithSourceAndDestPath.sourceNioFilePath,
-        new VersionInfo()
-      )
-    }
   }
 
   def getMissingAndChangedObjects(
@@ -66,10 +60,19 @@ class OcflService(ocflRepository: OcflRepository) {
               val potentialFile = Option(ocflObject.getFile(obj.destinationFilePath))
               potentialFile match {
                 case Some(ocflFileObject) =>
-                  val checksumUnchanged = Some(ocflFileObject.getFixity.get(DigestAlgorithm.sha256)).contains(obj.checksum)
-                  println("\n\n\nFound", "OCFL", ocflFileObject.getFixity.get(DigestAlgorithm.sha256), "FS ->", obj.checksum)
-                  println("\n\n\nchecksumUnchanged =" , checksumUnchanged)
-                  println(if (checksumUnchanged) objectMap else objectMap + ("changedObjects" -> (obj :: changedObjects)))
+                  val checksumUnchanged =
+                    Some(ocflFileObject.getFixity.get(DigestAlgorithm.sha256)).contains(obj.checksum)
+                  println(
+                    "\n\n\nFound",
+                    "OCFL",
+                    ocflFileObject.getFixity.get(DigestAlgorithm.sha256),
+                    "FS ->",
+                    obj.checksum
+                  )
+                  println("\n\n\nchecksumUnchanged =", checksumUnchanged)
+                  println(
+                    if (checksumUnchanged) objectMap else objectMap + ("changedObjects" -> (obj :: changedObjects))
+                  )
                   if (checksumUnchanged) objectMap else objectMap + ("changedObjects" -> (obj :: changedObjects))
                 case None =>
                   println("\n\n\n\nFiles", ocflObject.getFiles)

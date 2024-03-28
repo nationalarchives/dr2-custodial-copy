@@ -3,17 +3,8 @@ package uk.gov.nationalarchives
 import cats.effect.unsafe.implicits.global
 import io.ocfl.api.exception.NotFoundException
 import io.ocfl.api.io.FixityCheckInputStream
+import io.ocfl.api.model._
 import io.ocfl.api.{OcflFileRetriever, OcflObjectUpdater, OcflRepository}
-import io.ocfl.api.model.{
-  DigestAlgorithm,
-  FileDetails,
-  ObjectVersionId,
-  OcflObjectVersion,
-  OcflObjectVersionFile,
-  VersionDetails,
-  VersionInfo,
-  VersionNum
-}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.{ArgumentCaptor, MockitoSugar}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -23,7 +14,7 @@ import uk.gov.nationalarchives.DisasterRecoveryObject.FileObject
 import uk.gov.nationalarchives.Main.IdWithSourceAndDestPaths
 
 import java.io.ByteArrayInputStream
-import java.nio.file.{Path, Paths}
+import java.nio.file.Paths
 import java.util.UUID
 import java.util.function.Consumer
 import scala.jdk.CollectionConverters.MapHasAsJava
@@ -145,11 +136,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     val id = UUID.randomUUID()
     val ocflRepository = mock[OcflRepository]
     val objectVersionCaptor: ArgumentCaptor[ObjectVersionId] = ArgumentCaptor.forClass(classOf[ObjectVersionId])
-    val sourcePathCaptor: ArgumentCaptor[Path] = ArgumentCaptor.forClass(classOf[Path])
-    val destinationPathCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
     val updater = mock[OcflObjectUpdater]
-    when(updater.addPath(sourcePathCaptor.capture, destinationPathCaptor.capture))
-      .thenReturn(updater)
 
     when(ocflRepository.updateObject(objectVersionCaptor.capture, any[VersionInfo], any[Consumer[OcflObjectUpdater]]))
       .thenAnswer((_: ObjectVersionId, _: VersionInfo, consumer: Consumer[OcflObjectUpdater]) => {
@@ -161,23 +148,5 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     service.createObjects(List(IdWithSourceAndDestPaths(id, Paths.get("test"), destinationPath))).unsafeRunSync()
 
     UUID.fromString(objectVersionCaptor.getValue.getObjectId) should equal(id)
-    sourcePathCaptor.getValue.toString should equal("test")
-    destinationPathCaptor.getValue should equal(s"destinationPath")
-  }
-
-  "updateObjects" should "put a new version of an DR object in the repository" in {
-    val id = UUID.randomUUID()
-    val ocflRepository = mock[OcflRepository]
-    val objectVersionCaptor: ArgumentCaptor[ObjectVersionId] = ArgumentCaptor.forClass(classOf[ObjectVersionId])
-    val sourcePathCaptor: ArgumentCaptor[Path] = ArgumentCaptor.forClass(classOf[Path])
-    when(ocflRepository.putObject(objectVersionCaptor.capture, sourcePathCaptor.capture, any[VersionInfo]))
-      .thenReturn(ObjectVersionId.head(id.toString))
-
-    val service = new OcflService(ocflRepository)
-
-    service.updateObjects(List(IdWithSourceAndDestPaths(id, Paths.get("test"), destinationPath))).unsafeRunSync()
-
-    UUID.fromString(objectVersionCaptor.getValue.getObjectId) should equal(id)
-    sourcePathCaptor.getValue.toString should equal("test")
   }
 }
