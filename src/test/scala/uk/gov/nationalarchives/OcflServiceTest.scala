@@ -20,7 +20,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers._
 import org.scalatest.prop.TableDrivenPropertyChecks
 import uk.gov.nationalarchives.DisasterRecoveryObject.FileObject
-import uk.gov.nationalarchives.Main.IdWithPath
+import uk.gov.nationalarchives.Main.IdWithSourceAndDestPaths
 
 import java.io.ByteArrayInputStream
 import java.nio.file.{Path, Paths}
@@ -33,6 +33,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
   private val url = "url"
   private val name = "name"
   val checksum = "checksum"
+  private val destinationPath = "destinationPath"
 
   val testOcflFileRetriever: OcflFileRetriever = () =>
     new FixityCheckInputStream(new ByteArrayInputStream("".getBytes), DigestAlgorithm.sha256, "checksum")
@@ -40,8 +41,8 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
   def mockGetObjectResponse(
       ocflRepository: OcflRepository,
       id: UUID,
-      ocflFileName: String,
-      ocflChecksum: String
+      ocflChecksum: String,
+      destinationPath: String
   ): Unit = {
     val fileDetails = new FileDetails()
     fileDetails.setFixity(Map(DigestAlgorithm.sha256 -> ocflChecksum).asJava)
@@ -49,17 +50,17 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     val versionDetails = new VersionDetails()
     val v1 = VersionNum.V1
     versionDetails.setObjectVersionId(ObjectVersionId.version(id.toString, v1))
-    val objectVersion = new OcflObjectVersion(versionDetails, Map(s"$id/$ocflFileName" -> ocflObjectVersionFile).asJava)
+    val objectVersion = new OcflObjectVersion(versionDetails, Map(destinationPath -> ocflObjectVersionFile).asJava)
     when(ocflRepository.getObject(any[ObjectVersionId])).thenReturn(objectVersion)
   }
 
-  "getMissingAndChangedObjects" should "return 1 missing object and 0 changed objects if the repository doesn't contain the object" in {
+  "getMissingAndChangedObjects" should "return 1 missing DR object and 0 changed DR objects if the repository doesn't contain the OCFL object" in {
     val id = UUID.randomUUID()
     val ocflRepository = mock[OcflRepository]
     when(ocflRepository.getObject(any[ObjectVersionId])).thenThrow(new NotFoundException)
 
     val service = new OcflService(ocflRepository)
-    val fileObjectThatShouldBeMissing = FileObject(id, name, checksum, url)
+    val fileObjectThatShouldBeMissing = FileObject(id, name, checksum, url, destinationPath)
 
     val missingAndChangedObjects =
       service.getMissingAndChangedObjects(List(fileObjectThatShouldBeMissing)).unsafeRunSync()
@@ -71,29 +72,48 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     missingAndChangedObjects.changedObjects.size should equal(0)
   }
 
-  "getMissingAndChangedObjects" should "return 0 missing objects and 0 changed objects if the repository contains the object " +
+  "getMissingAndChangedObjects" should "return 1 missing DR object and 0 changed DR objects if the repository contains the OCFL object " +
+    "but doesn't contain the file" in {
+      val id = UUID.randomUUID()
+      val ocflRepository = mock[OcflRepository]
+      mockGetObjectResponse(ocflRepository, id, checksum, destinationPath)
+
+      val service = new OcflService(ocflRepository)
+      val fileObjectThatShouldBeMissing = FileObject(id, name, checksum, url, "nonExistingDestinationPath")
+
+      val missingAndChangedObjects =
+        service.getMissingAndChangedObjects(List(fileObjectThatShouldBeMissing)).unsafeRunSync()
+      val missingObject = missingAndChangedObjects.missingObjects.head
+
+      missingAndChangedObjects.missingObjects.size should equal(1)
+      missingObject should equal(fileObjectThatShouldBeMissing)
+
+      missingAndChangedObjects.changedObjects.size should equal(0)
+    }
+
+  "getMissingAndChangedObjects" should "return 0 missing DR objects and 0 changed DR objects if the repository contains the DR object " +
     "but the checksums match" in {
       val id = UUID.randomUUID()
       val ocflRepository = mock[OcflRepository]
-      mockGetObjectResponse(ocflRepository, id, name, checksum)
+      mockGetObjectResponse(ocflRepository, id, checksum, destinationPath)
 
       val service = new OcflService(ocflRepository)
 
       val missingAndChangedObjects =
-        service.getMissingAndChangedObjects(List(FileObject(id, name, checksum, url))).unsafeRunSync()
+        service.getMissingAndChangedObjects(List(FileObject(id, name, checksum, url, destinationPath))).unsafeRunSync()
 
       missingAndChangedObjects.missingObjects.size should equal(0)
       missingAndChangedObjects.changedObjects.size should equal(0)
     }
 
-  "getMissingAndChangedObjects" should "return 0 missing objects and 1 changed objects if the repository contains the object " +
+  "getMissingAndChangedObjects" should "return 0 missing DR objects and 1 changed DR objects if the repository contains the DR object " +
     "but the checksums don't match" in {
       val id = UUID.randomUUID()
       val ocflRepository = mock[OcflRepository]
-      mockGetObjectResponse(ocflRepository, id, name, checksum)
+      mockGetObjectResponse(ocflRepository, id, checksum, destinationPath)
 
       val service = new OcflService(ocflRepository)
-      val fileObjectThatShouldHaveChangedChecksum = FileObject(id, name, "anotherChecksum", url)
+      val fileObjectThatShouldHaveChangedChecksum = FileObject(id, name, "anotherChecksum", url, destinationPath)
 
       val missingAndChangedObjects =
         service.getMissingAndChangedObjects(List(fileObjectThatShouldHaveChangedChecksum)).unsafeRunSync()
@@ -110,7 +130,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     when(ocflRepository.getObject(any[ObjectVersionId])).thenThrow(new Exception("unexpected Exception"))
 
     val service = new OcflService(ocflRepository)
-    val fileObjectThatShouldHaveChangedChecksum = FileObject(id, name, checksum, url)
+    val fileObjectThatShouldHaveChangedChecksum = FileObject(id, name, checksum, url, destinationPath)
 
     val ex = intercept[Exception] {
       service.getMissingAndChangedObjects(List(fileObjectThatShouldHaveChangedChecksum)).unsafeRunSync()
@@ -121,7 +141,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     )
   }
 
-  "createObjects" should "create objects in the OCFL repository" in {
+  "createObjects" should "create DR objects in the OCFL repository" in {
     val id = UUID.randomUUID()
     val ocflRepository = mock[OcflRepository]
     val objectVersionCaptor: ArgumentCaptor[ObjectVersionId] = ArgumentCaptor.forClass(classOf[ObjectVersionId])
@@ -138,14 +158,14 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
       })
     val service = new OcflService(ocflRepository)
 
-    service.createObjects(List(IdWithPath(id, Paths.get("test")))).unsafeRunSync()
+    service.createObjects(List(IdWithSourceAndDestPaths(id, Paths.get("test"), destinationPath))).unsafeRunSync()
 
     UUID.fromString(objectVersionCaptor.getValue.getObjectId) should equal(id)
     sourcePathCaptor.getValue.toString should equal("test")
-    destinationPathCaptor.getValue should equal(s"$id/test")
+    destinationPathCaptor.getValue should equal(s"destinationPath")
   }
 
-  "updateObjects" should "put a new version of an object in the repository" in {
+  "updateObjects" should "put a new version of an DR object in the repository" in {
     val id = UUID.randomUUID()
     val ocflRepository = mock[OcflRepository]
     val objectVersionCaptor: ArgumentCaptor[ObjectVersionId] = ArgumentCaptor.forClass(classOf[ObjectVersionId])
@@ -155,7 +175,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
 
     val service = new OcflService(ocflRepository)
 
-    service.updateObjects(List(IdWithPath(id, Paths.get("test")))).unsafeRunSync()
+    service.updateObjects(List(IdWithSourceAndDestPaths(id, Paths.get("test"), destinationPath))).unsafeRunSync()
 
     UUID.fromString(objectVersionCaptor.getValue.getObjectId) should equal(id)
     sourcePathCaptor.getValue.toString should equal("test")

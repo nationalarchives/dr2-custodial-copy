@@ -7,7 +7,7 @@ import io.ocfl.api.{OcflConfig, OcflObjectUpdater, OcflRepository}
 import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.storage.OcflStorageBuilder
-import uk.gov.nationalarchives.Main.{Config, IdWithPath}
+import uk.gov.nationalarchives.Main.{Config, IdWithSourceAndDestPaths}
 import uk.gov.nationalarchives.OcflService._
 
 import java.nio.file.Paths
@@ -16,19 +16,23 @@ import scala.util.{Failure, Success, Try}
 import scala.compat.java8.FunctionConverters._
 
 class OcflService(ocflRepository: OcflRepository) {
-  def createObjects(paths: List[IdWithPath]): IO[List[ObjectVersionId]] = IO.blocking {
+  def createObjects(paths: List[IdWithSourceAndDestPaths]): IO[List[ObjectVersionId]] = IO.blocking {
     paths
       .groupBy(_.id)
       .view
-      .mapValues(_.map(_.path))
       .toMap
       .map { case (id, paths) =>
         ocflRepository.updateObject(
           id.toHeadVersion,
           new VersionInfo(),
           asJavaConsumer[OcflObjectUpdater] { updater =>
-            paths.map { filePath =>
-              updater.addPath(filePath, s"$id/${filePath.getFileName}")
+            paths.map { idWithSourceAndDestPath =>
+              println(
+                "\n\nidWithSourceAndDestPath.sourceNioFilePath, idWithSourceAndDestPath.destinationPath\n\n",
+                idWithSourceAndDestPath.sourceNioFilePath,
+                idWithSourceAndDestPath.destinationPath
+              )
+              updater.addPath(idWithSourceAndDestPath.sourceNioFilePath, idWithSourceAndDestPath.destinationPath)
             }
           }
         )
@@ -36,8 +40,14 @@ class OcflService(ocflRepository: OcflRepository) {
       .toList
   }
 
-  def updateObjects(paths: List[IdWithPath]): IO[List[ObjectVersionId]] = IO.blocking {
-    paths.map(path => ocflRepository.putObject(path.id.toHeadVersion, path.path, new VersionInfo()))
+  def updateObjects(paths: List[IdWithSourceAndDestPaths]): IO[List[ObjectVersionId]] = IO.blocking {
+    paths.map { idWithSourceAndDestPath =>
+      ocflRepository.putObject(
+        idWithSourceAndDestPath.id.toHeadVersion,
+        idWithSourceAndDestPath.sourceNioFilePath,
+        new VersionInfo()
+      )
+    }
   }
 
   def getMissingAndChangedObjects(
@@ -53,13 +63,23 @@ class OcflService(ocflRepository: OcflRepository) {
 
           potentialOcflObject match {
             case Success(ocflObject) =>
-              val checksumUnchanged =
-                Option(ocflObject.getFile(s"$objectId/${obj.name}"))
-                  .map(_.getFixity.get(DigestAlgorithm.sha256))
-                  .contains(obj.checksum)
-              if (checksumUnchanged) objectMap else objectMap + ("changedObjects" -> (obj :: changedObjects))
+              val potentialFile = Option(ocflObject.getFile(obj.destinationFilePath))
+              potentialFile match {
+                case Some(ocflFileObject) =>
+                  val checksumUnchanged = Some(ocflFileObject.getFixity.get(DigestAlgorithm.sha256)).contains(obj.checksum)
+                  println("\n\n\nFound", "OCFL", ocflFileObject.getFixity.get(DigestAlgorithm.sha256), "FS ->", obj.checksum)
+                  println("\n\n\nchecksumUnchanged =" , checksumUnchanged)
+                  println(if (checksumUnchanged) objectMap else objectMap + ("changedObjects" -> (obj :: changedObjects)))
+                  if (checksumUnchanged) objectMap else objectMap + ("changedObjects" -> (obj :: changedObjects))
+                case None =>
+                  println("\n\n\n\nFiles", ocflObject.getFiles)
+                  println("\n\n\nMissing None", objectMap + ("missingObjects" -> (obj :: missedObjects)))
+                  objectMap + ("missingObjects" -> (obj :: missedObjects)) // IO exists but file doesn't
+              }
 
-            case Failure(objectNotFound: NotFoundException) => objectMap + ("missingObjects" -> (obj :: missedObjects))
+            case Failure(objectNotFound: NotFoundException) =>
+              println("Missing Failure")
+              objectMap + ("missingObjects" -> (obj :: missedObjects)) // IO doesn't exist
             case Failure(unexpectedError) =>
               throw new Exception(
                 s"'getObject' returned an unexpected error '$unexpectedError' when called with object id $objectId"
