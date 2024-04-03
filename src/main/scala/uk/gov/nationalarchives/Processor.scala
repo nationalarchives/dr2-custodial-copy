@@ -57,7 +57,14 @@ class Processor(
     case ContentObjectMessage(ref, _) =>
       for {
         bitstreamInfoPerCo <- entityClient.getBitstreamInfo(ref)
-        entity <- entityClient.getEntity(ref, ContentObject)
+        entity <- fromType[IO](
+          EntityClient.ContentObject.entityTypeShort,
+          ref,
+          None,
+          None,
+          deleted = false,
+          parent = bitstreamInfoPerCo.headOption.flatMap(_.parentRef)
+        )
         parentRef <- IO.fromOption(entity.parent)(new Exception("Cannot get IO reference from CO"))
       } yield bitstreamInfoPerCo.toList.map(bitStreamInfo =>
         FileObject(
