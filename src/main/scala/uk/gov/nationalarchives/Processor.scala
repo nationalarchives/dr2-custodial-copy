@@ -10,8 +10,8 @@ import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.DisasterRecoveryObject._
+import uk.gov.nationalarchives.Main.{Config, IdWithSourceAndDestPaths}
 import uk.gov.nationalarchives.Message._
-import uk.gov.nationalarchives.Main.{Config, IdWithPath}
 import uk.gov.nationalarchives.dp.client.Entities.fromType
 import uk.gov.nationalarchives.dp.client.EntityClient.ContentObject
 import uk.gov.nationalarchives.dp.client.{Entities, EntityClient}
@@ -35,46 +35,60 @@ class Processor(
     </AllMetadata>
     val xmlAsString = newMetadata.toString()
     val checksum = DigestUtils.sha256Hex(xmlAsString)
-    List(MetadataObject(entity.ref, "tna-dr2-disaster-recovery-metadata.xml", checksum, newMetadata))
+    List(
+      MetadataObject(
+        entity.ref,
+        "tna-dr2-disaster-recovery-metadata.xml",
+        checksum,
+        newMetadata,
+        s"${entity.ref}/tna-dr2-disaster-recovery-metadata.xml"
+      )
+    )
   }
 
   private def toDisasterRecoveryObject(message: Message): IO[List[DisasterRecoveryObject]] = message match {
     case InformationObjectMessage(ref, _) =>
       for {
         entity <- fromType[IO](EntityClient.InformationObject.entityTypeShort, ref, None, None, deleted = false)
-        metadata <- entityClient.metadataForEntity(entity).map { metadata =>
+        metadataObject <- entityClient.metadataForEntity(entity).map { metadata =>
           createMetadataObject(entity, metadata)
         }
-      } yield metadata
+      } yield metadataObject
     case ContentObjectMessage(ref, _) =>
       for {
         bitstreamInfoPerCo <- entityClient.getBitstreamInfo(ref)
         entity <- entityClient.getEntity(ref, ContentObject)
         parentRef <- IO.fromOption(entity.parent)(new Exception("Cannot get IO reference from CO"))
       } yield bitstreamInfoPerCo.toList.map(bitStreamInfo =>
-        FileObject(parentRef, bitStreamInfo.name, bitStreamInfo.fixity.value, bitStreamInfo.url)
+        FileObject(
+          parentRef,
+          bitStreamInfo.name,
+          bitStreamInfo.fixity.value,
+          bitStreamInfo.url,
+          s"$parentRef/${bitStreamInfo.name}"
+        )
       )
   }
 
   private def download(disasterRecoveryObject: DisasterRecoveryObject) = disasterRecoveryObject match {
     case fo: FileObject =>
       for {
-        writePath <- fo.path
+        writePath <- fo.sourceFilePath
         _ <- entityClient.streamBitstreamContent[Unit](Fs2Streams.apply)(
           fo.url,
           s => s.through(Files[IO].writeAll(writePath, Flags.Write)).compile.drain
         )
-      } yield IdWithPath(fo.id, writePath.toNioPath)
+      } yield IdWithSourceAndDestPaths(fo.id, writePath.toNioPath, fo.destinationFilePath)
     case mo: MetadataObject =>
       val metadataXmlAsString = mo.metadata.toString
       for {
-        writePath <- mo.path
+        writePath <- mo.sourceFilePath
         _ <- Stream
           .emit(metadataXmlAsString)
           .through(Files[IO].writeUtf8(writePath))
           .compile
           .drain
-      } yield IdWithPath(mo.id, writePath.toNioPath)
+      } yield IdWithSourceAndDestPaths(mo.id, writePath.toNioPath, mo.destinationFilePath)
   }
 
   def process(messageResponses: List[MessageResponse[Option[Message]]]): IO[Unit] =
@@ -86,9 +100,12 @@ class Processor(
       _ <- logger.info(messages.map(_.messageText).mkString(","))
       disasterRecoveryObjects <- messages.map(toDisasterRecoveryObject).sequence
       flatDisasterRecoveryObjects = disasterRecoveryObjects.flatten
+
       missingAndChangedObjects <- ocflService.getMissingAndChangedObjects(flatDisasterRecoveryObjects)
+
       missingObjectsPaths <- missingAndChangedObjects.missingObjects.map(download).sequence
       changedObjectsPaths <- missingAndChangedObjects.changedObjects.map(download).sequence
+
       _ <- ocflService.createObjects(missingObjectsPaths)
       _ <- logger.info(s"${missingObjectsPaths.length} objects created")
       _ <- ocflService.createObjects(changedObjectsPaths)

@@ -7,7 +7,7 @@ import io.ocfl.api.{OcflConfig, OcflObjectUpdater, OcflOption, OcflRepository}
 import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.storage.OcflStorageBuilder
-import uk.gov.nationalarchives.Main.{Config, IdWithPath}
+import uk.gov.nationalarchives.Main.{Config, IdWithSourceAndDestPaths}
 import uk.gov.nationalarchives.OcflService._
 
 import java.nio.file.Paths
@@ -16,21 +16,20 @@ import scala.util.{Failure, Success, Try}
 import scala.compat.java8.FunctionConverters._
 
 class OcflService(ocflRepository: OcflRepository) {
-  def createObjects(paths: List[IdWithPath]): IO[List[ObjectVersionId]] = IO.blocking {
+  def createObjects(paths: List[IdWithSourceAndDestPaths]): IO[List[ObjectVersionId]] = IO.blocking {
     paths
       .groupBy(_.id)
       .view
-      .mapValues(_.map(_.path))
       .toMap
       .map { case (id, paths) =>
         ocflRepository.updateObject(
           id.toHeadVersion,
           new VersionInfo(),
           asJavaConsumer[OcflObjectUpdater] { updater =>
-            paths.map { filePath =>
+            paths.map { idWithSourceAndDestPath =>
               updater.addPath(
-                filePath,
-                s"$id/${filePath.getFileName}",
+                idWithSourceAndDestPath.sourceNioFilePath,
+                idWithSourceAndDestPath.destinationPath,
                 OcflOption.OVERWRITE
               )
             }
@@ -53,7 +52,7 @@ class OcflService(ocflRepository: OcflRepository) {
 
           potentialOcflObject match {
             case Success(ocflObject) =>
-              val potentialFile = Option(ocflObject.getFile(s"$objectId/${obj.name}"))
+              val potentialFile = Option(ocflObject.getFile(obj.destinationFilePath))
               potentialFile match {
                 case Some(ocflFileObject) =>
                   val checksumUnchanged =

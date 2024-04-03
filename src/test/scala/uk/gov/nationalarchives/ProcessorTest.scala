@@ -10,7 +10,7 @@ import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.DisasterRecoveryObject.MetadataObject
-import uk.gov.nationalarchives.Main.{Config, IdWithPath}
+import uk.gov.nationalarchives.Main.{Config, IdWithSourceAndDestPaths}
 import uk.gov.nationalarchives.Message.{ContentObjectMessage, InformationObjectMessage}
 import uk.gov.nationalarchives.OcflService.MissingAndChangedObjects
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
@@ -32,7 +32,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     val ocflService = mock[OcflService]
     when(ocflService.getMissingAndChangedObjects(any[List[MetadataObject]]))
       .thenReturn(IO.pure(MissingAndChangedObjects(missingObjects, changedObjects)))
-    when(ocflService.createObjects(any[List[IdWithPath]])).thenReturn(IO(Nil))
+    when(ocflService.createObjects(any[List[IdWithSourceAndDestPaths]])).thenReturn(IO(Nil))
 
     ocflService
   }
@@ -105,19 +105,20 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     when(entityClient.metadataForEntity(any[Entity])).thenReturn(IO(Seq(metadata)))
     when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO(DeleteMessageResponse.builder.build))
 
-    val ocflService = mockOcflService(Nil, List(MetadataObject(id, "changed", "checksum", metadata)))
+    val ocflService = mockOcflService(Nil, List(MetadataObject(id, "changed", "checksum", metadata, s"$id/changed")))
 
     val processor = new Processor(config, sqsClient, ocflService, entityClient)
     val responses: List[MessageResponse[Option[Message]]] =
       MessageResponse[Option[Message]]("receiptHandle", Option(InformationObjectMessage(id, s"io:$id"))) :: Nil
     processor.process(responses).unsafeRunSync()
 
-    val updateCaptor: ArgumentCaptor[List[IdWithPath]] = ArgumentCaptor.forClass(classOf[List[IdWithPath]])
+    val updateCaptor: ArgumentCaptor[List[IdWithSourceAndDestPaths]] =
+      ArgumentCaptor.forClass(classOf[List[IdWithSourceAndDestPaths]])
 
     verify(ocflService, times(2)).createObjects(updateCaptor.capture)
 
     updateCaptor.getValue.length should equal(1)
-    updateCaptor.getValue.head.path.toString.endsWith(s"$id/changed") should equal(true)
+    updateCaptor.getValue.head.destinationPath.toString.endsWith(s"$id/changed") should equal(true)
   }
 
   "process" should "create but not update if the object is missing" in {
@@ -129,21 +130,22 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     when(entityClient.metadataForEntity(any[Entity])).thenReturn(IO(Seq(metadata)))
     when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO(DeleteMessageResponse.builder.build))
 
-    val ocflService = mockOcflService(List(MetadataObject(id, "missing", "checksum", metadata)), Nil)
+    val ocflService = mockOcflService(List(MetadataObject(id, "missing", "checksum", metadata, s"$id/missing")), Nil)
 
     val processor = new Processor(config, sqsClient, ocflService, entityClient)
     val responses: List[MessageResponse[Option[Message]]] =
       MessageResponse[Option[Message]]("receiptHandle", Option(InformationObjectMessage(id, s"io:$id"))) :: Nil
     processor.process(responses).unsafeRunSync()
 
-    val createCaptor: ArgumentCaptor[List[IdWithPath]] = ArgumentCaptor.forClass(classOf[List[IdWithPath]])
+    val createCaptor: ArgumentCaptor[List[IdWithSourceAndDestPaths]] =
+      ArgumentCaptor.forClass(classOf[List[IdWithSourceAndDestPaths]])
 
     verify(ocflService, times(2)).createObjects(createCaptor.capture)
 
     val createValues = createCaptor.getAllValues.asScala
     createValues.head.length should equal(1)
     createValues.last.length should equal(0)
-    createValues.head.head.path.toString.endsWith(s"$id/missing") should equal(true)
+    createValues.head.head.destinationPath.toString.endsWith(s"$id/missing") should equal(true)
   }
 
   "process" should "update a changed file and add a missing file" in {
@@ -157,8 +159,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO(DeleteMessageResponse.builder.build))
 
     val ocflService = mockOcflService(
-      List(MetadataObject(missingId, "missing", "checksum", metadata)),
-      List(MetadataObject(changedId, "changed", "checksum", metadata))
+      List(MetadataObject(missingId, "missing", "checksum", metadata, s"$missingId/missing")),
+      List(MetadataObject(changedId, "changed", "checksum", metadata, s"$changedId/missing"))
     )
 
     val processor = new Processor(config, sqsClient, ocflService, entityClient)
@@ -168,7 +170,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     )
     processor.process(responses).unsafeRunSync()
 
-    val createCaptor: ArgumentCaptor[List[IdWithPath]] = ArgumentCaptor.forClass(classOf[List[IdWithPath]])
+    val createCaptor: ArgumentCaptor[List[IdWithSourceAndDestPaths]] =
+      ArgumentCaptor.forClass(classOf[List[IdWithSourceAndDestPaths]])
 
     verify(ocflService, times(2)).createObjects(createCaptor.capture)
 
@@ -177,10 +180,10 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     val create = createValues.head
 
     update.length should equal(1)
-    update.head.path.toString.endsWith(s"$changedId/changed") should equal(true)
+    update.head.sourceNioFilePath.toString.endsWith(s"$changedId/changed") should equal(true)
 
     create.length should equal(1)
-    create.head.path.toString.endsWith(s"$missingId/missing") should be(true)
+    create.head.sourceNioFilePath.toString.endsWith(s"$missingId/missing") should be(true)
   }
 
   "process" should "delete the messages if all messages are written successfully" in {

@@ -115,7 +115,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     Files.createDirectories(Paths.get(path.toString, id.toString))
     val fullFilePath = Paths.get(path.toString, filePath)
     Files.write(fullFilePath, bodyAsString.getBytes)
-    new OcflService(repo).createObjects(List(IdWithPath(id, fullFilePath))).unsafeRunSync()
+    new OcflService(repo).createObjects(List(IdWithSourceAndDestPaths(id, fullFilePath, filePath))).unsafeRunSync()
   }
 
   private def latestVersion(repo: OcflRepository, id: UUID): Long =
