@@ -22,6 +22,7 @@ object DisasterRecoveryObject {
       extends DisasterRecoveryObject
   case class MetadataObject(
       id: UUID,
+      repTypeGroup: Option[String],
       name: String,
       checksum: String,
       metadata: Elem,
