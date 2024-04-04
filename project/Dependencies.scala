@@ -3,7 +3,7 @@ object Dependencies {
   lazy val logbackVersion = "2.23.1"
   private val log4CatsVersion = "2.6.0"
 
-  lazy val fs2Core = "co.fs2" %% "fs2-core" % "3.10.1"
+  lazy val fs2Core = "co.fs2" %% "fs2-core" % "3.10.2"
   lazy val log4jSlf4j = "org.apache.logging.log4j" % "log4j-slf4j2-impl" % logbackVersion
   lazy val log4jCore = "org.apache.logging.log4j" % "log4j-core" % logbackVersion
   lazy val log4jTemplateJson = "org.apache.logging.log4j" % "log4j-layout-template-json" % logbackVersion
