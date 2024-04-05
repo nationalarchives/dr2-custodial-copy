@@ -14,7 +14,7 @@ import uk.gov.nationalarchives.Main.{Config, IdWithSourceAndDestPaths}
 import uk.gov.nationalarchives.Message._
 import uk.gov.nationalarchives.dp.client.Entities.fromType
 import uk.gov.nationalarchives.dp.client.EntityClient
-import uk.gov.nationalarchives.dp.client.EntityClient.{Access, GenerationType, Preservation, RepresentationType}
+import uk.gov.nationalarchives.dp.client.EntityClient._
 
 import java.util.UUID
 import scala.xml.Elem
@@ -85,13 +85,13 @@ class Processor(
       Some(fileName)
     ).flatten.mkString("/")
 
-  private def createMetadataFileName(entityType: String) = s"${entityType}_Metadata.xml"
+  private def createMetadataFileName(entityTypeShort: String) = s"${entityTypeShort}_Metadata.xml"
 
   private def toDisasterRecoveryObject(message: Message): IO[List[DisasterRecoveryObject]] = message match {
     case InformationObjectMessage(ref, _) =>
       for {
-        entity <- fromType[IO](EntityClient.InformationObject.entityTypeShort, ref, None, None, deleted = false)
-        metadataFileName = createMetadataFileName(entity.entityType.get.entityTypeShort)
+        entity <- fromType[IO](InformationObject.entityTypeShort, ref, None, None, deleted = false)
+        metadataFileName = createMetadataFileName(InformationObject.entityTypeShort)
         metadataObject <- entityClient.metadataForEntity(entity).map { metadata =>
           val destinationFilePath = createDestinationFilePath(entity.ref, fileName = metadataFileName)
           createMetadataObject(entity.ref, metadata, metadataFileName, destinationFilePath)
@@ -101,7 +101,7 @@ class Processor(
       for {
         bitstreamInfoPerCo <- entityClient.getBitstreamInfo(ref)
         entity <- fromType[IO](
-          EntityClient.ContentObject.entityTypeShort,
+          ContentObject.entityTypeShort,
           ref,
           None,
           None,
@@ -115,7 +115,7 @@ class Processor(
           new Exception(s"${entity.ref} belongs to more than 1 representation type: ${coRepTypes.mkString(", ")}")
         }
         representationTypeGroup = coRepTypes.headOption
-        metadataFileName = createMetadataFileName(entity.entityType.get.entityTypeShort)
+        metadataFileName = createMetadataFileName(ContentObject.entityTypeShort)
         metadata <- entityClient.metadataForEntity(entity).map { metadataFragments =>
           val destinationFilePath = createDestinationFilePath(
             parentRef,
