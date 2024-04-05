@@ -58,11 +58,12 @@ class OcflService(ocflRepository: OcflRepository) {
                   val checksumUnchanged =
                     Some(ocflFileObject.getFixity.get(DigestAlgorithm.sha256)).contains(obj.checksum)
                   if (checksumUnchanged) objectMap else objectMap + ("changedObjects" -> (obj :: changedObjects))
-                case None => objectMap + ("missingObjects" -> (obj :: missedObjects)) // IO exists but file doesn't
+                case None =>
+                  objectMap + ("missingObjects" -> (obj :: missedObjects)) // Information Object exists but file doesn't
               }
 
             case Failure(objectNotFound: NotFoundException) =>
-              objectMap + ("missingObjects" -> (obj :: missedObjects)) // IO doesn't exist
+              objectMap + ("missingObjects" -> (obj :: missedObjects)) // Information Object doesn't exist
             case Failure(unexpectedError) =>
               throw new Exception(
                 s"'getObject' returned an unexpected error '$unexpectedError' when called with object id $objectId"
