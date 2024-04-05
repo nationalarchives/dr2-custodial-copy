@@ -566,10 +566,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
   "runDisasterRecovery" should "throw an error if the OCFL repository returns an unexpected error" in {
     val id = UUID.randomUUID()
-    val repoDir = Files.createTempDirectory("repo")
     val sqsClient = mockSqs(InformationObjectMessage(id, s"$ioType:$id") :: Nil)
     val preservicaClient = mockPreservicaClient(metadataElems = Seq(<Test></Test>))
-    val expectedMetadataFileDestinationFilePath = metadataFile(id, ioType)
 
     val repo = mock[OcflRepository]
     when(repo.getObject(any[ObjectVersionId])).thenThrow(new Exception("Unexpected Exception"))
