@@ -114,13 +114,13 @@ class Processor(
         _ <- IO.raiseWhen(coRepTypes.length > 1) {
           new Exception(s"${entity.ref} belongs to more than 1 representation type: ${coRepTypes.mkString(", ")}")
         }
-        representationTypeGroup = coRepTypes.head
+        representationTypeGroup = coRepTypes.headOption
         metadataFileName = createMetadataFileName(entity.entityType.get.entityTypeShort)
         metadata <- entityClient.metadataForEntity(entity).map { metadataFragments =>
           val destinationFilePath = createDestinationFilePath(
             parentRef,
             Some(entity.ref),
-            Some(representationTypeGroup),
+            representationTypeGroup,
             fileName = metadataFileName
           )
           createMetadataObject(
@@ -128,14 +128,14 @@ class Processor(
             metadataFragments,
             metadataFileName,
             destinationFilePath,
-            Some(representationTypeGroup)
+            representationTypeGroup
           )
         }
       } yield bitstreamInfoPerCo.toList.map { bitStreamInfo =>
         val destinationFilePath = createDestinationFilePath(
           parentRef,
           Some(entity.ref),
-          Some(representationTypeGroup),
+          representationTypeGroup,
           Some(bitStreamInfo.generationType),
           Some(bitStreamInfo.generationVersion),
           bitStreamInfo.name
