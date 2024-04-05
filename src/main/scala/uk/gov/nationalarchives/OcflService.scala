@@ -62,7 +62,7 @@ class OcflService(ocflRepository: OcflRepository) {
                   objectMap + ("missingObjects" -> (obj :: missedObjects)) // Information Object exists but file doesn't
               }
 
-            case Failure(objectNotFound: NotFoundException) =>
+            case Failure(_: NotFoundException) =>
               objectMap + ("missingObjects" -> (obj :: missedObjects)) // Information Object doesn't exist
             case Failure(unexpectedError) =>
               throw new Exception(
