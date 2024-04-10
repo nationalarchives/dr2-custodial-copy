@@ -44,7 +44,7 @@ object Main extends IOApp {
       }
     }
 
-  case class IdWithPath(id: UUID, path: file.Path)
+  case class IdWithSourceAndDestPaths(id: UUID, sourceNioFilePath: file.Path, destinationPath: String)
 
   override def run(args: List[String]): IO[ExitCode] =
     for {

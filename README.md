@@ -15,35 +15,57 @@ The queue sends messages in this format
 }
 ```
 
-The prefix of the id can be `io`, `co` or `so` depending on the entity type. They are dealt with differently.
+The prefix of the id can be `io`, `co` or `so` depending on the entity type; they are dealt with differently.
+Messages are deduped before they are processed.
 
 ### Handling Information object messages
 
+* Create the metadata file name `IO_Metadata.xml`
 * Get the metadata from the Preservica API
+* Create the destination path for this metadata file `{IO_REF}/IO_Metadata.xml`
 * Wrap all returned metadata fragments in a `<AllMetadata/>` tag
 * Calculate the checksum of this metadata string.
-* Check the OCFL repository for an object stored under this IO id.
-    * If an object is not found, insert a new object into the OCFL repository with the metadata stored in a file
-      named `tna-dr2-disaster-recovery-metadata.xml`
-    * If an object is found:
-        * Compare the calculated checksum with the one in the OCFL repository.
-        * If they are the same, do nothing.
-        * If they are different, add a new version to the OCFL repository.
+* Use all of this information to create a `MetadataObject`
 
-### Handling Content object messages
+### Handling Content Object (CO) messages
 
-* Get the bitstream information from the Preservica API.
-* Get the entity, so we can find the IO parent ID.
-* Check the OCFL repository for an object stored under this IO id.
-    * If an object is not found, insert a new file into the repository under `{ioId}/{bistreamName}`
-    * If an object is found:
-        * Compare the checksum returned from Preservica with the checksum in the repository.
-        * If they are the same, do nothing.
-        * If they are different, add a new version to the repository.
+* Get the bitstream information (which contains the parent ID) from the Preservica API.
+* Verify that the parent ID is present.
+* Use parent ID to get the URLs of the representations
+* Use URLs to get the COs under each representation
+* Return the representation types (`{representationType}_{index}`) for a given CO ref
+* If a CO has more than 1 representation type, throw an Exception
+* Create the metadata file name `CO_Metadata.xml`
+* Get the metadata from the Preservica API
+* Create the destination path for this metadata file `{IO_REF}/{REP_TYPE}/{CO_REF}/{FILE_NAME}`
+* Use metadata information to create a `MetadataObject`
+* Create the destination path for the CO file `{IO_REF}/{REP_TYPE}/{CO_REF}/{GEN_TYPE}/g{GEN_VERSION}/{FILE_NAME}`
+* Use the path and bitstream information to create a `FileObject`
 
-### Structural object messages.
+### Handling Structural Object (SO) messages
 
 These are ignored as there is nothing in the structural objects we want to store.
+
+### Looking up, Creating and Updating files
+* Once the list of all `MetadataObject`s and `FileObject`s have been generated
+* Check the OCFL repository for an object stored under this IO id.
+  * If an object is not found that means no files belong under this IO and therefore, add the metadata object to the list of "missing" files
+  * If an object is found:
+    * Get the file, using the destination path
+      * If the file is missing, add metadata object to the list of "missing" files
+      * If the file is found
+        * Compare the calculated checksum with the one in the OCFL repository.
+          * If they are the same, do nothing.
+          * If they are different, add the metadata object to the list of "changed" files
+* Once the list of all "missing" and "changed" files are generated, stream them from Preservica to a tmp directory
+  * For "missing" files:
+    * Call `createObjects` on the OCFL repository in order to:
+      * insert a new object into the `destinationPath` provided
+      * add a new version to the OCFL repository
+  * For "changed" files:
+    * Call `createObjects` on the OCFL repository in order to:
+      * overwrite the current file stored at the `destinationPath` provided
+      * add a new version to the OCFL repository
 
 ### Deleting SQS messages
 
