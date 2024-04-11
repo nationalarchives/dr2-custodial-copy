@@ -2,188 +2,52 @@ package uk.gov.nationalarchives
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import io.circe.Decoder
-import io.ocfl.api.model.{DigestAlgorithm, ObjectVersionId}
-import io.ocfl.api.{OcflConfig, OcflRepository}
-import io.ocfl.core.OcflRepositoryBuilder
-import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
-import io.ocfl.core.storage.OcflStorageBuilder
-import org.mockito.ArgumentMatchers._
-import fs2.Stream
+import io.ocfl.api.OcflRepository
+import io.ocfl.api.model.ObjectVersionId
 import org.apache.commons.codec.digest.DigestUtils
-import org.mockito.{ArgumentMatchers, MockitoSugar}
+import org.mockito.ArgumentMatchers._
+import org.mockito.MockitoSugar
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers._
-import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
 import sttp.capabilities.fs2.Fs2Streams
-import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.Main._
-import uk.gov.nationalarchives.Message._
 import uk.gov.nationalarchives.OcflService.UuidUtils
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.Entity
 import uk.gov.nationalarchives.dp.client.EntityClient
-import uk.gov.nationalarchives.dp.client.EntityClient.{Access, Derived, Original, Preservation, RepresentationType}
+import uk.gov.nationalarchives.dp.client.EntityClient.{ContentObject, Derived, InformationObject, Original}
+import uk.gov.nationalarchives.testUtils.ExternalServicesTestUtils.MainTestUtils
 
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Paths}
 import java.util.UUID
-import scala.compat.java8.FunctionConverters.asJavaConsumer
-import scala.xml.{Elem, XML}
 import scala.xml.Utility.trim
+import scala.xml.XML
 
 class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
-  private val ioType = "io"
-  private def createTestRepo(repoDir: Path = Files.createTempDirectory("repo")) = {
-    val workDir = Files.createTempDirectory("work")
-    new OcflRepositoryBuilder()
-      .defaultLayoutConfig(new HashedNTupleLayoutConfig())
-      .storage(asJavaConsumer[OcflStorageBuilder](s => s.fileSystem(repoDir)))
-      .ocflConfig(asJavaConsumer[OcflConfig](config => config.setDefaultDigestAlgorithm(DigestAlgorithm.sha256)))
-      .prettyPrintJson()
-      .workDir(workDir)
-      .build()
-  }
-
-  private val config = Config("", "", "", "", "", None)
-
-  private def mockSqs(messages: List[Message]): DASQSClient[IO] = {
-    val sqsClient = mock[DASQSClient[IO]]
-    val responses = IO {
-      messages.zipWithIndex.map { case (message, idx) =>
-        MessageResponse[Option[Message]](s"handle$idx", Option(message))
-      }
-    }
-    when(sqsClient.receiveMessages[Option[Message]](any[String], any[Int])(any[Decoder[Option[Message]]]))
-      .thenReturn(responses)
-    when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO(DeleteMessageResponse.builder().build))
-    sqsClient
-  }
-
-  private def mockPreservicaClient(
-      ioId: UUID = UUID.fromString("049974f1-d3f0-4f51-8288-2a40051a663c"),
-      coId: UUID = UUID.fromString("3393cd51-3c54-41a0-a9d4-5234a0ae47bf"),
-      coId2: UUID = UUID.fromString("ed384a5c-689b-4f56-a47b-3690259a9998"),
-      coId3: UUID = UUID.fromString("07747488-7976-4481-8fa4-b515c842d9a0"),
-      metadataElems: Seq[Elem] = Nil,
-      bitstreamInfo1: Seq[BitStreamInfo] = Nil,
-      bitstreamInfo2: Seq[BitStreamInfo] = Nil,
-      addAccessRepUrl: Boolean = false
-  ): EntityClient[IO, Fs2Streams[IO]] = {
-    val preservicaClient = mock[EntityClient[IO, Fs2Streams[IO]]]
-    val entityType = Some(EntityClient.ContentObject)
-    val contentObjectResponse =
-      Entity(entityType, coId, None, None, false, entityType.map(_.entityPath), parent = Option(ioId))
-    val urlToRepresentations = Seq(
-      s"http://localhost/api/entity/information-objects/$ioId/representations/Preservation/1"
-    ) ++ (if (addAccessRepUrl) Seq(s"http://localhost/api/entity/information-objects/$ioId/representations/Access/1")
-          else Nil)
-    when(preservicaClient.metadataForEntity(any[Entity])).thenReturn(IO(metadataElems))
-    when(preservicaClient.getUrlsToIoRepresentations(ArgumentMatchers.eq(ioId), any[Option[RepresentationType]]))
-      .thenReturn(IO(urlToRepresentations))
-    when(
-      preservicaClient.getContentObjectsFromRepresentation(
-        ArgumentMatchers.eq(ioId),
-        ArgumentMatchers.eq(Preservation),
-        any[Int]
-      )
-    ).thenReturn(IO(Seq(contentObjectResponse, contentObjectResponse.copy(ref = coId2))))
-
-    when(
-      preservicaClient.getContentObjectsFromRepresentation(
-        ArgumentMatchers.eq(ioId),
-        ArgumentMatchers.eq(Access),
-        any[Int]
-      )
-    ).thenReturn(IO(Seq(contentObjectResponse.copy(ref = coId3))))
-
-    Seq((coId, bitstreamInfo1), (coId2, bitstreamInfo2), (coId3, bitstreamInfo1)).foreach { case (id, bitstreamInfo) =>
-      when(preservicaClient.getBitstreamInfo(ArgumentMatchers.eq(id))).thenReturn(IO(bitstreamInfo))
-    }
-
-    Seq(coId, coId2).foreach { id =>
-      when(preservicaClient.getEntity(id, EntityClient.ContentObject))
-        .thenReturn(IO(contentObjectResponse.copy(ref = id)))
-    }
-
-    (bitstreamInfo1 ++ bitstreamInfo2).foreach { bitstreamInfo =>
-      when(
-        preservicaClient
-          .streamBitstreamContent(any[Fs2Streams[IO]])(any[String], any[Fs2Streams[IO]#BinaryStream => IO[Unit]])
-      ).thenAnswer((_: Fs2Streams[IO], _: String, stream: Fs2Streams[IO]#BinaryStream => IO[Unit]) => {
-        if (Option(stream).isDefined) {
-          stream(Stream.emits(s"File content for ${bitstreamInfo.name}".getBytes)).unsafeRunSync()
-        }
-        IO.unit
-      })
-    }
-
-    preservicaClient
-  }
-
   private def runDisasterRecovery(
       sqsClient: DASQSClient[IO],
-      preservicaClient: EntityClient[IO, Fs2Streams[IO]],
-      repository: OcflRepository
-  ): Unit = {
-    val ocflService = new OcflService(repository)
-    val processor = new Processor(config, sqsClient, ocflService, preservicaClient)
-    Main.runDisasterRecovery(sqsClient, config, processor).compile.drain.unsafeRunSync()
-  }
-
-  private def metadataFile(id: UUID, ioType: String) = s"$id/${ioType.toUpperCase}_Metadata.xml"
-
-  private def createExistingMetadataEntry(
-      id: UUID,
-      ioType: String,
-      repo: OcflRepository,
-      elem: Elem,
-      destinationPath: String
-  ) = {
-    val existingMetadata = <AllMetadata>
-      {elem}
-    </AllMetadata>
-    val xmlAsString = existingMetadata.toString()
-    addToRepo(id, repo, xmlAsString, metadataFile(id, ioType), destinationPath)
-  }
-
-  private def addToRepo(
-      id: UUID,
-      repo: OcflRepository,
-      bodyAsString: String,
-      sourceFilePath: String,
-      destinationPath: String
-  ) = {
-    val path = Files.createTempDirectory(id.toString)
-    Files.createDirectories(Paths.get(path.toString, id.toString))
-    val fullSourceFilePath = Paths.get(path.toString, sourceFilePath)
-    Files.write(fullSourceFilePath, bodyAsString.getBytes)
-    new OcflService(repo)
-      .createObjects(List(IdWithSourceAndDestPaths(id, fullSourceFilePath, destinationPath)))
-      .unsafeRunSync()
-  }
-
-  private def latestVersion(repo: OcflRepository, id: UUID): Long =
-    repo.getObject(id.toHeadVersion).getObjectVersionId.getVersionNum.getVersionNum
+      config: Config,
+      processor: Processor
+  ): Unit = Main.runDisasterRecovery(sqsClient, config, processor).compile.drain.unsafeRunSync()
 
   "runDisasterRecovery" should "write a new version and new IO metadata object, to the correct location in the repository " +
     "if it doesn't already exist" in {
-      val id = UUID.randomUUID()
-      val repoDir = Files.createTempDirectory("repo")
-      val repo = createTestRepo(repoDir)
-      val sqsClient = mockSqs(InformationObjectMessage(id, s"$ioType:$id") :: Nil)
-      val preservicaClient = mockPreservicaClient(metadataElems = Seq(<Test></Test>))
-      val expectedMetadataFileDestinationFilePath = metadataFile(id, ioType)
+      val utils = new MainTestUtils(objectVersion = 0)
+      val ioId = utils.ioId
+      val repo = utils.repo
+      val expectedIoMetadataFileDestinationPath = utils.expectedIoMetadataFileDestinationPath
 
-      runDisasterRecovery(sqsClient, preservicaClient, repo)
+      runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
 
-      latestVersion(repo, id) must equal(1)
-      repo.containsObject(id.toString) must be(true)
-      repo.getObject(id.toHeadVersion).containsFile(expectedMetadataFileDestinationFilePath) must be(true)
+      utils.latestObjectVersion(repo, ioId) must equal(1)
+      repo.containsObject(ioId.toString) must be(true)
+      repo.getObject(ioId.toHeadVersion).containsFile(expectedIoMetadataFileDestinationPath) must be(true)
 
       val metadataStoragePath =
-        repo.getObject(id.toHeadVersion).getFile(expectedMetadataFileDestinationFilePath).getStorageRelativePath
-      val metadataContent = Files.readAllBytes(Paths.get(repoDir.toString, metadataStoragePath)).map(_.toChar).mkString
+        repo.getObject(ioId.toHeadVersion).getFile(expectedIoMetadataFileDestinationPath).getStorageRelativePath
+      val metadataContent =
+        Files.readAllBytes(Paths.get(utils.repoDir.toString, metadataStoragePath)).map(_.toChar).mkString
 
       metadataContent must equal(
         <AllMetadata>
@@ -194,39 +58,35 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
   "runDisasterRecovery" should "not write a new version, nor new IO metadata object if there is an IO update message with " +
     "the same metadata" in {
-      val id = UUID.randomUUID()
-      val sqsClient = mockSqs(InformationObjectMessage(id, s"$ioType:$id") :: Nil)
-      val metadata = <Test></Test>
-      val preservicaClient = mockPreservicaClient(metadataElems = Seq(metadata))
-      val repo = createTestRepo()
-      val expectedVersionNumberBeforeAndAfter = 1
-      createExistingMetadataEntry(id, ioType.toUpperCase, repo, metadata, metadataFile(id, ioType))
+      val utils = new MainTestUtils(typesOfMetadataFilesInRepo = List(InformationObject))
+      val ioId = utils.ioId
+      val repo = utils.repo
 
-      latestVersion(repo, id) must equal(expectedVersionNumberBeforeAndAfter)
-      runDisasterRecovery(sqsClient, preservicaClient, repo)
+      runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
 
-      latestVersion(repo, id) must equal(expectedVersionNumberBeforeAndAfter)
+      utils.latestObjectVersion(repo, ioId) must equal(1)
     }
 
   "runDisasterRecovery" should "write a new version and a new IO metadata object if there is an IO update with different metadata" in {
-    val id = UUID.randomUUID()
-    val sqsClient = mockSqs(InformationObjectMessage(id, s"$ioType:$id") :: Nil)
-    val metadata = <Test></Test>
-    val preservicaClient = mockPreservicaClient(metadataElems = Seq(<DifferentMetadata></DifferentMetadata>))
-    val repoDir = Files.createTempDirectory("repo")
-    val repo = createTestRepo(repoDir)
-    val expectedMetadataFileDestinationFilePath = metadataFile(id, ioType)
-    createExistingMetadataEntry(id, ioType.toUpperCase, repo, metadata, expectedMetadataFileDestinationFilePath)
+    val utils = new MainTestUtils(
+      typesOfMetadataFilesInRepo = List(InformationObject),
+      metadataElemsPreservicaResponse = Seq(<DifferentMetadata></DifferentMetadata>)
+    )
+    val ioId = utils.ioId
+    val repo = utils.repo
 
-    latestVersion(repo, id) must equal(1)
-    runDisasterRecovery(sqsClient, preservicaClient, repo)
+    runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
 
-    latestVersion(repo, id) must equal(2)
+    utils.latestObjectVersion(repo, ioId) must equal(2)
 
     val metadataStoragePath =
-      repo.getObject(id.toHeadVersion).getFile(expectedMetadataFileDestinationFilePath).getStorageRelativePath
+      repo.getObject(ioId.toHeadVersion).getFile(utils.expectedIoMetadataFileDestinationPath).getStorageRelativePath
     val metadataContent =
-      trim(XML.loadString(Files.readAllBytes(Paths.get(repoDir.toString, metadataStoragePath)).map(_.toChar).mkString))
+      trim(
+        XML.loadString(
+          Files.readAllBytes(Paths.get(utils.repoDir.toString, metadataStoragePath)).map(_.toChar).mkString
+        )
+      )
 
     metadataContent must equal(
       trim(<AllMetadata>
@@ -236,14 +96,20 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
   }
 
   "runDisasterRecovery" should "write multiple metadata fragments to the same file" in {
-    val id = UUID.randomUUID()
-    val repoDir = Files.createTempDirectory("repo")
-    val repo = createTestRepo(repoDir)
-    val sqsClient = mockSqs(InformationObjectMessage(id, s"$ioType:$id") :: Nil)
-    val preservicaClient = mockPreservicaClient(metadataElems = Seq(<Test1></Test1>, <Test2></Test2>, <Test3></Test3>))
-    runDisasterRecovery(sqsClient, preservicaClient, repo)
-    val storagePath = repo.getObject(id.toHeadVersion).getFile(metadataFile(id, ioType)).getStorageRelativePath
-    val xml = Files.readAllBytes(Paths.get(repoDir.toString, storagePath)).map(_.toChar).mkString
+    val utils =
+      new MainTestUtils(
+        objectVersion = 0,
+        metadataElemsPreservicaResponse = Seq(<Test1></Test1>, <Test2></Test2>, <Test3></Test3>)
+      )
+    val ioId = utils.ioId
+    val repo = utils.repo
+
+    runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
+    utils.latestObjectVersion(repo, ioId) must equal(1)
+
+    val storagePath =
+      repo.getObject(ioId.toHeadVersion).getFile(utils.expectedIoMetadataFileDestinationPath).getStorageRelativePath
+    val xml = Files.readAllBytes(Paths.get(utils.repoDir.toString, storagePath)).map(_.toChar).mkString
     val expectedXml = """<AllMetadata>
                         |      <Test1></Test1><Test2></Test2><Test3></Test3>
                         |    </AllMetadata>""".stripMargin
@@ -251,177 +117,148 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
   }
 
   "runDisasterRecovery" should "only write one version if there are two identical IO messages" in {
-    val id = UUID.randomUUID()
-    val repo = createTestRepo()
-    val sqsClient = mockSqs(List(InformationObjectMessage(id, s"io:$id"), InformationObjectMessage(id, s"io:$id")))
-    val preservicaClient = mockPreservicaClient(metadataElems = Seq(<Test></Test>))
-    runDisasterRecovery(sqsClient, preservicaClient, repo)
-    latestVersion(repo, id) must equal(1)
+    val utils = new MainTestUtils(List(InformationObject, InformationObject), objectVersion = 0)
+    val ioId = utils.ioId
+    val repo = utils.repo
+
+    runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
+    utils.latestObjectVersion(repo, ioId) must equal(1)
   }
 
   "runDisasterRecovery" should "return an error if there is an error fetching the metadata" in {
     val preservicaClient = mock[EntityClient[IO, Fs2Streams[IO]]]
-    val id = UUID.randomUUID()
-    val repo = createTestRepo()
-    val sqsClient = mockSqs(List(InformationObjectMessage(id, s"io:$id")))
+    val utils = new MainTestUtils(objectVersion = 0)
     when(preservicaClient.metadataForEntity(any[Entity])).thenThrow(new Exception("Error getting metadata"))
 
-    val ocflService = new OcflService(repo)
-    val processor = new Processor(config, sqsClient, ocflService, preservicaClient)
+    val processor = new Processor(utils.config, utils.sqsClient, utils.ocflService, preservicaClient)
     val err: Throwable =
-      Main.runDisasterRecovery(sqsClient, config, processor).compile.drain.attempt.unsafeRunSync().left.value
+      Main
+        .runDisasterRecovery(utils.sqsClient, utils.config, processor)
+        .compile
+        .drain
+        .attempt
+        .unsafeRunSync()
+        .left
+        .value
     err.getMessage must equal("Error getting metadata")
   }
 
   "runDisasterRecovery" should "return an error if a CO has no parent" in {
-    val preservicaClient = mock[EntityClient[IO, Fs2Streams[IO]]]
-    val id = UUID.randomUUID()
-    val repo = createTestRepo()
-    val sqsClient = mockSqs(List(ContentObjectMessage(id, s"co:$id")))
-    val bitStreamInfo = BitStreamInfo("name", 1, "", Fixity("SHA256", ""), 1, Original, None, None)
+    val bitstreamInfo = Seq(BitStreamInfo("name1", 1, "", Fixity("SHA256", ""), 1, Original, None, None))
+    val utils = new MainTestUtils(List(ContentObject), 0, bitstreamInfo1Responses = bitstreamInfo)
 
-    when(preservicaClient.getBitstreamInfo(ArgumentMatchers.eq(id))).thenReturn(IO(Seq(bitStreamInfo)))
-
-    val ocflService = new OcflService(repo)
-    val processor = new Processor(config, sqsClient, ocflService, preservicaClient)
     val err: Throwable =
-      Main.runDisasterRecovery(sqsClient, config, processor).compile.drain.attempt.unsafeRunSync().left.value
+      Main
+        .runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
+        .compile
+        .drain
+        .attempt
+        .unsafeRunSync()
+        .left
+        .value
     err.getMessage must equal("Cannot get IO reference from CO")
   }
 
   "runDisasterRecovery" should "return an error if a CO belongs to more than one Representation type" in {
-    val id = UUID.randomUUID()
     val ioId = UUID.randomUUID()
-    val repo = createTestRepo()
-    val sqsClient = mockSqs(List(ContentObjectMessage(id, s"co:$id")))
-    val bitStreamInfo = BitStreamInfo("name", 1, "", Fixity("SHA256", ""), 1, Original, None, Some(ioId))
-
-    val preservicaClient = mockPreservicaClient(
-      ioId = ioId,
-      coId = id,
-      coId3 = id,
-      bitstreamInfo1 = Seq(bitStreamInfo),
+    val utils = new MainTestUtils(
+      List(ContentObject),
+      0,
+      bitstreamInfo2Responses = Seq(BitStreamInfo("name1", 1, "", Fixity("SHA256", ""), 1, Original, None, Some(ioId))),
       addAccessRepUrl = true
     )
+    val coId = utils.coId1
 
-    val ocflService = new OcflService(repo)
-    val processor = new Processor(config, sqsClient, ocflService, preservicaClient)
     val err: Throwable =
-      Main.runDisasterRecovery(sqsClient, config, processor).compile.drain.attempt.unsafeRunSync().left.value
+      Main
+        .runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
+        .compile
+        .drain
+        .attempt
+        .unsafeRunSync()
+        .left
+        .value
     err.getMessage must equal(
-      s"$id belongs to more than 1 representation type: Preservation_1, Access_1"
+      s"$coId belongs to more than 1 representation type: Preservation_1, Access_1"
     )
   }
 
   "runDisasterRecovery" should "write a new version and a bitstream to a file, to the correct location in the repository " +
     "if it doesn't already exist" in {
-      val coId = UUID.randomUUID()
-      val ioId = UUID.randomUUID()
-      val metadata = <Test></Test>
-      val repoDir = Files.createTempDirectory("repo")
-      val repo = createTestRepo(repoDir)
-      val sqsClient = mockSqs(ContentObjectMessage(coId, s"co:$coId") :: Nil)
-      val bitStreamInfo = BitStreamInfo("name", 1, "", Fixity("SHA256", ""), 1, Original, None, Some(ioId))
-      val preservicaClient =
-        mockPreservicaClient(ioId, coId, metadataElems = Seq(metadata), bitstreamInfo1 = List(bitStreamInfo))
-      val expectedCoFileDestinationFilePath = s"$ioId/Preservation_1/$coId/original/g1/name"
-      createExistingMetadataEntry(
-        ioId,
-        ioType.toUpperCase,
-        repo,
-        metadata,
-        s"$ioId/Preservation_1/$coId/CO_Metadata.xml"
+      val utils = new MainTestUtils(
+        List(ContentObject),
+        typesOfMetadataFilesInRepo = List(ContentObject)
       )
+      val repo = utils.repo
+      val ioId = utils.ioId
 
-      latestVersion(repo, ioId) must equal(1)
-      runDisasterRecovery(sqsClient, preservicaClient, repo)
+      val expectedCoFileDestinationFilePath = utils.expectedCoFileDestinationPath
 
-      latestVersion(repo, ioId) must equal(2)
+      runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
+
+      utils.latestObjectVersion(repo, ioId) must equal(2)
       repo.containsObject(ioId.toString) must be(true)
       repo.getObject(ioId.toHeadVersion).containsFile(expectedCoFileDestinationFilePath) must be(true)
 
       val coStoragePath =
         repo.getObject(ioId.toHeadVersion).getFile(expectedCoFileDestinationFilePath).getStorageRelativePath
-      val coContent = Files.readAllBytes(Paths.get(repoDir.toString, coStoragePath)).map(_.toChar).mkString
+      val coContent = Files.readAllBytes(Paths.get(utils.repoDir.toString, coStoragePath)).map(_.toChar).mkString
 
-      coContent must equal(s"File content for ${bitStreamInfo.name}")
+      coContent must equal(s"File content for name1")
     }
 
   "runDisasterRecovery" should "not write a new version, nor a new bitstream if there is an CO update with the same bitstream" in {
-    val data = "Test"
-    val metadata = <Test></Test>
     val ioId = UUID.randomUUID()
-    val coId = UUID.randomUUID()
-    val checksum = DigestUtils.sha256Hex(data)
-    val repo = createTestRepo()
-    addToRepo(ioId, repo, data, s"$ioId/name", s"$ioId/Preservation_1/$coId/original/g1/name")
-    createExistingMetadataEntry(ioId, ioType.toUpperCase, repo, metadata, s"$ioId/Preservation_1/$coId/CO_Metadata.xml")
-    val sqsClient = mockSqs(ContentObjectMessage(coId, s"co:$coId") :: Nil)
-    val bitStreamInfo = BitStreamInfo("name", 1, "", Fixity("SHA256", checksum), 1, Original, None, Some(ioId))
-    val preservicaClient =
-      mockPreservicaClient(ioId, coId, metadataElems = Seq(metadata), bitstreamInfo1 = Seq(bitStreamInfo))
+    val fileContent = "Test"
+    val checksum = DigestUtils.sha256Hex(fileContent)
     val expectedVersionBeforeAndAfter = 2
+    val utils = new MainTestUtils(
+      List(ContentObject),
+      expectedVersionBeforeAndAfter,
+      typesOfMetadataFilesInRepo = List(ContentObject),
+      fileContentToWriteToEachFileInRepo = List(fileContent),
+      bitstreamInfo1Responses =
+        List(BitStreamInfo("name1", 1, "", Fixity("SHA256", checksum), 1, Original, None, Some(ioId)))
+    )
+    val repo = utils.repo
 
-    latestVersion(repo, ioId) must equal(expectedVersionBeforeAndAfter)
-    runDisasterRecovery(sqsClient, preservicaClient, repo)
+    runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
 
-    latestVersion(repo, ioId) must equal(expectedVersionBeforeAndAfter)
+    utils.latestObjectVersion(repo, ioId) must equal(expectedVersionBeforeAndAfter)
   }
 
   "runDisasterRecovery" should "write a new version and a bitstream to a file, to the correct location in the repository, " +
     "if there is a CO update with different metadata" in {
-      val data = "Test"
-      val metadata = <Test></Test>
+      val fileContent = "Test"
       val ioId = UUID.randomUUID()
-      val coId = UUID.randomUUID()
-      val repoDir = Files.createTempDirectory("repo")
-      val repo = createTestRepo(repoDir)
-      val expectedCoFileDestinationFilePath = s"$ioId/Preservation_1/$coId/original/g1/name"
-      addToRepo(ioId, repo, data, s"$ioId/name", expectedCoFileDestinationFilePath)
 
-      createExistingMetadataEntry(
-        ioId,
-        ioType.toUpperCase,
-        repo,
-        metadata,
-        s"$ioId/Preservation_1/$coId/CO_Metadata.xml"
+      val utils = new MainTestUtils(
+        List(ContentObject),
+        2,
+        typesOfMetadataFilesInRepo = List(ContentObject),
+        fileContentToWriteToEachFileInRepo = List(fileContent),
+        bitstreamInfo1Responses =
+          List(BitStreamInfo("name1", 1, "", Fixity("SHA256", "DifferentContent"), 1, Original, None, Some(ioId)))
       )
-      val sqsClient = mockSqs(ContentObjectMessage(coId, s"co:$coId") :: Nil)
-      val checksum = DigestUtils.sha256Hex("DifferentData")
-      val bitStreamInfo = BitStreamInfo("name", 1, "", Fixity("SHA256", checksum), 1, Original, None, Some(ioId))
-      val preservicaClient =
-        mockPreservicaClient(ioId, coId, metadataElems = Seq(metadata), bitstreamInfo1 = Seq(bitStreamInfo))
 
-      latestVersion(repo, ioId) must equal(2)
+      val repo = utils.repo
+      val expectedCoFileDestinationFilePath = utils.expectedCoFileDestinationPath
 
-      runDisasterRecovery(sqsClient, preservicaClient, repo)
+      runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
 
-      latestVersion(repo, ioId) must equal(3)
+      utils.latestObjectVersion(repo, ioId) must equal(3)
       repo.containsObject(ioId.toString) must be(true)
-
       repo.getObject(ioId.toHeadVersion).containsFile(expectedCoFileDestinationFilePath) must be(true)
 
       val coStoragePath =
         repo.getObject(ioId.toHeadVersion).getFile(expectedCoFileDestinationFilePath).getStorageRelativePath
-      val coContent = Files.readAllBytes(Paths.get(repoDir.toString, coStoragePath)).map(_.toChar).mkString
+      val coContent = Files.readAllBytes(Paths.get(utils.repoDir.toString, coStoragePath)).map(_.toChar).mkString
 
-      coContent must equal(s"File content for ${bitStreamInfo.name}")
+      coContent must equal(s"File content for name1")
     }
 
   "runDisasterRecovery" should "write multiple bitstreams to the same version and to the correct location" in {
     val ioId = UUID.randomUUID()
-    val coId = UUID.randomUUID()
-    val coId2 = UUID.randomUUID()
-    val coId3 = UUID.randomUUID()
-    val metadata = <Test></Test>
-    val repo = createTestRepo()
-    val sqsClient = mockSqs(
-      List(
-        ContentObjectMessage(coId, s"co:$coId"),
-        ContentObjectMessage(coId2, s"co:$coId2"),
-        ContentObjectMessage(coId3, s"co:$coId3")
-      )
-    )
     val fixity = Fixity("SHA256", "")
     val bitStreamInfoList = Seq(
       BitStreamInfo("name1", 1, "", fixity, 1, Original, None, Some(ioId)),
@@ -431,89 +268,79 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       BitStreamInfo("name3", 1, "", fixity, 1, Original, None, Some(ioId))
     )
 
-    val preservicaClient = mockPreservicaClient(
-      ioId,
-      coId,
-      coId2,
-      coId3,
-      metadataElems = Seq(metadata),
-      bitstreamInfo1 = bitStreamInfoList,
-      bitstreamInfo2 = bitStreamInfoList2,
+    val utils = new MainTestUtils(
+      List(ContentObject, ContentObject, ContentObject),
+      typesOfMetadataFilesInRepo = List(ContentObject),
+      bitstreamInfo1Responses = bitStreamInfoList,
+      bitstreamInfo2Responses = bitStreamInfoList2,
       addAccessRepUrl = true
     )
+    val coId = utils.coId1
+    val coId2 = utils.coId2
+    val coId3 = utils.coId3
+    val repo = utils.repo
 
-    createExistingMetadataEntry(ioId, ioType.toUpperCase, repo, metadata, s"$ioId/Preservation_1/$coId/CO_Metadata.xml")
-    latestVersion(repo, ioId) must equal(1)
-    runDisasterRecovery(sqsClient, preservicaClient, repo)
+    runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
 
-    val expectedCoFile1DestinationFilePath = s"$ioId/Preservation_1/$coId/original/g1/name1"
-    val expectedCoFile2DestinationFilePath = s"$ioId/Preservation_1/$coId/derived/g2/name2"
-    val expectedCoFile3DestinationFilePath = s"$ioId/Preservation_1/$coId2/original/g1/name3"
-    val expectedCoFile4DestinationFilePath = s"$ioId/Access_1/$coId3/original/g1/name1"
+    val expectedCoFileDestinationFilePaths = List(
+      s"$ioId/Preservation_1/$coId/original/g1/name1",
+      s"$ioId/Preservation_1/$coId/derived/g2/name2",
+      s"$ioId/Preservation_1/$coId2/original/g1/name3",
+      s"$ioId/Access_1/$coId3/original/g1/name1"
+    )
+    expectedCoFileDestinationFilePaths.foreach { path =>
+      repo.getObject(ioId.toHeadVersion).containsFile(path) must be(true)
+    }
 
-    repo.getObject(ioId.toHeadVersion).containsFile(expectedCoFile1DestinationFilePath) must be(true)
-    repo.getObject(ioId.toHeadVersion).containsFile(expectedCoFile2DestinationFilePath) must be(true)
-    repo.getObject(ioId.toHeadVersion).containsFile(expectedCoFile3DestinationFilePath) must be(true)
-    repo.getObject(ioId.toHeadVersion).containsFile(expectedCoFile4DestinationFilePath) must be(true)
-
-    latestVersion(repo, ioId) must equal(2)
+    utils.latestObjectVersion(repo, ioId) must equal(2)
   }
 
   "runDisasterRecovery" should "only write one version if there are two identical CO messages" in {
-    val ioId = UUID.randomUUID()
-    val coId = UUID.randomUUID()
-    val repo = createTestRepo()
-    val sqsClient = mockSqs(List(ContentObjectMessage(coId, s"co:$coId"), ContentObjectMessage(coId, s"co:$coId")))
-    val preservicaClient = mockPreservicaClient(
-      ioId,
-      coId,
-      bitstreamInfo1 = Seq(BitStreamInfo("name", 1, "", Fixity("SHA256", ""), 1, Original, None, Some(ioId)))
-    )
-    runDisasterRecovery(sqsClient, preservicaClient, repo)
-    latestVersion(repo, ioId) must equal(1)
+    val utils = new MainTestUtils(List(ContentObject), 0)
+    val ioId = utils.ioId
+    val repo = utils.repo
+
+    runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
+    utils.latestObjectVersion(repo, ioId) must equal(1)
   }
 
   "runDisasterRecovery" should "return an error if there is an error fetching the bitstream info" in {
     val preservicaClient = mock[EntityClient[IO, Fs2Streams[IO]]]
-    val id = UUID.randomUUID()
-    val repo = createTestRepo()
-    val sqsClient = mockSqs(List(ContentObjectMessage(id, s"co:$id")))
+    val utils = new MainTestUtils(List(ContentObject), 0)
+    val sqsClient = utils.sqsClient
     when(preservicaClient.getBitstreamInfo(any[UUID])).thenThrow(new Exception("Error getting bitstream info"))
 
-    val ocflService = new OcflService(repo)
-    val processor = new Processor(config, sqsClient, ocflService, preservicaClient)
+    val processor = new Processor(utils.config, sqsClient, utils.ocflService, preservicaClient)
     val err: Throwable =
-      Main.runDisasterRecovery(sqsClient, config, processor).compile.drain.attempt.unsafeRunSync().left.value
+      Main.runDisasterRecovery(sqsClient, utils.config, processor).compile.drain.attempt.unsafeRunSync().left.value
     err.getMessage must equal("Error getting bitstream info")
   }
 
   "runDisasterRecovery" should "write a new version and new CO metadata object, to the correct location in the repository " +
     "if it doesn't already exist" in {
-      val data = "File content for name"
-      val coId = UUID.randomUUID()
+      val fileContent = "File content for name"
+      val checksum = DigestUtils.sha256Hex(fileContent)
       val ioId = UUID.randomUUID()
-      val metadata = <Test></Test>
-      val repoDir = Files.createTempDirectory("repo")
-      val repo = createTestRepo(repoDir)
-      val sqsClient = mockSqs(ContentObjectMessage(coId, s"co:$coId") :: Nil)
-      val checksum = DigestUtils.sha256Hex(data)
-      val bitStreamInfo = BitStreamInfo("name", 1, "", Fixity("SHA256", checksum), 1, Original, None, Some(ioId))
-      val preservicaClient =
-        mockPreservicaClient(ioId, coId, metadataElems = Seq(metadata), bitstreamInfo1 = List(bitStreamInfo))
-      val expectedMetadataFileDestinationFilePath = s"$ioId/Preservation_1/$coId/CO_Metadata.xml"
+      val utils = new MainTestUtils(
+        List(ContentObject),
+        1,
+        fileContentToWriteToEachFileInRepo = List(fileContent),
+        bitstreamInfo1Responses =
+          List(BitStreamInfo("name1", 1, "", Fixity("SHA256", checksum), 1, Original, None, Some(ioId)))
+      )
+      val repo = utils.repo
+      val expectedCoMetadataFileDestinationPath = utils.expectedCoMetadataFileDestinationPath
 
-      addToRepo(ioId, repo, data, s"$ioId/name", s"$ioId/Preservation_1/$coId/original/g1/name")
+      runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
 
-      latestVersion(repo, ioId) must equal(1)
-      runDisasterRecovery(sqsClient, preservicaClient, repo)
-
-      latestVersion(repo, ioId) must equal(2)
+      utils.latestObjectVersion(repo, ioId) must equal(2)
       repo.containsObject(ioId.toString) must be(true)
-      repo.getObject(ioId.toHeadVersion).containsFile(expectedMetadataFileDestinationFilePath) must be(true)
+      repo.getObject(ioId.toHeadVersion).containsFile(expectedCoMetadataFileDestinationPath) must be(true)
 
       val metadataStoragePath =
-        repo.getObject(ioId.toHeadVersion).getFile(expectedMetadataFileDestinationFilePath).getStorageRelativePath
-      val metadataContent = Files.readAllBytes(Paths.get(repoDir.toString, metadataStoragePath)).map(_.toChar).mkString
+        repo.getObject(ioId.toHeadVersion).getFile(expectedCoMetadataFileDestinationPath).getStorageRelativePath
+      val metadataContent =
+        Files.readAllBytes(Paths.get(utils.repoDir.toString, metadataStoragePath)).map(_.toChar).mkString
 
       metadataContent must equal(
         <AllMetadata>
@@ -523,60 +350,55 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     }
 
   "runDisasterRecovery" should "write a new version and new CO metadata object if there is a CO update with different metadata" in {
-    val data = "Test"
-    val metadata = <AllMetadata>
-      <Test></Test>
-    </AllMetadata>
+    val fileContent = "Test"
+    val checksum = DigestUtils.sha256Hex(fileContent)
     val ioId = UUID.randomUUID()
-    val coId = UUID.randomUUID()
-    val checksum = DigestUtils.sha256Hex(data)
-    val sqsClient = mockSqs(ContentObjectMessage(coId, s"co:$coId") :: Nil)
-    val bitStreamInfo = BitStreamInfo("name", 1, "", Fixity("SHA256", checksum), 1, Original, None, Some(ioId))
-    val preservicaClient =
-      mockPreservicaClient(
-        ioId,
-        coId,
-        metadataElems = Seq(<DifferentMetadata></DifferentMetadata>),
-        bitstreamInfo1 = Seq(bitStreamInfo)
-      )
+    val utils = new MainTestUtils(
+      List(InformationObject),
+      2,
+      typesOfMetadataFilesInRepo = List(ContentObject),
+      fileContentToWriteToEachFileInRepo = List(fileContent),
+      metadataElemsPreservicaResponse = Seq(<DifferentMetadata></DifferentMetadata>),
+      bitstreamInfo1Responses =
+        List(BitStreamInfo("name1", 1, "", Fixity("SHA256", checksum), 1, Original, None, Some(ioId)))
+    )
+    val repo = utils.repo
 
-    val repoDir = Files.createTempDirectory("repo")
-    val repo = createTestRepo(repoDir)
-    val expectedMetadataFileDestinationFilePath = s"$ioId/Preservation_1/$coId/CO_Metadata.xml"
-    addToRepo(ioId, repo, data, s"$ioId/name", s"$ioId/Preservation_1/$coId/original/g1/name")
-    createExistingMetadataEntry(ioId, ioType.toUpperCase, repo, metadata, expectedMetadataFileDestinationFilePath)
+    runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
 
-    latestVersion(repo, ioId) must equal(2)
-
-    runDisasterRecovery(sqsClient, preservicaClient, repo)
-
-    latestVersion(repo, ioId) must equal(3)
+    utils.latestObjectVersion(repo, ioId) must equal(3)
 
     val metadataStoragePath =
-      repo.getObject(ioId.toHeadVersion).getFile(expectedMetadataFileDestinationFilePath).getStorageRelativePath
+      repo.getObject(ioId.toHeadVersion).getFile(utils.expectedCoMetadataFileDestinationPath).getStorageRelativePath
     val metadataContent =
-      trim(XML.loadString(Files.readAllBytes(Paths.get(repoDir.toString, metadataStoragePath)).map(_.toChar).mkString))
+      trim(
+        XML.loadString(
+          Files.readAllBytes(Paths.get(utils.repoDir.toString, metadataStoragePath)).map(_.toChar).mkString
+        )
+      )
 
     metadataContent must equal(
       trim(<AllMetadata>
-        <DifferentMetadata></DifferentMetadata>
-      </AllMetadata>)
+          <Test></Test>
+        </AllMetadata>)
     )
   }
 
   "runDisasterRecovery" should "throw an error if the OCFL repository returns an unexpected error" in {
-    val id = UUID.randomUUID()
-    val sqsClient = mockSqs(InformationObjectMessage(id, s"$ioType:$id") :: Nil)
-    val preservicaClient = mockPreservicaClient(metadataElems = Seq(<Test></Test>))
+    val utils = new MainTestUtils(objectVersion = 0)
+    val ioId = utils.ioId
 
     val repo = mock[OcflRepository]
     when(repo.getObject(any[ObjectVersionId])).thenThrow(new Exception("Unexpected Exception"))
 
+    val ocflService = new OcflService(repo)
+    val processor = new Processor(utils.config, utils.sqsClient, ocflService, utils.preservicaClient)
+
     val ex = intercept[Exception] {
-      runDisasterRecovery(sqsClient, preservicaClient, repo)
+      runDisasterRecovery(utils.sqsClient, utils.config, processor)
     }
     ex.getMessage must equal(
-      s"'getObject' returned an unexpected error 'java.lang.Exception: Unexpected Exception' when called with object id $id"
+      s"'getObject' returned an unexpected error 'java.lang.Exception: Unexpected Exception' when called with object id $ioId"
     )
   }
 }
