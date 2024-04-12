@@ -173,7 +173,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       addAccessRepUrl: Boolean = false
   ) {
 
-    val config = Config("", "", "", "", "", None)
+    val config: Config = Config("", "", "", "", "", None, "")
 
     val bitstreamInfoResponsesWithSameName: Seq[BitStreamInfo] = bitstreamInfo1Responses.flatMap {
       bitstreamInfo1Response =>
@@ -267,7 +267,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       changedObjects: List[DisasterRecoveryObject] = Nil,
       throwErrorInMissingAndChangedObjects: Boolean = false
   ) {
-    val config: Config = Config("", "", "queueUrl", "", "", Option(URI.create("https://example.com")))
+    val config: Config = Config("", "", "queueUrl", "", "", Option(URI.create("https://example.com")), "")
     val ioId: UUID = UUID.randomUUID()
     val coId: UUID = UUID.randomUUID()
     val metadata: Elem = <Test><Metadata></Metadata></Test>
