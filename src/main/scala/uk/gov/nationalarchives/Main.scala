@@ -58,7 +58,7 @@ object Main extends IOApp {
             val versionWithoutSnapshot: String = BuildInfo.version.stripSuffix("-SNAPSHOT")
             versionWithoutSnapshot.getBytes("UTF-8")
           }
-          .through(Files[IO].writeAll(Path(s"${config.versionPath}-${UUID.randomUUID()}")))
+          .through(Files[IO].writeAll(Path(s"${config.versionPath}/${UUID.randomUUID()}")))
           .compile
           .drain
 
