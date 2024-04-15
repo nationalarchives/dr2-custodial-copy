@@ -2,6 +2,7 @@ package uk.gov.nationalarchives
 
 import cats.effect._
 import fs2.Stream
+import fs2.io.file.{Files, Path}
 import io.circe.{Decoder, HCursor}
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import pureconfig._
@@ -9,6 +10,7 @@ import pureconfig.generic.auto._
 import pureconfig.module.catseffect.syntax._
 import uk.gov.nationalarchives.dp.client.fs2.Fs2Client
 import uk.gov.nationalarchives.Message._
+import projectInfo.BuildInfo
 import java.net.URI
 import java.nio.file
 import java.util.UUID
@@ -22,7 +24,8 @@ object Main extends IOApp {
       sqsQueueUrl: String,
       repoDir: String,
       workDir: String,
-      proxyUrl: Option[URI]
+      proxyUrl: Option[URI],
+      versionPath: String
   )
 
   private def sqsClient(config: Config): DASQSClient[IO] =
@@ -49,6 +52,16 @@ object Main extends IOApp {
   override def run(args: List[String]): IO[ExitCode] =
     for {
       config <- ConfigSource.default.loadF[IO, Config]()
+      _ <-
+        Stream
+          .emits {
+            val versionWithoutSnapshot: String = BuildInfo.version.stripSuffix("-SNAPSHOT")
+            versionWithoutSnapshot.getBytes("UTF-8")
+          }
+          .through(Files[IO].writeAll(Path(s"${config.versionPath}/${UUID.randomUUID()}")))
+          .compile
+          .drain
+
       client <- Fs2Client.entityClient(
         config.preservicaUrl,
         config.preservicaSecretName,
