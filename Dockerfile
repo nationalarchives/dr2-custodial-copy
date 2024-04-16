@@ -1,6 +1,6 @@
 FROM openjdk:19-jdk-alpine
 COPY target/scala-3.3.3/dr2-disaster-recovery.jar /dr2-disaster-recovery.jar
-RUN mkdir -p /poduser/work /poduser/repo && \
+RUN mkdir -p /poduser/work /poduser/repo /poduser/version && \
     chown -R 1002:1005 /poduser && \
     mkdir /poduser/logs && \
     touch /poduser/logs/disaster-recovery.log && \
