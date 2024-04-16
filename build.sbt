@@ -1,8 +1,9 @@
-import sbtrelease.ReleaseStateTransformations._
-import Dependencies._
+import sbtrelease.ReleaseStateTransformations.*
+import Dependencies.*
 import uk.gov.nationalarchives.sbt.Log4j2MergePlugin.log4j2MergeStrategy
 
-ThisBuild / scalaVersion := "2.13.13"
+ThisBuild / organization := "uk.gov.nationalarchives"
+ThisBuild / scalaVersion := "3.3.3"
 
 lazy val releaseSettings = Seq(
   releaseProcess := Seq[ReleaseStep](

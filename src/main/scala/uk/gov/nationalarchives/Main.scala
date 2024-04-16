@@ -1,15 +1,15 @@
 package uk.gov.nationalarchives
 
-import cats.effect._
+import cats.effect.*
 import fs2.Stream
 import fs2.io.file.{Files, Path}
 import io.circe.{Decoder, HCursor}
 import org.typelevel.log4cats.slf4j.Slf4jLogger
-import pureconfig._
-import pureconfig.generic.auto._
-import pureconfig.module.catseffect.syntax._
+import pureconfig.*
+import pureconfig.generic.derivation.default.*
+import pureconfig.module.catseffect.syntax.*
 import uk.gov.nationalarchives.dp.client.fs2.Fs2Client
-import uk.gov.nationalarchives.Message._
+import uk.gov.nationalarchives.Message.*
 import projectInfo.BuildInfo
 import java.net.URI
 import java.nio.file
@@ -26,14 +26,14 @@ object Main extends IOApp {
       workDir: String,
       proxyUrl: Option[URI],
       versionPath: String
-  )
+  ) derives ConfigReader
 
   private def sqsClient(config: Config): DASQSClient[IO] =
     config.proxyUrl
       .map(proxy => DASQSClient[IO](proxy))
       .getOrElse(DASQSClient[IO]())
 
-  implicit val decoder: Decoder[Option[Message]] = (c: HCursor) =>
+  given Decoder[Option[Message]] = (c: HCursor) =>
     for {
       id <- c.downField("id").as[String]
     } yield {

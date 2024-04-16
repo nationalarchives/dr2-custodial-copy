@@ -1,7 +1,7 @@
 package uk.gov.nationalarchives
 
 import cats.effect.IO
-import cats.implicits._
+import cats.implicits.*
 import fs2.Stream
 import fs2.io.file.{Files, Flags}
 import org.apache.commons.codec.digest.DigestUtils
@@ -9,12 +9,14 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
-import uk.gov.nationalarchives.DisasterRecoveryObject._
+import uk.gov.nationalarchives.DisasterRecoveryObject.*
 import uk.gov.nationalarchives.Main.{Config, IdWithSourceAndDestPaths}
-import uk.gov.nationalarchives.Message._
+import uk.gov.nationalarchives.Message.*
 import uk.gov.nationalarchives.dp.client.Entities.fromType
 import uk.gov.nationalarchives.dp.client.EntityClient
-import uk.gov.nationalarchives.dp.client.EntityClient._
+import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
+import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
+import uk.gov.nationalarchives.dp.client.EntityClient.*
 
 import java.util.UUID
 import scala.xml.Elem
@@ -32,13 +34,13 @@ class Processor(
 
   private def createMetadataObject(
       ioRef: UUID,
-      metadata: Seq[Elem],
+      metadata: EntityMetadata,
       fileName: String,
       path: String,
       repType: Option[String] = None
   ): List[MetadataObject] = {
     val newMetadata = <AllMetadata>
-      {metadata}
+      {metadata.metadataContainerNode :+ metadata.entityNode :+ metadata.identifiersNode}
     </AllMetadata>
     val xmlAsString = newMetadata.toString()
     val checksum = DigestUtils.sha256Hex(xmlAsString)

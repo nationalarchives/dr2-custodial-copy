@@ -4,16 +4,18 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import fs2.io.file.Path
 import org.mockito.ArgumentMatchers.any
-import org.mockito.MockitoSugar
+import org.mockito.Mockito.when
+import org.scalatestplus.mockito.MockitoSugar
 import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers._
+import org.scalatest.matchers.should.Matchers.*
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.DisasterRecoveryObject.MetadataObject
 import uk.gov.nationalarchives.Main.IdWithSourceAndDestPaths
 import uk.gov.nationalarchives.Message.InformationObjectMessage
 import uk.gov.nationalarchives.OcflService.MissingAndChangedObjects
-import uk.gov.nationalarchives.dp.client.EntityClient.{Access, ContentObject, InformationObject, Preservation}
-import uk.gov.nationalarchives.testUtils.ExternalServicesTestUtils._
+import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
+import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
+import uk.gov.nationalarchives.testUtils.ExternalServicesTestUtils.*
 
 import java.util.UUID
 
