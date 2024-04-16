@@ -9,8 +9,8 @@ import io.ocfl.api.{OcflConfig, OcflRepository}
 import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.storage.OcflStorageBuilder
-import org.mockito.ArgumentMatchers.{any, argThat}
-import org.mockito.Mockito.{doAnswer, times, verify, when}
+import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito.{times, verify, when}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 import org.scalatest.matchers.should.Matchers.*
