@@ -5,18 +5,20 @@ import cats.effect.unsafe.implicits.global
 import io.ocfl.api.OcflRepository
 import io.ocfl.api.model.ObjectVersionId
 import org.apache.commons.codec.digest.DigestUtils
-import org.mockito.ArgumentMatchers._
-import org.mockito.MockitoSugar
+import org.mockito.ArgumentMatchers.*
+import org.mockito.Mockito.when
+import org.scalatestplus.mockito.MockitoSugar
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.must.Matchers._
+import org.scalatest.matchers.must.Matchers.*
 import sttp.capabilities.fs2.Fs2Streams
-import uk.gov.nationalarchives.Main._
-import uk.gov.nationalarchives.OcflService.UuidUtils
+import uk.gov.nationalarchives.Main.*
+import uk.gov.nationalarchives.OcflService.*
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.Entity
 import uk.gov.nationalarchives.dp.client.EntityClient
-import uk.gov.nationalarchives.dp.client.EntityClient.{ContentObject, Derived, InformationObject, Original}
+import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
+import uk.gov.nationalarchives.dp.client.EntityClient.GenerationType.*
 import uk.gov.nationalarchives.testUtils.ExternalServicesTestUtils.MainTestUtils
 
 import java.nio.file.{Files, Paths}
@@ -51,7 +53,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
       metadataContent must equal(
         <AllMetadata>
-      <Test></Test>
+      <Test></Test><Entity/><Identifier/>
     </AllMetadata>.toString
       )
     }
@@ -90,7 +92,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
     metadataContent must equal(
       trim(<AllMetadata>
-        <DifferentMetadata/>
+        <DifferentMetadata/><Entity/><Identifier/>
       </AllMetadata>)
     )
   }
@@ -111,7 +113,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       repo.getObject(ioId.toHeadVersion).getFile(utils.expectedIoMetadataFileDestinationPath).getStorageRelativePath
     val xml = Files.readAllBytes(Paths.get(utils.repoDir.toString, storagePath)).map(_.toChar).mkString
     val expectedXml = """<AllMetadata>
-                        |      <Test1></Test1><Test2></Test2><Test3></Test3>
+                        |      <Test1></Test1><Test2></Test2><Test3></Test3><Entity/><Identifier/>
                         |    </AllMetadata>""".stripMargin
     xml must equal(expectedXml)
   }
@@ -128,7 +130,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
   "runDisasterRecovery" should "return an error if there is an error fetching the metadata" in {
     val preservicaClient = mock[EntityClient[IO, Fs2Streams[IO]]]
     val utils = new MainTestUtils(objectVersion = 0)
-    when(preservicaClient.metadataForEntity(any[Entity])).thenThrow(new Exception("Error getting metadata"))
+    when(preservicaClient.metadataForEntity(any[Entity])).thenThrow(new RuntimeException("Error getting metadata"))
 
     val processor = new Processor(utils.config, utils.sqsClient, utils.ocflService, preservicaClient)
     val err: Throwable =
@@ -308,7 +310,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val preservicaClient = mock[EntityClient[IO, Fs2Streams[IO]]]
     val utils = new MainTestUtils(List(ContentObject), 0)
     val sqsClient = utils.sqsClient
-    when(preservicaClient.getBitstreamInfo(any[UUID])).thenThrow(new Exception("Error getting bitstream info"))
+    when(preservicaClient.getBitstreamInfo(any[UUID])).thenThrow(new RuntimeException("Error getting bitstream info"))
 
     val processor = new Processor(utils.config, sqsClient, utils.ocflService, preservicaClient)
     val err: Throwable =
@@ -344,7 +346,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
       metadataContent must equal(
         <AllMetadata>
-      <Test></Test>
+      <Test></Test><Entity/><Identifier/>
     </AllMetadata>.toString
       )
     }
@@ -379,7 +381,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
     metadataContent must equal(
       trim(<AllMetadata>
-          <Test></Test>
+          <Test></Test><Entity/><Identifier/>
         </AllMetadata>)
     )
   }
@@ -389,7 +391,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val ioId = utils.ioId
 
     val repo = mock[OcflRepository]
-    when(repo.getObject(any[ObjectVersionId])).thenThrow(new Exception("Unexpected Exception"))
+    when(repo.getObject(any[ObjectVersionId])).thenThrow(new RuntimeException("Unexpected Exception"))
 
     val ocflService = new OcflService(repo)
     val processor = new Processor(utils.config, utils.sqsClient, ocflService, utils.preservicaClient)
@@ -398,7 +400,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       runDisasterRecovery(utils.sqsClient, utils.config, processor)
     }
     ex.getMessage must equal(
-      s"'getObject' returned an unexpected error 'java.lang.Exception: Unexpected Exception' when called with object id $ioId"
+      s"'getObject' returned an unexpected error 'java.lang.RuntimeException: Unexpected Exception' when called with object id $ioId"
     )
   }
 }

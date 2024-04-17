@@ -10,21 +10,28 @@ import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.storage.OcflStorageBuilder
 import org.mockito.ArgumentMatchers.any
-import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito, MockitoSugar}
-import org.scalatest.matchers.should.Matchers.{convertToAnyShouldWrapper, equal}
+import org.mockito.Mockito.{times, verify, when}
+import org.mockito.invocation.InvocationOnMock
+import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
+import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.{Assertion, EitherValues}
+import org.scalatestplus.mockito.MockitoSugar
 import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.DisasterRecoveryObject.MetadataObject
 import uk.gov.nationalarchives.Main.{Config, IdWithSourceAndDestPaths}
 import uk.gov.nationalarchives.Message.{ContentObjectMessage, InformationObjectMessage}
-import uk.gov.nationalarchives.OcflService.{MissingAndChangedObjects, UuidUtils}
-import uk.gov.nationalarchives._
+import uk.gov.nationalarchives.OcflService.MissingAndChangedObjects
+import uk.gov.nationalarchives.OcflService.*
+import uk.gov.nationalarchives.*
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.{Entity, fromType}
 import uk.gov.nationalarchives.dp.client.EntityClient
-import uk.gov.nationalarchives.dp.client.EntityClient._
+import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
+import uk.gov.nationalarchives.dp.client.EntityClient.GenerationType.*
+import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
+import uk.gov.nationalarchives.dp.client.EntityClient.*
 
 import java.net.URI
 import java.nio.file.{Files, Path, Paths}
@@ -32,7 +39,7 @@ import java.util.UUID
 import scala.compat.java8.FunctionConverters.asJavaConsumer
 import scala.jdk.CollectionConverters.ListHasAsScala
 import scala.util.{Failure, Success, Try}
-import scala.xml.Elem
+import scala.xml.{Elem, NodeBuffer}
 
 object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
   private val ioType = InformationObject.entityTypeShort
@@ -53,14 +60,15 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       addAccessRepUrl: Boolean = false
   ): EntityClient[IO, Fs2Streams[IO]] = {
     val preservicaClient = mock[EntityClient[IO, Fs2Streams[IO]]]
-    val entityType = Some(EntityClient.ContentObject)
+    val entityType = Some(ContentObject)
     val contentObjectResponse =
       Entity(entityType, coId, None, None, deleted = false, entityType.map(_.entityPath), parent = Option(ioId))
     val urlToRepresentations = Seq(
       s"http://localhost/api/entity/information-objects/$ioId/representations/Preservation/1"
-    ) ++ (if (addAccessRepUrl) Seq(s"http://localhost/api/entity/information-objects/$ioId/representations/Access/1")
+    ) ++ (if addAccessRepUrl then Seq(s"http://localhost/api/entity/information-objects/$ioId/representations/Access/1")
           else Nil)
-    when(preservicaClient.metadataForEntity(any[Entity])).thenReturn(IO(metadataElems))
+    when(preservicaClient.metadataForEntity(any[Entity]))
+      .thenReturn(IO(EntityMetadata(<Entity/>, <Identifier/>, metadataElems)))
     when(preservicaClient.getUrlsToIoRepresentations(ArgumentMatchers.eq(ioId), any[Option[RepresentationType]]))
       .thenReturn(IO(urlToRepresentations))
     when(
@@ -84,18 +92,18 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     }
 
     Seq(coId, coId2).foreach { id =>
-      when(preservicaClient.getEntity(id, EntityClient.ContentObject))
+      when(preservicaClient.getEntity(id, ContentObject))
         .thenReturn(IO(contentObjectResponse.copy(ref = id)))
     }
-
     (bitstreamInfo1 ++ bitstreamInfo2).foreach { bitstreamInfo =>
       when(
         preservicaClient
-          .streamBitstreamContent(any[Fs2Streams[IO]])(any[String], any[Fs2Streams[IO]#BinaryStream => IO[Unit]])
-      ).thenAnswer((_: Fs2Streams[IO], _: String, stream: Fs2Streams[IO]#BinaryStream => IO[Unit]) => {
-        if (Option(stream).isDefined) {
+          .streamBitstreamContent[Unit](any[Fs2Streams[IO]])(any[String], any())
+      ).thenAnswer((invocation: InvocationOnMock) => {
+        val stream = invocation.getArgument[Fs2Streams[IO]#BinaryStream => IO[Unit]](2)
+        if Option(stream).isDefined then
           stream(Stream.emits(s"File content for ${bitstreamInfo.name}".getBytes)).unsafeRunSync()
-        }
+
         IO.unit
       })
     }
@@ -107,7 +115,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       id: UUID,
       entityType: String,
       repo: OcflRepository,
-      elem: Elem,
+      elem: NodeBuffer,
       destinationPath: String
   ) = {
     val existingMetadata = <AllMetadata>
@@ -151,7 +159,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         MessageResponse[Option[Message]](s"handle$idx", Option(message))
       }
     }
-    when(sqsClient.receiveMessages[Option[Message]](any[String], any[Int])(any[Decoder[Option[Message]]]))
+    when(sqsClient.receiveMessages[Option[Message]](any[String], any[Int])(using any[Decoder[Option[Message]]]))
       .thenReturn(responses)
     when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO(DeleteMessageResponse.builder().build))
     sqsClient
@@ -184,7 +192,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
 
     val coId1: UUID = UUID.randomUUID()
     val coId2: UUID = UUID.randomUUID()
-    val coId3: UUID = if (bitstreamInfoResponsesWithSameName.nonEmpty) coId1 else UUID.randomUUID()
+    val coId3: UUID = if bitstreamInfoResponsesWithSameName.nonEmpty then coId1 else UUID.randomUUID()
     val ioId: UUID = bitstreamInfo1Responses.headOption.flatMap(_.parentRef).getOrElse(UUID.randomUUID())
     lazy val repoDir: Path = Files.createTempDirectory("repo")
     lazy val repo: OcflRepository = createTestRepo(repoDir)
@@ -217,7 +225,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       addAccessRepUrl
     )
 
-    private val metadataInRepo = <Test></Test>
+    private val metadataInRepo = <Test></Test><Entity/><Identifier/>
 
     typesOfMetadataFilesInRepo.foreach {
       case InformationObject =>
@@ -281,7 +289,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
 
     val duplicatesCoMessageResponses: List[MessageResponse[Option[Message]]] =
       (1 to 3).toList.map(_ => MessageResponse[Option[Message]]("receiptHandle2", Option(coMessage)))
-    private val potentialParentRef = if (parentRefExists) Some(ioId) else None
+    private val potentialParentRef = if parentRefExists then Some(ioId) else None
 
     private val getBitstreamsCoIdCaptor: ArgumentCaptor[UUID] = ArgumentCaptor.forClass(classOf[UUID])
     private val entityCaptor: ArgumentCaptor[Entity] = ArgumentCaptor.forClass(classOf[Entity])
@@ -302,9 +310,9 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     ): OcflService = {
       val ocflService = mock[OcflService]
       Mockito.reset(ocflService)
-      if (throwErrorInMissingAndChangedObjects)
+      if throwErrorInMissingAndChangedObjects then
         when(ocflService.getMissingAndChangedObjects(any[List[MetadataObject]]))
-          .thenThrow(new Exception("Unexpected Error"))
+          .thenThrow(new RuntimeException("Unexpected Error"))
       else
         when(ocflService.getMissingAndChangedObjects(any[List[MetadataObject]]))
           .thenReturn(IO.pure(MissingAndChangedObjects(missingObjects, changedObjects)))
@@ -343,7 +351,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       }
     }
 
-    when(entityClient.metadataForEntity(any[Entity])).thenReturn(IO.pure(Seq(metadata)))
+    when(entityClient.metadataForEntity(any[Entity]))
+      .thenReturn(IO.pure(EntityMetadata(<Entity/>, <Identifier/>, metadata)))
     when(sqsClient.deleteMessage(queueUrlCaptor.capture, receiptHandleCaptor.capture))
       .thenReturn(IO.pure(DeleteMessageResponse.builder.build))
 

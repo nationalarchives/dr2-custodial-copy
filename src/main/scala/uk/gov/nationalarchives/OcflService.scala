@@ -8,12 +8,12 @@ import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.storage.OcflStorageBuilder
 import uk.gov.nationalarchives.Main.{Config, IdWithSourceAndDestPaths}
-import uk.gov.nationalarchives.OcflService._
+import uk.gov.nationalarchives.OcflService.*
 
 import java.nio.file.Paths
 import java.util.UUID
 import scala.util.{Failure, Success, Try}
-import scala.compat.java8.FunctionConverters._
+import scala.compat.java8.FunctionConverters.*
 
 class OcflService(ocflRepository: OcflRepository) {
   def createObjects(paths: List[IdWithSourceAndDestPaths]): IO[List[ObjectVersionId]] = IO.blocking {
@@ -57,7 +57,7 @@ class OcflService(ocflRepository: OcflRepository) {
                 case Some(ocflFileObject) =>
                   val checksumUnchanged =
                     Some(ocflFileObject.getFixity.get(DigestAlgorithm.sha256)).contains(obj.checksum)
-                  if (checksumUnchanged) objectMap else objectMap + ("changedObjects" -> (obj :: changedObjects))
+                  if checksumUnchanged then objectMap else objectMap + ("changedObjects" -> (obj :: changedObjects))
                 case None =>
                   objectMap + ("missingObjects" -> (obj :: missedObjects)) // Information Object exists but file doesn't
               }
@@ -78,9 +78,7 @@ class OcflService(ocflRepository: OcflRepository) {
   }
 }
 object OcflService {
-  implicit class UuidUtils(uuid: UUID) {
-    def toHeadVersion: ObjectVersionId = ObjectVersionId.head(uuid.toString)
-  }
+  extension (uuid: UUID) def toHeadVersion: ObjectVersionId = ObjectVersionId.head(uuid.toString)
 
   def apply(config: Config): IO[OcflService] = IO {
     val repoDir = Paths.get(config.repoDir)

@@ -3,12 +3,14 @@ package uk.gov.nationalarchives
 import cats.effect.unsafe.implicits.global
 import io.ocfl.api.exception.NotFoundException
 import io.ocfl.api.io.FixityCheckInputStream
-import io.ocfl.api.model._
+import io.ocfl.api.model.*
 import io.ocfl.api.{OcflFileRetriever, OcflObjectUpdater, OcflRepository}
 import org.mockito.ArgumentMatchers.any
-import org.mockito.{ArgumentCaptor, MockitoSugar}
+import org.mockito.ArgumentCaptor
+import org.scalatestplus.mockito.MockitoSugar
+import org.mockito.Mockito.when
 import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.should.Matchers._
+import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.prop.TableDrivenPropertyChecks
 import uk.gov.nationalarchives.DisasterRecoveryObject.FileObject
 import uk.gov.nationalarchives.Main.IdWithSourceAndDestPaths
@@ -118,7 +120,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
   "getMissingAndChangedObjects" should "throw an exception if 'ocflRepository.getObject' returns an unexpected Exception" in {
     val id = UUID.randomUUID()
     val ocflRepository = mock[OcflRepository]
-    when(ocflRepository.getObject(any[ObjectVersionId])).thenThrow(new Exception("unexpected Exception"))
+    when(ocflRepository.getObject(any[ObjectVersionId])).thenThrow(new RuntimeException("unexpected Exception"))
 
     val service = new OcflService(ocflRepository)
     val fileObjectThatShouldHaveChangedChecksum = FileObject(id, name, checksum, url, destinationPath)
@@ -128,7 +130,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     }
 
     ex.getMessage should equal(
-      s"'getObject' returned an unexpected error 'java.lang.Exception: unexpected Exception' when called with object id $id"
+      s"'getObject' returned an unexpected error 'java.lang.RuntimeException: unexpected Exception' when called with object id $id"
     )
   }
 
@@ -139,7 +141,8 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     val updater = mock[OcflObjectUpdater]
 
     when(ocflRepository.updateObject(objectVersionCaptor.capture, any[VersionInfo], any[Consumer[OcflObjectUpdater]]))
-      .thenAnswer((_: ObjectVersionId, _: VersionInfo, consumer: Consumer[OcflObjectUpdater]) => {
+      .thenAnswer(invocation => {
+        val consumer = invocation.getArgument[Consumer[OcflObjectUpdater]](2)
         consumer.accept(updater)
         ObjectVersionId.head(id.toString)
       })
