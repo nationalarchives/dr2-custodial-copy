@@ -96,7 +96,6 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         .thenReturn(IO(contentObjectResponse.copy(ref = id)))
     }
     (bitstreamInfo1 ++ bitstreamInfo2).foreach { bitstreamInfo =>
-      type B = Fs2Streams[IO]#BinaryStream
       when(
         preservicaClient
           .streamBitstreamContent[Unit](any[Fs2Streams[IO]])(any[String], any())
