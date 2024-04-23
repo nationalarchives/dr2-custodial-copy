@@ -1,6 +1,7 @@
-FROM openjdk:19-jdk-alpine
+FROM alpine
 COPY target/scala-3.3.3/dr2-disaster-recovery.jar /dr2-disaster-recovery.jar
-RUN mkdir -p /poduser/work /poduser/repo /poduser/version && \
+RUN apk update && apk upgrade && apk add openjdk19-jre && \
+    mkdir -p /poduser/work /poduser/repo /poduser/version && \
     chown -R 1002:1005 /poduser && \
     mkdir /poduser/logs && \
     touch /poduser/logs/disaster-recovery.log && \
