@@ -3,7 +3,7 @@ import Dependencies.*
 import uk.gov.nationalarchives.sbt.Log4j2MergePlugin.log4j2MergeStrategy
 
 ThisBuild / organization := "uk.gov.nationalarchives"
-ThisBuild / scalaVersion := "3.3.3"
+ThisBuild / scalaVersion := "3.4.1"
 
 lazy val releaseSettings = Seq(
   releaseProcess := Seq[ReleaseStep](
@@ -17,7 +17,6 @@ lazy val releaseSettings = Seq(
     commitNextVersion,
     pushChanges
   ),
-
   version := (ThisBuild / version).value,
   organization := "uk.gov.nationalarchives",
   organizationName := "National Archives",
@@ -40,24 +39,26 @@ lazy val releaseSettings = Seq(
   homepage := Some(url("https://github.com/nationalarchives/dr2-preservica-client"))
 )
 
-lazy val root = (project in file(".")).settings(
-  name := "dr2-disaster-recovery",
-  libraryDependencies ++= Seq(
-    log4jSlf4j,
-    log4jCore,
-    log4jTemplateJson,
-    preservicaClient,
-    sqsClient,
-    fs2Core,
-    ocfl,
-    pureConfig,
-    pureConfigCatsEffect,
-    scalaTest % Test,
-    mockito % Test
-  ),
-  scalacOptions += "-deprecation"
-).enablePlugins(BuildInfoPlugin).
-  settings(
+lazy val root = (project in file("."))
+  .settings(
+    name := "dr2-disaster-recovery",
+    libraryDependencies ++= Seq(
+      log4jSlf4j,
+      log4jCore,
+      log4jTemplateJson,
+      preservicaClient,
+      sqsClient,
+      fs2Core,
+      ocfl,
+      pureConfig,
+      pureConfigCatsEffect,
+      scalaTest % Test,
+      mockito % Test
+    ),
+    scalacOptions += "-deprecation"
+  )
+  .enablePlugins(BuildInfoPlugin)
+  .settings(
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
     buildInfoPackage := "projectInfo"
   )
