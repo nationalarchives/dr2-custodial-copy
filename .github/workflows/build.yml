@@ -18,7 +18,7 @@ jobs:
           git config --global user.name tna-digital-archiving-jenkins
           git checkout -b $BRANCH_NAME
           git push -u origin $BRANCH_NAME
-          sbt '+release with-defaults'
+          sbt 'release with-defaults'
         env:
           BRANCH_NAME: version-bump-${{ github.run_id }}${{ github.run_attempt }}
       - name: Configure AWS credentials from management account
