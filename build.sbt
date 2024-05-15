@@ -15,6 +15,8 @@ setLatestTagOutput := {
   fileWriter.close()
 }
 
+publishArtifact := false
+
 lazy val releaseSettings = Seq(
   releaseProcess := Seq[ReleaseStep](
     inquireVersions,
