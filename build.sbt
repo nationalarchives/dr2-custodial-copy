@@ -2,8 +2,18 @@ import sbtrelease.ReleaseStateTransformations.*
 import Dependencies.*
 import uk.gov.nationalarchives.sbt.Log4j2MergePlugin.log4j2MergeStrategy
 
+import java.io.FileWriter
+
 ThisBuild / organization := "uk.gov.nationalarchives"
 ThisBuild / scalaVersion := "3.4.1"
+
+lazy val setLatestTagOutput = taskKey[Unit]("Sets a GitHub actions output for the latest tag")
+
+setLatestTagOutput := {
+  val fileWriter = new FileWriter(sys.env("GITHUB_OUTPUT"), true)
+  fileWriter.write(s"latest-tag=${(ThisBuild / version).value}\n")
+  fileWriter.close()
+}
 
 lazy val releaseSettings = Seq(
   releaseProcess := Seq[ReleaseStep](
@@ -11,6 +21,7 @@ lazy val releaseSettings = Seq(
     runClean,
     runTest,
     setReleaseVersion,
+    releaseStepTask(setLatestTagOutput),
     commitReleaseVersion,
     tagRelease,
     setNextVersion,
