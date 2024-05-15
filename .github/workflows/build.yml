@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+      - DR2-1601-rebuild-image-and-fix-build-process
 permissions:
   id-token: write
   contents: write
