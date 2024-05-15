@@ -35,7 +35,7 @@ jobs:
         run: | 
           sbt assembly
           docker build --pull --no-cache -t ${{ secrets.MANAGEMENT_ACCOUNT }}.dkr.ecr.eu-west-2.amazonaws.com/disaster-recovery:${{ steps.build.outputs.latest-tag}} .
-          docker push ${{ secrets.MANAGEMENT_ACCOUNT }}.dkr.ecr.eu-west-2.amazonaws.com/consignment-export:${{ steps.build.outputs.latest-tag}}
+          docker push ${{ secrets.MANAGEMENT_ACCOUNT }}.dkr.ecr.eu-west-2.amazonaws.com/disaster-recovery:${{ steps.build.outputs.latest-tag}}
           gh workflow run deploy.yml -f environment=intg -f to-deploy=${{ steps.build.outputs.latest-tag}}
       - name: Create Pull Request
         run: gh pr create --fill --label 'Version bump'
