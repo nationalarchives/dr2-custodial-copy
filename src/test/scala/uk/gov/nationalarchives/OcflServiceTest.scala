@@ -1,14 +1,14 @@
 package uk.gov.nationalarchives
 
 import cats.effect.unsafe.implicits.global
-import io.ocfl.api.exception.NotFoundException
+import io.ocfl.api.exception.{CorruptObjectException, NotFoundException}
 import io.ocfl.api.io.FixityCheckInputStream
 import io.ocfl.api.model.*
 import io.ocfl.api.{OcflFileRetriever, OcflObjectUpdater, OcflRepository}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.ArgumentCaptor
 import org.scalatestplus.mockito.MockitoSugar
-import org.mockito.Mockito.when
+import org.mockito.Mockito.{doNothing, when}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -132,6 +132,26 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     ex.getMessage should equal(
       s"'getObject' returned an unexpected error 'java.lang.RuntimeException: unexpected Exception' when called with object id $id"
     )
+  }
+
+  "getMissingAndChangedObjects" should "purge the failed object if there is a CorruptedObjectException and rethrow the error" in {
+    val id = UUID.randomUUID()
+    val ocflRepository = mock[OcflRepository]
+    val objectIdCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
+    when(ocflRepository.getObject(any[ObjectVersionId])).thenThrow(new CorruptObjectException())
+    doNothing().when(ocflRepository).purgeObject(objectIdCaptor.capture())
+
+    val service = new OcflService(ocflRepository)
+    val fileObjectThatShouldHaveChangedChecksum = FileObject(id, name, checksum, url, destinationPath)
+
+    val ex = intercept[Exception] {
+      service.getMissingAndChangedObjects(List(fileObjectThatShouldHaveChangedChecksum)).unsafeRunSync()
+    }
+
+    ex.getMessage should equal(
+      s"$id is corrupt. the object has been purged and the error will be rethrown so the process can try again"
+    )
+    objectIdCaptor.getValue should equal(id.toString)
   }
 
   "createObjects" should "create DR objects in the OCFL repository" in {
