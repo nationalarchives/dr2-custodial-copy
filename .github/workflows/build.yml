@@ -36,7 +36,7 @@ jobs:
           sbt assembly
           docker build --pull --no-cache -t ${{ secrets.MANAGEMENT_ACCOUNT }}.dkr.ecr.eu-west-2.amazonaws.com/dr2-disaster-recovery:${{ steps.build.outputs.latest-tag}} .
           docker push ${{ secrets.MANAGEMENT_ACCOUNT }}.dkr.ecr.eu-west-2.amazonaws.com/dr2-disaster-recovery:${{ steps.build.outputs.latest-tag}}
-          gh workflow run deploy.yml -f environment=intg -f to-deploy=${{ steps.build.outputs.latest-tag}}
+          gh workflow run deploy.yml -f environment=intg -f to-deploy=${{ steps.build.outputs.latest-tag}} --ref DR2-1601-rebuild-image-and-fix-build-process
         env:
           GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
       - name: Create Pull Request
