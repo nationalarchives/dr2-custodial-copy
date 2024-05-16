@@ -149,7 +149,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     }
 
     ex.getMessage should equal(
-      s"$id is corrupt. the object has been purged and the error will be rethrown so the process can try again"
+      s"Object $id is corrupt. The object has been purged and the error will be rethrown so the process can try again"
     )
     objectIdCaptor.getValue should equal(id.toString)
   }

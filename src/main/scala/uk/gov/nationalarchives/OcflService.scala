@@ -67,7 +67,7 @@ class OcflService(ocflRepository: OcflRepository) {
             case Failure(coe: CorruptObjectException) =>
               ocflRepository.purgeObject(objectId.toString)
               throw new Exception(
-                s"$objectId is corrupt. the object has been purged and the error will be rethrown so the process can try again",
+                s"Object $objectId is corrupt. The object has been purged and the error will be rethrown so the process can try again",
                 coe
               )
             case Failure(unexpectedError) =>
