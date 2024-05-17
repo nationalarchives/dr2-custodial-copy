@@ -1,7 +1,7 @@
 package uk.gov.nationalarchives
 
 import cats.effect.IO
-import io.ocfl.api.exception.NotFoundException
+import io.ocfl.api.exception.{CorruptObjectException, NotFoundException}
 import io.ocfl.api.model.{DigestAlgorithm, ObjectVersionId, VersionInfo}
 import io.ocfl.api.{OcflConfig, OcflObjectUpdater, OcflOption, OcflRepository}
 import io.ocfl.core.OcflRepositoryBuilder
@@ -64,6 +64,12 @@ class OcflService(ocflRepository: OcflRepository) {
 
             case Failure(_: NotFoundException) =>
               objectMap + ("missingObjects" -> (obj :: missedObjects)) // Information Object doesn't exist
+            case Failure(coe: CorruptObjectException) =>
+              ocflRepository.purgeObject(objectId.toString)
+              throw new Exception(
+                s"Object $objectId is corrupt. The object has been purged and the error will be rethrown so the process can try again",
+                coe
+              )
             case Failure(unexpectedError) =>
               throw new Exception(
                 s"'getObject' returned an unexpected error '$unexpectedError' when called with object id $objectId"
