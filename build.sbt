@@ -48,7 +48,7 @@ lazy val releaseSettings = Seq(
       url = url("https://github.com/nationalarchives/dr2-disaster-recovery")
     )
   ),
-  description := "A client to communicate with the Preservica API",
+  description := "A service to process change updates from Preservica and write them to an OCFL repository",
   licenses := List("MIT" -> URI.create("https://choosealicense.com/licenses/mit/").toURL),
   homepage := Some(url("https://github.com/nationalarchives/dr2-disaster-recovery"))
 )

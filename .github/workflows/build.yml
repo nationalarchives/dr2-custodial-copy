@@ -27,7 +27,7 @@ jobs:
           aws-region: eu-west-2
           role-session-name: DeployECRImages
       - name: Login to ECR
-        uses: docker/login-action@v1
+        uses: docker/login-action@v3
         with:
           registry: ${{ secrets.MANAGEMENT_ACCOUNT }}.dkr.ecr.eu-west-2.amazonaws.com
       - id: build-image
