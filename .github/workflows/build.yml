@@ -1,8 +1,6 @@
 name: DR2 Tag and pre deploy
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 permissions:
   id-token: write
   contents: write
@@ -11,6 +9,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Import GPG key
+        id: import_gpg
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
       - id: build
         run: |
           git config --global user.email digitalpreservation@nationalarchives.gov.uk
