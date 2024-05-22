@@ -1,0 +1,14 @@
+name: Deploy if not a version bump PR
+on:
+  pull_request:
+    types:
+      - closed
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.base_ref == 'main' && github.event.pull_request.merged == true && !contains(github.event.pull_request.labels.*.name, 'Version bump') }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: gh workflow run build.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
