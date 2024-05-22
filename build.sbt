@@ -6,7 +6,7 @@ import java.io.FileWriter
 import java.net.URI
 
 ThisBuild / organization := "uk.gov.nationalarchives"
-ThisBuild / scalaVersion := "3.4.1"
+ThisBuild / scalaVersion := "3.4.2"
 
 lazy val setLatestTagOutput = taskKey[Unit]("Sets a GitHub actions output for the latest tag")
 
