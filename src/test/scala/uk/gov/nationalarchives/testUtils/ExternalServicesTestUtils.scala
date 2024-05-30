@@ -10,7 +10,7 @@ import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.storage.OcflStorageBuilder
 import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.{times, verify, when}
+import org.mockito.Mockito.{spy, times, verify, when}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 import org.scalatest.matchers.should.Matchers.*
@@ -27,11 +27,12 @@ import uk.gov.nationalarchives.OcflService.*
 import uk.gov.nationalarchives.*
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.{Entity, fromType}
-import uk.gov.nationalarchives.dp.client.EntityClient
+import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.GenerationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.*
+import uk.gov.nationalarchives.dp.client.ValidateXmlAgainstXsd.PreservicaSchema.XipXsdSchemaV6
 
 import java.net.URI
 import java.nio.file.{Files, Path, Paths}
@@ -68,7 +69,15 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     ) ++ (if addAccessRepUrl then Seq(s"http://localhost/api/entity/information-objects/$ioId/representations/Access/1")
           else Nil)
     when(preservicaClient.metadataForEntity(any[Entity]))
-      .thenReturn(IO(EntityMetadata(<Entity/>, <Identifier/>, metadataElems)))
+      .thenReturn(
+        IO(
+          EntityMetadata(
+            <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>,
+            Seq(<Identifier><ApiId/><Type/><Value/><Entity/></Identifier>),
+            metadataElems
+          )
+        )
+      )
     when(preservicaClient.getUrlsToIoRepresentations(ArgumentMatchers.eq(ioId), any[Option[RepresentationType]]))
       .thenReturn(IO(urlToRepresentations))
     when(
@@ -115,12 +124,9 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       id: UUID,
       entityType: String,
       repo: OcflRepository,
-      elem: NodeBuffer,
+      existingMetadata: Elem,
       destinationPath: String
   ) = {
-    val existingMetadata = <AllMetadata>
-      {elem}
-    </AllMetadata>
     val xmlAsString = existingMetadata.toString()
     addFileToRepo(id, repo, xmlAsString, metadataFile(id, entityType), destinationPath)
   }
@@ -173,7 +179,9 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       objectVersion: Int = 1,
       typesOfMetadataFilesInRepo: List[EntityType] = Nil,
       fileContentToWriteToEachFileInRepo: List[String] = Nil,
-      metadataElemsPreservicaResponse: Seq[Elem] = Seq(<Test></Test>),
+      metadataElemsPreservicaResponse: Seq[Elem] = Seq(
+        <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
+      ),
       bitstreamInfo1Responses: Seq[BitStreamInfo] = Seq(
         BitStreamInfo("name1", 1, "", Fixity("SHA256", ""), 1, Original, None, Some(UUID.randomUUID()))
       ),
@@ -225,7 +233,12 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       addAccessRepUrl
     )
 
-    private val metadataInRepo = <Test></Test><Entity/><Identifier/>
+    private val metadataInRepo =
+      <XIP xmlns="http://preservica.com/XIP/v6.9">
+          <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
+          <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+          <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
+        </XIP>
 
     typesOfMetadataFilesInRepo.foreach {
       case InformationObject =>
@@ -252,7 +265,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     }
 
     val ocflService = new OcflService(repo)
-    val processor = new Processor(config, sqsClient, ocflService, preservicaClient)
+    val xmlValidator: ValidateXmlAgainstXsd[IO] = ValidateXmlAgainstXsd[IO](XipXsdSchemaV6)
+    val processor = new Processor(config, sqsClient, ocflService, preservicaClient, xmlValidator)
 
     def latestObjectVersion(repo: OcflRepository, id: UUID): Long =
       repo.getObject(id.toHeadVersion).getObjectVersionId.getVersionNum.getVersionNum
@@ -278,7 +292,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val config: Config = Config("", "", "queueUrl", "", "", Option(URI.create("https://example.com")), "")
     val ioId: UUID = UUID.randomUUID()
     val coId: UUID = UUID.randomUUID()
-    val metadata: Elem = <Test><Metadata></Metadata></Test>
+
     lazy val coMessage: ContentObjectMessage = ContentObjectMessage(coId, s"co:$coId")
     lazy val ioMessage: InformationObjectMessage = InformationObjectMessage(ioId, s"io:$ioId")
     val sqsClient: DASQSClient[IO] = mock[DASQSClient[IO]]
@@ -289,6 +303,19 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
 
     val duplicatesCoMessageResponses: List[MessageResponse[Option[Message]]] =
       (1 to 3).toList.map(_ => MessageResponse[Option[Message]]("receiptHandle2", Option(coMessage)))
+
+    lazy val consolidatedMetadata: Elem =
+      <XIP>
+        {entityFromApi +: (metadataFromApi ++ identifiersFromAPi)}
+      </XIP>
+
+    private val metadataFromApi = Seq(
+      <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
+    )
+    private val entityFromApi =
+      <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
+    private val identifiersFromAPi = Seq(<Identifier><ApiId/><Type/><Value/><Entity/></Identifier>)
+
     private val potentialParentRef = if parentRefExists then Some(ioId) else None
 
     private val getBitstreamsCoIdCaptor: ArgumentCaptor[UUID] = ArgumentCaptor.forClass(classOf[UUID])
@@ -299,6 +326,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     private val queueUrlCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
     private val idWithSourceAndDestPathsCaptor: ArgumentCaptor[List[IdWithSourceAndDestPaths]] =
       ArgumentCaptor.forClass(classOf[List[IdWithSourceAndDestPaths]])
+    private val metadataXmlStringToValidate: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
     private val droLookupCaptor: ArgumentCaptor[List[DisasterRecoveryObject]] =
       ArgumentCaptor.forClass(classOf[List[DisasterRecoveryObject]])
     private val receiptHandleCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
@@ -352,13 +380,20 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     }
 
     when(entityClient.metadataForEntity(any[Entity]))
-      .thenReturn(IO.pure(EntityMetadata(<Entity/>, <Identifier/>, metadata)))
+      .thenReturn(IO.pure(EntityMetadata(entityFromApi, identifiersFromAPi, metadataFromApi)))
     when(sqsClient.deleteMessage(queueUrlCaptor.capture, receiptHandleCaptor.capture))
       .thenReturn(IO.pure(DeleteMessageResponse.builder.build))
 
     val ocflService: OcflService = mockOcflService(missingObjects, changedObjects, throwErrorInMissingAndChangedObjects)
+    val xmlValidator: ValidateXmlAgainstXsd[IO] = spy(ValidateXmlAgainstXsd[IO](XipXsdSchemaV6))
 
-    val processor = new Processor(config, sqsClient, ocflService, entityClient)
+    val processor: Processor = new Processor(config, sqsClient, ocflService, entityClient, xmlValidator)
+    val xmlStringToValidate =
+      """<XIP xmlns="http://preservica.com/XIP/v6.9">
+          <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
+          <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+          <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
+        </XIP>"""
 
     def verifyCallsAndArguments(
         numOfGetBitstreamInfoCalls: Int = 0,
@@ -368,6 +403,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         repIndexes: List[Int] = List(1),
         idsOfEntityToGetMetadataFrom: List[UUID] = List(ioId),
         entityTypesToGetMetadataFrom: List[EntityType] = List(InformationObject),
+        xmlStringRequestsToValidate: List[String] = List(xmlStringToValidate),
         createdIdSourceAndDestinationPathAndId: List[List[IdWithSourceAndDestPaths]] = Nil,
         drosToLookup: List[List[String]] = List(List(s"$ioId/IO_Metadata.xml")),
         receiptHandles: List[String] = List("receiptHandle", "receiptHandle", "receiptHandle")
@@ -390,6 +426,9 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         .createObjects(idWithSourceAndDestPathsCaptor.capture())
       verify(sqsClient, times(receiptHandles.length))
         .deleteMessage(ArgumentMatchers.eq("queueUrl"), ArgumentMatchers.startsWith("receiptHandle"))
+
+      verify(xmlValidator, times(xmlStringRequestsToValidate.length))
+        .xmlStringIsValid(metadataXmlStringToValidate.capture())
 
       getBitstreamsCoIdCaptor.getAllValues.asScala.toList should equal(
         (1 to numOfGetBitstreamInfoCalls).toList.map(_ => coId)
@@ -417,6 +456,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       }
       val capturedLookupDestinationPaths = droLookupCaptor.getAllValues.asScala.toList.map(_.map(_.destinationFilePath))
       capturedLookupDestinationPaths should equal(drosToLookup)
+
+      metadataXmlStringToValidate.getAllValues.asScala.toList should equal(xmlStringRequestsToValidate)
     }
   }
 }

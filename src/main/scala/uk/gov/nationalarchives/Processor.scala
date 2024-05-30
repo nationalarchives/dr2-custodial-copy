@@ -13,7 +13,7 @@ import uk.gov.nationalarchives.DisasterRecoveryObject.*
 import uk.gov.nationalarchives.Main.{Config, IdWithSourceAndDestPaths}
 import uk.gov.nationalarchives.Message.*
 import uk.gov.nationalarchives.dp.client.Entities.fromType
-import uk.gov.nationalarchives.dp.client.EntityClient
+import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.*
@@ -25,8 +25,10 @@ class Processor(
     config: Config,
     sqsClient: DASQSClient[IO],
     ocflService: OcflService,
-    entityClient: EntityClient[IO, Fs2Streams[IO]]
+    entityClient: EntityClient[IO, Fs2Streams[IO]],
+    xmlValidator: ValidateXmlAgainstXsd[IO]
 ) {
+  private val newlineAndIndent = "\n          "
   private def deleteMessages(receiptHandles: List[String]): IO[List[DeleteMessageResponse]] =
     receiptHandles.map(handle => sqsClient.deleteMessage(config.sqsQueueUrl, handle)).sequence
 
@@ -38,13 +40,21 @@ class Processor(
       fileName: String,
       path: String,
       repType: Option[String] = None
-  ): List[MetadataObject] = {
-    val newMetadata = <AllMetadata>
-      {metadata.metadataContainerNode :+ metadata.entityNode :+ metadata.identifiersNode}
-    </AllMetadata>
-    val xmlAsString = newMetadata.toString()
-    val checksum = DigestUtils.sha256Hex(xmlAsString)
-    List(MetadataObject(ioRef, repType, fileName, checksum, newMetadata, path))
+  ): IO[List[MetadataObject]] = {
+    val consolidatedMetadata =
+      <XIP xmlns="http://preservica.com/XIP/v6.9">
+          {
+        Seq(metadata.entityNode)
+          ++ metadata.identifiers.flatMap(identifier => Seq(newlineAndIndent, identifier))
+          ++ metadata.metadataNodes.flatMap(metadataNode => Seq(newlineAndIndent, metadataNode))
+      }
+        </XIP>
+
+    val metadataXmlAsString = consolidatedMetadata.toString()
+    xmlValidator.xmlStringIsValid(metadataXmlAsString).map { _ =>
+      val checksum = DigestUtils.sha256Hex(metadataXmlAsString)
+      List(MetadataObject(ioRef, repType, fileName, checksum, consolidatedMetadata, path))
+    }
   }
 
   private lazy val allRepresentationTypes: Map[String, RepresentationType] = Map(
@@ -94,7 +104,7 @@ class Processor(
       for {
         entity <- fromType[IO](InformationObject.entityTypeShort, ref, None, None, deleted = false)
         metadataFileName = createMetadataFileName(InformationObject.entityTypeShort)
-        metadataObject <- entityClient.metadataForEntity(entity).map { metadata =>
+        metadataObject <- entityClient.metadataForEntity(entity).flatMap { metadata =>
           val destinationFilePath = createDestinationFilePath(entity.ref, fileName = metadataFileName)
           createMetadataObject(entity.ref, metadata, metadataFileName, destinationFilePath)
         }
@@ -118,7 +128,7 @@ class Processor(
         }
         representationTypeGroup = coRepTypes.headOption
         metadataFileName = createMetadataFileName(ContentObject.entityTypeShort)
-        metadata <- entityClient.metadataForEntity(entity).map { metadataFragments =>
+        metadata <- entityClient.metadataForEntity(entity).flatMap { metadataFragments =>
           val destinationFilePath = createDestinationFilePath(
             parentRef,
             Some(entity.ref),
@@ -194,8 +204,9 @@ object Processor {
       config: Config,
       sqsClient: DASQSClient[IO],
       ocflService: OcflService,
-      entityClient: EntityClient[IO, Fs2Streams[IO]]
+      entityClient: EntityClient[IO, Fs2Streams[IO]],
+      xmlValidator: ValidateXmlAgainstXsd[IO]
   ): IO[Processor] = IO(
-    new Processor(config, sqsClient, ocflService, entityClient)
+    new Processor(config, sqsClient, ocflService, entityClient, xmlValidator)
   )
 }
