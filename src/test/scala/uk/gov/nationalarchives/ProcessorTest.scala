@@ -92,7 +92,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       repIndexes = Nil,
       idsOfEntityToGetMetadataFrom = Nil,
       entityTypesToGetMetadataFrom = Nil,
-      xmlStringRequestsToValidate = Nil,
+      xmlRequestsToValidate = Nil,
       createdIdSourceAndDestinationPathAndId = Nil,
       drosToLookup = Nil,
       receiptHandles = Nil
@@ -124,7 +124,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       repIndexes = List(1, 2, 1),
       idsOfEntityToGetMetadataFrom = Nil,
       entityTypesToGetMetadataFrom = Nil,
-      xmlStringRequestsToValidate = Nil,
+      xmlRequestsToValidate = Nil,
       drosToLookup = Nil,
       receiptHandles = Nil
     )
@@ -142,7 +142,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       1,
       idsOfEntityToGetMetadataFrom = List(parentRef, id),
       entityTypesToGetMetadataFrom = List(InformationObject, ContentObject),
-      xmlStringRequestsToValidate = List(utils.xmlStringToValidate, utils.xmlStringToValidate),
+      xmlRequestsToValidate = List(utils.xmlToValidate, utils.xmlToValidate),
       createdIdSourceAndDestinationPathAndId = List(Nil, Nil),
       drosToLookup = List(
         List(
@@ -284,7 +284,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       repTypes = Nil,
       repIndexes = Nil,
       idsOfEntityToGetMetadataFrom = List(missingFileId, changedFileId),
-      xmlStringRequestsToValidate = List(utils.xmlStringToValidate, utils.xmlStringToValidate),
+      xmlRequestsToValidate = List(utils.xmlToValidate, utils.xmlToValidate),
       createdIdSourceAndDestinationPathAndId = List(
         List(IdWithSourceAndDestPaths(missingFileId, Path(s"$missingFileId/missing").toNioPath, "destinationPath")),
         List(IdWithSourceAndDestPaths(changedFileId, Path(s"$changedFileId/changed").toNioPath, "destinationPath2"))
@@ -326,10 +326,10 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       repTypes = Nil,
       repIndexes = Nil,
       createdIdSourceAndDestinationPathAndId = Nil,
-      xmlStringRequestsToValidate = List(
-        """<XIP xmlns="http://preservica.com/XIP/v6.9">
+      xmlRequestsToValidate = List(
+        <XIP xmlns="http://preservica.com/XIP/v6.9">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><InvalidTag/></InformationObject>
-        </XIP>"""
+        </XIP>
       ),
       drosToLookup = Nil,
       receiptHandles = Nil

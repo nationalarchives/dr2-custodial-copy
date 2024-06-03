@@ -40,7 +40,8 @@ import java.util.UUID
 import scala.compat.java8.FunctionConverters.asJavaConsumer
 import scala.jdk.CollectionConverters.ListHasAsScala
 import scala.util.{Failure, Success, Try}
-import scala.xml.{Elem, NodeBuffer}
+import scala.xml.Utility.trim
+import scala.xml.{Elem, NodeBuffer, XML}
 
 object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
   private val ioType = InformationObject.entityTypeShort
@@ -388,12 +389,12 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val xmlValidator: ValidateXmlAgainstXsd[IO] = spy(ValidateXmlAgainstXsd[IO](XipXsdSchemaV6))
 
     val processor: Processor = new Processor(config, sqsClient, ocflService, entityClient, xmlValidator)
-    val xmlStringToValidate =
-      """<XIP xmlns="http://preservica.com/XIP/v6.9">
+    val xmlToValidate: Elem =
+      <XIP xmlns="http://preservica.com/XIP/v6.9">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
-        </XIP>"""
+        </XIP>
 
     def verifyCallsAndArguments(
         numOfGetBitstreamInfoCalls: Int = 0,
@@ -403,7 +404,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         repIndexes: List[Int] = List(1),
         idsOfEntityToGetMetadataFrom: List[UUID] = List(ioId),
         entityTypesToGetMetadataFrom: List[EntityType] = List(InformationObject),
-        xmlStringRequestsToValidate: List[String] = List(xmlStringToValidate),
+        xmlRequestsToValidate: List[Elem] = List(xmlToValidate),
         createdIdSourceAndDestinationPathAndId: List[List[IdWithSourceAndDestPaths]] = Nil,
         drosToLookup: List[List[String]] = List(List(s"$ioId/IO_Metadata.xml")),
         receiptHandles: List[String] = List("receiptHandle", "receiptHandle", "receiptHandle")
@@ -427,7 +428,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       verify(sqsClient, times(receiptHandles.length))
         .deleteMessage(ArgumentMatchers.eq("queueUrl"), ArgumentMatchers.startsWith("receiptHandle"))
 
-      verify(xmlValidator, times(xmlStringRequestsToValidate.length))
+      verify(xmlValidator, times(xmlRequestsToValidate.length))
         .xmlStringIsValid(metadataXmlStringToValidate.capture())
 
       getBitstreamsCoIdCaptor.getAllValues.asScala.toList should equal(
@@ -457,7 +458,9 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       val capturedLookupDestinationPaths = droLookupCaptor.getAllValues.asScala.toList.map(_.map(_.destinationFilePath))
       capturedLookupDestinationPaths should equal(drosToLookup)
 
-      metadataXmlStringToValidate.getAllValues.asScala.toList should equal(xmlStringRequestsToValidate)
+      metadataXmlStringToValidate.getAllValues.asScala.toList.map(s => trim(XML.loadString(s))) should equal(
+        xmlRequestsToValidate.map(trim)
+      )
     }
   }
 }
