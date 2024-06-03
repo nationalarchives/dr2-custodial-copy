@@ -11,8 +11,6 @@ import pureconfig.module.catseffect.syntax.*
 import uk.gov.nationalarchives.dp.client.fs2.Fs2Client
 import uk.gov.nationalarchives.Message.*
 import projectInfo.BuildInfo
-import uk.gov.nationalarchives.dp.client.ValidateXmlAgainstXsd
-import uk.gov.nationalarchives.dp.client.ValidateXmlAgainstXsd.PreservicaSchema.XipXsdSchemaV6
 
 import java.net.URI
 import java.nio.file
@@ -72,8 +70,7 @@ object Main extends IOApp {
       )
       service <- OcflService(config)
       sqs = sqsClient(config)
-      xmlValidator = ValidateXmlAgainstXsd[IO](XipXsdSchemaV6)
-      processor <- Processor(config, sqs, service, client, xmlValidator)
+      processor <- Processor(config, sqs, service, client)
       _ <- {
         Stream.fixedRateStartImmediately[IO](20.seconds) >>
           runDisasterRecovery(sqs, config, processor)

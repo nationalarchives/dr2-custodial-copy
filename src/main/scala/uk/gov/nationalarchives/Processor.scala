@@ -17,6 +17,7 @@ import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.*
+import uk.gov.nationalarchives.dp.client.ValidateXmlAgainstXsd.PreservicaSchema.XipXsdSchemaV6
 
 import java.util.UUID
 import scala.xml.Elem
@@ -204,9 +205,8 @@ object Processor {
       config: Config,
       sqsClient: DASQSClient[IO],
       ocflService: OcflService,
-      entityClient: EntityClient[IO, Fs2Streams[IO]],
-      xmlValidator: ValidateXmlAgainstXsd[IO]
+      entityClient: EntityClient[IO, Fs2Streams[IO]]
   ): IO[Processor] = IO(
-    new Processor(config, sqsClient, ocflService, entityClient, xmlValidator)
+    new Processor(config, sqsClient, ocflService, entityClient, ValidateXmlAgainstXsd[IO](XipXsdSchemaV6))
   )
 }
