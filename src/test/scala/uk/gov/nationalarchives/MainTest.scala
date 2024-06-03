@@ -120,16 +120,25 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
     utils.latestObjectVersion(repo, ioId) must equal(1)
 
-    val storagePath =
+    val metadataStoragePath =
       repo.getObject(ioId.toHeadVersion).getFile(utils.expectedIoMetadataFileDestinationPath).getStorageRelativePath
-    val xml = Files.readAllBytes(Paths.get(utils.repoDir.toString, storagePath)).map(_.toChar).mkString
-    val expectedXml = """<XIP xmlns="http://preservica.com/XIP/v6.9">
-                        |          <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
-                        |          <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
-                        |          <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
-                        |          <Metadata><Ref/><Entity/><Content><anotherThing xmlns="http://www.mockSchema.com/test/v42"></anotherThing></Content></Metadata>
-                        |        </XIP>""".stripMargin
-    xml must equal(expectedXml)
+    val metadataContent =
+      trim(
+        XML.loadString(
+          Files.readAllBytes(Paths.get(utils.repoDir.toString, metadataStoragePath)).map(_.toChar).mkString
+        )
+      )
+
+    metadataContent must equal(
+      trim(
+        <XIP xmlns="http://preservica.com/XIP/v6.9">
+                    <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
+                    <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+                    <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
+                    <Metadata><Ref/><Entity/><Content><anotherThing xmlns="http://www.mockSchema.com/test/v42"></anotherThing></Content></Metadata>
+                  </XIP>
+      )
+    )
   }
 
   "runDisasterRecovery" should "only write one version if there are two identical IO messages" in {
