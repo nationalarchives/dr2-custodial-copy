@@ -13,6 +13,8 @@ import uk.gov.nationalarchives.DisasterRecoveryObject.MetadataObject
 import uk.gov.nationalarchives.Main.IdWithSourceAndDestPaths
 import uk.gov.nationalarchives.Message.InformationObjectMessage
 import uk.gov.nationalarchives.OcflService.MissingAndChangedObjects
+import uk.gov.nationalarchives.dp.client.Entities.Entity
+import uk.gov.nationalarchives.dp.client.EntityClient.EntityMetadata
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.testUtils.ExternalServicesTestUtils.*
@@ -90,6 +92,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       repIndexes = Nil,
       idsOfEntityToGetMetadataFrom = Nil,
       entityTypesToGetMetadataFrom = Nil,
+      xmlRequestsToValidate = Nil,
       createdIdSourceAndDestinationPathAndId = Nil,
       drosToLookup = Nil,
       receiptHandles = Nil
@@ -121,6 +124,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       repIndexes = List(1, 2, 1),
       idsOfEntityToGetMetadataFrom = Nil,
       entityTypesToGetMetadataFrom = Nil,
+      xmlRequestsToValidate = Nil,
       drosToLookup = Nil,
       receiptHandles = Nil
     )
@@ -138,6 +142,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       1,
       idsOfEntityToGetMetadataFrom = List(parentRef, id),
       entityTypesToGetMetadataFrom = List(InformationObject, ContentObject),
+      xmlRequestsToValidate = List(utils.xmlToValidate, utils.xmlToValidate),
       createdIdSourceAndDestinationPathAndId = List(Nil, Nil),
       drosToLookup = List(
         List(
@@ -170,7 +175,16 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
         IO.pure(
           MissingAndChangedObjects(
             Nil,
-            List(MetadataObject(id, Some("Preservation_1"), "changed", "checksum", utils.metadata, "destinationPath"))
+            List(
+              MetadataObject(
+                id,
+                Some("Preservation_1"),
+                "changed",
+                "checksum",
+                utils.consolidatedMetadata,
+                "destinationPath"
+              )
+            )
           )
         )
       )
@@ -196,7 +210,16 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       .thenReturn(
         IO.pure(
           MissingAndChangedObjects(
-            List(MetadataObject(id, Some("Preservation_1"), "missing", "checksum", utils.metadata, "destinationPath")),
+            List(
+              MetadataObject(
+                id,
+                Some("Preservation_1"),
+                "missing",
+                "checksum",
+                utils.consolidatedMetadata,
+                "destinationPath"
+              )
+            ),
             Nil
           )
         )
@@ -227,7 +250,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 Some("Preservation_1"),
                 "missing",
                 "checksum",
-                utils.metadata,
+                utils.consolidatedMetadata,
                 "destinationPath"
               )
             ),
@@ -237,7 +260,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 Some("Preservation_1"),
                 "changed",
                 "checksum",
-                utils.metadata,
+                utils.consolidatedMetadata,
                 "destinationPath2"
               )
             )
@@ -261,6 +284,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       repTypes = Nil,
       repIndexes = Nil,
       idsOfEntityToGetMetadataFrom = List(missingFileId, changedFileId),
+      xmlRequestsToValidate = List(utils.xmlToValidate, utils.xmlToValidate),
       createdIdSourceAndDestinationPathAndId = List(
         List(IdWithSourceAndDestPaths(missingFileId, Path(s"$missingFileId/missing").toNioPath, "destinationPath")),
         List(IdWithSourceAndDestPaths(changedFileId, Path(s"$changedFileId/changed").toNioPath, "destinationPath2"))
@@ -272,6 +296,43 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
         )
       ),
       receiptHandles = List("receiptHandle1", "receiptHandle2")
+    )
+  }
+
+  "process" should "throw an Exception if XML string passed to validator is invalid" in {
+    val utils = new ProcessorTestUtils()
+
+    when(utils.entityClient.metadataForEntity(any[Entity]))
+      .thenReturn(
+        IO.pure(
+          EntityMetadata(
+            <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><InvalidTag/></InformationObject>,
+            Nil,
+            Nil
+          )
+        )
+      )
+
+    val res = utils.processor.process(utils.duplicatesIoMessageResponses).attempt.unsafeRunSync()
+
+    res.left.foreach(
+      _.getMessage should equal(
+        """cvc-complex-type.2.4.a: Invalid content was found starting with element '{"http://preservica.com/XIP/v6.9":InvalidTag}'. """ +
+          """One of '{"http://preservica.com/XIP/v6.9":Parent}' is expected."""
+      )
+    )
+
+    utils.verifyCallsAndArguments(
+      repTypes = Nil,
+      repIndexes = Nil,
+      createdIdSourceAndDestinationPathAndId = Nil,
+      xmlRequestsToValidate = List(
+        <XIP xmlns="http://preservica.com/XIP/v6.9">
+          <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><InvalidTag/></InformationObject>
+        </XIP>
+      ),
+      drosToLookup = Nil,
+      receiptHandles = Nil
     )
   }
 

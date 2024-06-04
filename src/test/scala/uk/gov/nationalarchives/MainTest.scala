@@ -52,9 +52,11 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
         Files.readAllBytes(Paths.get(utils.repoDir.toString, metadataStoragePath)).map(_.toChar).mkString
 
       metadataContent must equal(
-        <AllMetadata>
-      <Test></Test><Entity/><Identifier/>
-    </AllMetadata>.toString
+        <XIP xmlns="http://preservica.com/XIP/v6.9">
+          <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
+          <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+          <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
+        </XIP>.toString
       )
     }
 
@@ -72,7 +74,9 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
   "runDisasterRecovery" should "write a new version and a new IO metadata object if there is an IO update with different metadata" in {
     val utils = new MainTestUtils(
       typesOfMetadataFilesInRepo = List(InformationObject),
-      metadataElemsPreservicaResponse = Seq(<DifferentMetadata></DifferentMetadata>)
+      metadataElemsPreservicaResponse = Seq(
+        <Metadata><Ref/><Entity/><Content><differentThing xmlns="http://www.mockSchema.com/test/v42"></differentThing></Content></Metadata>
+      )
     )
     val ioId = utils.ioId
     val repo = utils.repo
@@ -91,9 +95,13 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       )
 
     metadataContent must equal(
-      trim(<AllMetadata>
-        <DifferentMetadata/><Entity/><Identifier/>
-      </AllMetadata>)
+      trim(
+        <XIP xmlns="http://preservica.com/XIP/v6.9">
+          <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
+          <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+          <Metadata><Ref/><Entity/><Content><differentThing xmlns="http://www.mockSchema.com/test/v42"/></Content></Metadata>
+        </XIP>
+      )
     )
   }
 
@@ -101,7 +109,10 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val utils =
       new MainTestUtils(
         objectVersion = 0,
-        metadataElemsPreservicaResponse = Seq(<Test1></Test1>, <Test2></Test2>, <Test3></Test3>)
+        metadataElemsPreservicaResponse = Seq(
+          <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>,
+          <Metadata><Ref/><Entity/><Content><anotherThing xmlns="http://www.mockSchema.com/test/v42"></anotherThing></Content></Metadata>
+        )
       )
     val ioId = utils.ioId
     val repo = utils.repo
@@ -109,13 +120,25 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
     utils.latestObjectVersion(repo, ioId) must equal(1)
 
-    val storagePath =
+    val metadataStoragePath =
       repo.getObject(ioId.toHeadVersion).getFile(utils.expectedIoMetadataFileDestinationPath).getStorageRelativePath
-    val xml = Files.readAllBytes(Paths.get(utils.repoDir.toString, storagePath)).map(_.toChar).mkString
-    val expectedXml = """<AllMetadata>
-                        |      <Test1></Test1><Test2></Test2><Test3></Test3><Entity/><Identifier/>
-                        |    </AllMetadata>""".stripMargin
-    xml must equal(expectedXml)
+    val metadataContent =
+      trim(
+        XML.loadString(
+          Files.readAllBytes(Paths.get(utils.repoDir.toString, metadataStoragePath)).map(_.toChar).mkString
+        )
+      )
+
+    metadataContent must equal(
+      trim(
+        <XIP xmlns="http://preservica.com/XIP/v6.9">
+                    <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
+                    <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+                    <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
+                    <Metadata><Ref/><Entity/><Content><anotherThing xmlns="http://www.mockSchema.com/test/v42"></anotherThing></Content></Metadata>
+                  </XIP>
+      )
+    )
   }
 
   "runDisasterRecovery" should "only write one version if there are two identical IO messages" in {
@@ -132,7 +155,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val utils = new MainTestUtils(objectVersion = 0)
     when(preservicaClient.metadataForEntity(any[Entity])).thenThrow(new RuntimeException("Error getting metadata"))
 
-    val processor = new Processor(utils.config, utils.sqsClient, utils.ocflService, preservicaClient)
+    val processor =
+      new Processor(utils.config, utils.sqsClient, utils.ocflService, preservicaClient, utils.xmlValidator)
     val err: Throwable =
       Main
         .runDisasterRecovery(utils.sqsClient, utils.config, processor)
@@ -312,7 +336,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val sqsClient = utils.sqsClient
     when(preservicaClient.getBitstreamInfo(any[UUID])).thenThrow(new RuntimeException("Error getting bitstream info"))
 
-    val processor = new Processor(utils.config, sqsClient, utils.ocflService, preservicaClient)
+    val processor = new Processor(utils.config, sqsClient, utils.ocflService, preservicaClient, utils.xmlValidator)
     val err: Throwable =
       Main.runDisasterRecovery(sqsClient, utils.config, processor).compile.drain.attempt.unsafeRunSync().left.value
     err.getMessage must equal("Error getting bitstream info")
@@ -345,9 +369,11 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
         Files.readAllBytes(Paths.get(utils.repoDir.toString, metadataStoragePath)).map(_.toChar).mkString
 
       metadataContent must equal(
-        <AllMetadata>
-      <Test></Test><Entity/><Identifier/>
-    </AllMetadata>.toString
+        <XIP xmlns="http://preservica.com/XIP/v6.9">
+          <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
+          <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+          <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
+        </XIP>.toString
       )
     }
 
@@ -360,7 +386,9 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       2,
       typesOfMetadataFilesInRepo = List(ContentObject),
       fileContentToWriteToEachFileInRepo = List(fileContent),
-      metadataElemsPreservicaResponse = Seq(<DifferentMetadata></DifferentMetadata>),
+      metadataElemsPreservicaResponse = Seq(
+        <Metadata><Ref/><Entity/><Content><differentThing xmlns="http://www.mockSchema.com/test/v42"></differentThing></Content></Metadata>
+      ),
       bitstreamInfo1Responses =
         List(BitStreamInfo("name1", 1, "", Fixity("SHA256", checksum), 1, Original, None, Some(ioId)))
     )
@@ -380,9 +408,13 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       )
 
     metadataContent must equal(
-      trim(<AllMetadata>
-          <Test></Test><Entity/><Identifier/>
-        </AllMetadata>)
+      trim(
+        <XIP xmlns="http://preservica.com/XIP/v6.9">
+          <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
+          <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+          <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"/></Content></Metadata>
+        </XIP>
+      )
     )
   }
 
@@ -394,7 +426,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     when(repo.getObject(any[ObjectVersionId])).thenThrow(new RuntimeException("Unexpected Exception"))
 
     val ocflService = new OcflService(repo)
-    val processor = new Processor(utils.config, utils.sqsClient, ocflService, utils.preservicaClient)
+    val processor =
+      new Processor(utils.config, utils.sqsClient, ocflService, utils.preservicaClient, utils.xmlValidator)
 
     val ex = intercept[Exception] {
       runDisasterRecovery(utils.sqsClient, utils.config, processor)
