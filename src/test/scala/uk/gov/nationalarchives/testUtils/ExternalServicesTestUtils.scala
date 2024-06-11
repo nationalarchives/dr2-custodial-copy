@@ -33,11 +33,10 @@ import uk.gov.nationalarchives.dp.client.EntityClient.GenerationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.*
 import uk.gov.nationalarchives.dp.client.ValidateXmlAgainstXsd.PreservicaSchema.XipXsdSchemaV6
-
+import scala.jdk.FunctionConverters.*
 import java.net.URI
 import java.nio.file.{Files, Path, Paths}
 import java.util.UUID
-import scala.compat.java8.FunctionConverters.asJavaConsumer
 import scala.jdk.CollectionConverters.ListHasAsScala
 import scala.util.{Failure, Success, Try}
 import scala.xml.Utility.trim
@@ -152,8 +151,14 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val workDir = Files.createTempDirectory("work")
     new OcflRepositoryBuilder()
       .defaultLayoutConfig(new HashedNTupleLayoutConfig())
-      .storage(asJavaConsumer[OcflStorageBuilder](s => s.fileSystem(repoDir)))
-      .ocflConfig(asJavaConsumer[OcflConfig](config => config.setDefaultDigestAlgorithm(DigestAlgorithm.sha256)))
+      .storage(((s: OcflStorageBuilder) => {
+        s.fileSystem(repoDir)
+        ()
+      }).asJava)
+      .ocflConfig(((config: OcflConfig) => {
+        config.setDefaultDigestAlgorithm(DigestAlgorithm.sha256)
+        ()
+      }).asJava)
       .prettyPrintJson()
       .workDir(workDir)
       .build()
