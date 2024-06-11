@@ -13,7 +13,7 @@ import uk.gov.nationalarchives.OcflService.*
 import java.nio.file.Paths
 import java.util.UUID
 import scala.util.{Failure, Success, Try}
-import scala.compat.java8.FunctionConverters.*
+import scala.jdk.FunctionConverters.*
 
 class OcflService(ocflRepository: OcflRepository) {
   def createObjects(paths: List[IdWithSourceAndDestPaths]): IO[List[ObjectVersionId]] = IO.blocking {
@@ -25,7 +25,7 @@ class OcflService(ocflRepository: OcflRepository) {
         ocflRepository.updateObject(
           id.toHeadVersion,
           new VersionInfo(),
-          asJavaConsumer[OcflObjectUpdater] { updater =>
+          { (updater: OcflObjectUpdater) =>
             paths.map { idWithSourceAndDestPath =>
               updater.addPath(
                 idWithSourceAndDestPath.sourceNioFilePath,
@@ -33,7 +33,8 @@ class OcflService(ocflRepository: OcflRepository) {
                 OcflOption.OVERWRITE
               )
             }
-          }
+            ()
+          }.asJava
         )
       }
       .toList
@@ -95,8 +96,14 @@ object OcflService {
 
     val repo: OcflRepository = new OcflRepositoryBuilder()
       .defaultLayoutConfig(new HashedNTupleLayoutConfig())
-      .storage(asJavaConsumer[OcflStorageBuilder](osb => osb.fileSystem(repoDir)))
-      .ocflConfig(asJavaConsumer[OcflConfig](config => config.setDefaultDigestAlgorithm(DigestAlgorithm.sha256)))
+      .storage(((osb: OcflStorageBuilder) => {
+        osb.fileSystem(repoDir)
+        ()
+      }).asJava)
+      .ocflConfig(((config: OcflConfig) => {
+        config.setDefaultDigestAlgorithm(DigestAlgorithm.sha256)
+        ()
+      }).asJava)
       .prettyPrintJson()
       .workDir(workDir)
       .build()
