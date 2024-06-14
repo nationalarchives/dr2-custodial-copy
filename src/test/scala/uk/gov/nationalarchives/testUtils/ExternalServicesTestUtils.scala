@@ -32,7 +32,7 @@ import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.GenerationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.*
-import uk.gov.nationalarchives.dp.client.ValidateXmlAgainstXsd.PreservicaSchema.XipXsdSchemaV6
+import uk.gov.nationalarchives.dp.client.ValidateXmlAgainstXsd.PreservicaSchema.XipXsdSchemaV7
 import scala.jdk.FunctionConverters.*
 import java.net.URI
 import java.nio.file.{Files, Path, Paths}
@@ -240,7 +240,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     )
 
     private val metadataInRepo =
-      <XIP xmlns="http://preservica.com/XIP/v6.9">
+      <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
@@ -271,7 +271,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     }
 
     val ocflService = new OcflService(repo)
-    val xmlValidator: ValidateXmlAgainstXsd[IO] = ValidateXmlAgainstXsd[IO](XipXsdSchemaV6)
+    val xmlValidator: ValidateXmlAgainstXsd[IO] = ValidateXmlAgainstXsd[IO](XipXsdSchemaV7)
     val processor = new Processor(config, sqsClient, ocflService, preservicaClient, xmlValidator)
 
     def latestObjectVersion(repo: OcflRepository, id: UUID): Long =
@@ -391,11 +391,11 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       .thenReturn(IO.pure(DeleteMessageResponse.builder.build))
 
     val ocflService: OcflService = mockOcflService(missingObjects, changedObjects, throwErrorInMissingAndChangedObjects)
-    val xmlValidator: ValidateXmlAgainstXsd[IO] = spy(ValidateXmlAgainstXsd[IO](XipXsdSchemaV6))
+    val xmlValidator: ValidateXmlAgainstXsd[IO] = spy(ValidateXmlAgainstXsd[IO](XipXsdSchemaV7))
 
     val processor: Processor = new Processor(config, sqsClient, ocflService, entityClient, xmlValidator)
     val xmlToValidate: Elem =
-      <XIP xmlns="http://preservica.com/XIP/v6.9">
+      <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
