@@ -17,7 +17,7 @@ import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.*
-import uk.gov.nationalarchives.dp.client.ValidateXmlAgainstXsd.PreservicaSchema.XipXsdSchemaV6
+import uk.gov.nationalarchives.dp.client.ValidateXmlAgainstXsd.PreservicaSchema.XipXsdSchemaV7
 
 import java.util.UUID
 import scala.xml.Elem
@@ -43,7 +43,7 @@ class Processor(
       repType: Option[String] = None
   ): IO[List[MetadataObject]] = {
     val consolidatedMetadata =
-      <XIP xmlns="http://preservica.com/XIP/v6.9">
+      <XIP xmlns="http://preservica.com/XIP/v7.0">
           {
         Seq(metadata.entityNode)
           ++ metadata.identifiers.flatMap(identifier => Seq(newlineAndIndent, identifier))
@@ -207,6 +207,6 @@ object Processor {
       ocflService: OcflService,
       entityClient: EntityClient[IO, Fs2Streams[IO]]
   ): IO[Processor] = IO(
-    new Processor(config, sqsClient, ocflService, entityClient, ValidateXmlAgainstXsd[IO](XipXsdSchemaV6))
+    new Processor(config, sqsClient, ocflService, entityClient, ValidateXmlAgainstXsd[IO](XipXsdSchemaV7))
   )
 }

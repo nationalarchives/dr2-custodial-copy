@@ -52,7 +52,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
         Files.readAllBytes(Paths.get(utils.repoDir.toString, metadataStoragePath)).map(_.toChar).mkString
 
       metadataContent must equal(
-        <XIP xmlns="http://preservica.com/XIP/v6.9">
+        <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
@@ -96,7 +96,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
     metadataContent must equal(
       trim(
-        <XIP xmlns="http://preservica.com/XIP/v6.9">
+        <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
           <Metadata><Ref/><Entity/><Content><differentThing xmlns="http://www.mockSchema.com/test/v42"/></Content></Metadata>
@@ -131,7 +131,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
     metadataContent must equal(
       trim(
-        <XIP xmlns="http://preservica.com/XIP/v6.9">
+        <XIP xmlns="http://preservica.com/XIP/v7.0">
                     <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
                     <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
                     <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
@@ -369,7 +369,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
         Files.readAllBytes(Paths.get(utils.repoDir.toString, metadataStoragePath)).map(_.toChar).mkString
 
       metadataContent must equal(
-        <XIP xmlns="http://preservica.com/XIP/v6.9">
+        <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
@@ -409,7 +409,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
     metadataContent must equal(
       trim(
-        <XIP xmlns="http://preservica.com/XIP/v6.9">
+        <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"/></Content></Metadata>
