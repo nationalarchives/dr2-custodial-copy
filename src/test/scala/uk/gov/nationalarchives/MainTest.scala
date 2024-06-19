@@ -54,8 +54,11 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       metadataContent must equal(
         <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
+          <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
           <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+          <Link><Type/><FromEntity/><ToEntity/></Link>
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
+          <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
         </XIP>.toString
       )
     }
@@ -98,8 +101,11 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       trim(
         <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
+          <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
           <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+          <Link><Type/><FromEntity/><ToEntity/></Link>
           <Metadata><Ref/><Entity/><Content><differentThing xmlns="http://www.mockSchema.com/test/v42"/></Content></Metadata>
+          <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
         </XIP>
       )
     )
@@ -132,10 +138,13 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     metadataContent must equal(
       trim(
         <XIP xmlns="http://preservica.com/XIP/v7.0">
-                    <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
-                    <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
-                    <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
-                    <Metadata><Ref/><Entity/><Content><anotherThing xmlns="http://www.mockSchema.com/test/v42"></anotherThing></Content></Metadata>
+          <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
+          <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
+          <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+          <Link><Type/><FromEntity/><ToEntity/></Link>
+          <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"/></Content></Metadata>
+          <Metadata><Ref/><Entity/><Content><anotherThing xmlns="http://www.mockSchema.com/test/v42"/></Content></Metadata>
+          <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
                   </XIP>
       )
     )
@@ -370,9 +379,13 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
       metadataContent must equal(
         <XIP xmlns="http://preservica.com/XIP/v7.0">
-          <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
+          <ContentObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></ContentObject>
+          <Generation original="true" active="true"><ContentObject>someContent</ContentObject></Generation>
+          <Bitstream><Filename>testName</Filename><FileSize>10</FileSize><Fixities/></Bitstream>
           <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+          <Link><Type/><FromEntity/><ToEntity/></Link>
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
+          <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
         </XIP>.toString
       )
     }
@@ -410,9 +423,13 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     metadataContent must equal(
       trim(
         <XIP xmlns="http://preservica.com/XIP/v7.0">
-          <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
+          <ContentObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></ContentObject>
+          <Generation original="true" active="true"><ContentObject>someContent</ContentObject></Generation>
+          <Bitstream><Filename>testName</Filename><FileSize>10</FileSize><Fixities/></Bitstream>
           <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+          <Link><Type/><FromEntity/><ToEntity/></Link>
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"/></Content></Metadata>
+          <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
         </XIP>
       )
     )

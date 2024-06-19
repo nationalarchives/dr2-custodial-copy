@@ -10,9 +10,9 @@ import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.storage.OcflStorageBuilder
 import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.{spy, times, verify, when}
+import org.mockito.Mockito.{doReturn, spy, times, verify, when}
 import org.mockito.invocation.InvocationOnMock
-import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
+import org.mockito.{ArgumentCaptor, ArgumentMatcher, ArgumentMatchers, Mockito}
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.{Assertion, EitherValues}
 import org.scalatestplus.mockito.MockitoSugar
@@ -33,6 +33,7 @@ import uk.gov.nationalarchives.dp.client.EntityClient.GenerationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.*
 import uk.gov.nationalarchives.dp.client.ValidateXmlAgainstXsd.PreservicaSchema.XipXsdSchemaV7
+
 import scala.jdk.FunctionConverters.*
 import java.net.URI
 import java.nio.file.{Files, Path, Paths}
@@ -50,6 +51,12 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     Preservation.toString -> Preservation
   )
 
+  class EntityWithSpecificType(shortenedEntityType: String) extends ArgumentMatcher[Entity] {
+    def matches(entity: Entity): Boolean = entity.entityType.exists(_.entityTypeShort == shortenedEntityType)
+
+    override def toString: String = s"[entityTypeShort == $shortenedEntityType]"
+  }
+
   private def mockPreservicaClient(
       ioId: UUID = UUID.fromString("049974f1-d3f0-4f51-8288-2a40051a663c"),
       coId: UUID = UUID.fromString("3393cd51-3c54-41a0-a9d4-5234a0ae47bf"),
@@ -59,7 +66,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       bitstreamInfo1: Seq[BitStreamInfo] = Nil,
       bitstreamInfo2: Seq[BitStreamInfo] = Nil,
       addAccessRepUrl: Boolean = false
-  ): EntityClient[IO, Fs2Streams[IO]] = {
+  ) = {
     val preservicaClient = mock[EntityClient[IO, Fs2Streams[IO]]]
     val entityType = Some(ContentObject)
     val contentObjectResponse =
@@ -68,16 +75,40 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       s"http://localhost/api/entity/information-objects/$ioId/representations/Preservation/1"
     ) ++ (if addAccessRepUrl then Seq(s"http://localhost/api/entity/information-objects/$ioId/representations/Access/1")
           else Nil)
-    when(preservicaClient.metadataForEntity(any[Entity]))
-      .thenReturn(
-        IO(
-          EntityMetadata(
-            <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>,
-            Seq(<Identifier><ApiId/><Type/><Value/><Entity/></Identifier>),
-            metadataElems
+    // For some reason, the regular "when" stubbing doesn't play nicely with "argThat"
+    doReturn(
+      IO.pure(
+        IoMetadata(
+          <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>,
+          Seq(
+            <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
+          ),
+          Seq(<Identifier><ApiId/><Type/><Value/><Entity/></Identifier>),
+          Seq(<Link><Type/><FromEntity/><ToEntity/></Link>),
+          metadataElems,
+          Seq(
+            <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
           )
         )
       )
+    ).when(preservicaClient).metadataForEntity(ArgumentMatchers.argThat(new EntityWithSpecificType("IO")))
+
+    doReturn(
+      IO.pure(
+        CoMetadata(
+          <ContentObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></ContentObject>,
+          Seq(<Generation original="true" active="true"><ContentObject>someContent</ContentObject></Generation>),
+          Seq(<Bitstream><Filename>testName</Filename><FileSize>10</FileSize><Fixities/></Bitstream>),
+          Seq(<Identifier><ApiId/><Type/><Value/><Entity/></Identifier>),
+          Seq(<Link><Type/><FromEntity/><ToEntity/></Link>),
+          metadataElems,
+          Seq(
+            <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
+          )
+        )
+      )
+    ).when(preservicaClient).metadataForEntity(ArgumentMatchers.argThat(new EntityWithSpecificType("CO")))
+
     when(preservicaClient.getUrlsToIoRepresentations(ArgumentMatchers.eq(ioId), any[Option[RepresentationType]]))
       .thenReturn(IO(urlToRepresentations))
     when(
@@ -239,11 +270,25 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       addAccessRepUrl
     )
 
-    private val metadataInRepo =
+    private val ioMetadataInRepo =
       <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
+          <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
           <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+          <Link><Type/><FromEntity/><ToEntity/></Link>
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
+          <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
+        </XIP>
+
+    private val coMetadataInRepo =
+      <XIP xmlns="http://preservica.com/XIP/v7.0">
+          <ContentObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></ContentObject>
+          <Generation original="true" active="true"><ContentObject>someContent</ContentObject></Generation>
+          <Bitstream><Filename>testName</Filename><FileSize>10</FileSize><Fixities/></Bitstream>
+          <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+          <Link><Type/><FromEntity/><ToEntity/></Link>
+          <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
+          <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
         </XIP>
 
     typesOfMetadataFilesInRepo.foreach {
@@ -252,7 +297,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
           ioId,
           ioType,
           repo,
-          metadataInRepo,
+          ioMetadataInRepo,
           expectedIoMetadataFileDestinationPath
         )
       case ContentObject =>
@@ -260,7 +305,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
           ioId,
           coType,
           repo,
-          metadataInRepo,
+          coMetadataInRepo,
           expectedCoMetadataFileDestinationPath
         )
       case unexpectedEntityType => throw new Exception(s"Unexpected EntityType $unexpectedEntityType!")
@@ -310,17 +355,41 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val duplicatesCoMessageResponses: List[MessageResponse[Option[Message]]] =
       (1 to 3).toList.map(_ => MessageResponse[Option[Message]]("receiptHandle2", Option(coMessage)))
 
-    lazy val consolidatedMetadata: Elem =
+    lazy val ioConsolidatedMetadata: Elem =
       <XIP>
-        {entityFromApi +: (metadataFromApi ++ identifiersFromAPi)}
+        {
+        entityFromApi +: (representationFromApi ++ identifiersFromAPi ++ linksFromApi ++ metadataFromApi ++ eventActionFromApi)
+      }
+      </XIP>
+    lazy val coConsolidatedMetadata: Elem =
+      <XIP>
+        {
+        entityFromApi +: (generationFromApi ++ bitstreamFromApi ++ identifiersFromAPi ++ linksFromApi ++ metadataFromApi ++ eventActionFromApi)
+      }
       </XIP>
 
-    private val metadataFromApi = Seq(
-      <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
-    )
+    private val metadataFromApi =
+      Seq(
+        <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
+      )
     private val entityFromApi =
       <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
     private val identifiersFromAPi = Seq(<Identifier><ApiId/><Type/><Value/><Entity/></Identifier>)
+    private val representationFromApi =
+      Seq(
+        <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
+      )
+
+    private val generationFromApi =
+      Seq(<Generation original="true" active="true"><ContentObject/></Generation>)
+    private val bitstreamFromApi = Seq(
+      <Bitstream><Filename>testName</Filename><FileSize>10</FileSize><Fixities/></Bitstream>
+    )
+    private val linksFromApi = Seq(<Link><Type/><FromEntity/><ToEntity/></Link>)
+    private val eventActionFromApi =
+      Seq(
+        <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
+      )
 
     private val potentialParentRef = if parentRefExists then Some(ioId) else None
 
@@ -385,8 +454,31 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       }
     }
 
-    when(entityClient.metadataForEntity(any[Entity]))
-      .thenReturn(IO.pure(EntityMetadata(entityFromApi, identifiersFromAPi, metadataFromApi)))
+    doReturn(
+      IO.pure(
+        IoMetadata(
+          entityFromApi,
+          representationFromApi,
+          identifiersFromAPi,
+          linksFromApi,
+          metadataFromApi,
+          eventActionFromApi
+        )
+      )
+    ).when(entityClient).metadataForEntity(ArgumentMatchers.argThat(new EntityWithSpecificType("IO")))
+    doReturn(
+      IO.pure(
+        CoMetadata(
+          entityFromApi,
+          generationFromApi,
+          bitstreamFromApi,
+          identifiersFromAPi,
+          linksFromApi,
+          metadataFromApi,
+          eventActionFromApi
+        )
+      )
+    ).when(entityClient).metadataForEntity(ArgumentMatchers.argThat(new EntityWithSpecificType("CO")))
     when(sqsClient.deleteMessage(queueUrlCaptor.capture, receiptHandleCaptor.capture))
       .thenReturn(IO.pure(DeleteMessageResponse.builder.build))
 
@@ -394,11 +486,24 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val xmlValidator: ValidateXmlAgainstXsd[IO] = spy(ValidateXmlAgainstXsd[IO](XipXsdSchemaV7))
 
     val processor: Processor = new Processor(config, sqsClient, ocflService, entityClient, xmlValidator)
-    val xmlToValidate: Elem =
+    val ioXmlToValidate: Elem =
       <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
+          <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
           <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
-          <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
+          <Link><Type/><FromEntity/><ToEntity/></Link>
+          <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"/></Content></Metadata>
+          <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
+        </XIP>
+    val coXmlToValidate: Elem =
+      <XIP xmlns="http://preservica.com/XIP/v7.0">
+          <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
+          <Generation original="true" active="true"><ContentObject/></Generation>
+          <Bitstream><Filename>testName</Filename><FileSize>10</FileSize><Fixities/></Bitstream>
+          <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+          <Link><Type/><FromEntity/><ToEntity/></Link>
+          <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"/></Content></Metadata>
+          <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
         </XIP>
 
     def verifyCallsAndArguments(
@@ -409,7 +514,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         repIndexes: List[Int] = List(1),
         idsOfEntityToGetMetadataFrom: List[UUID] = List(ioId),
         entityTypesToGetMetadataFrom: List[EntityType] = List(InformationObject),
-        xmlRequestsToValidate: List[Elem] = List(xmlToValidate),
+        xmlRequestsToValidate: List[Elem] = List(ioXmlToValidate),
         createdIdSourceAndDestinationPathAndId: List[List[IdWithSourceAndDestPaths]] = Nil,
         drosToLookup: List[List[String]] = List(List(s"$ioId/IO_Metadata.xml")),
         receiptHandles: List[String] = List("receiptHandle", "receiptHandle", "receiptHandle")

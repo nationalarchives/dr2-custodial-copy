@@ -41,22 +41,42 @@ class Processor(
       fileName: String,
       path: String,
       repType: Option[String] = None
-  ): IO[List[MetadataObject]] = {
-    val consolidatedMetadata =
-      <XIP xmlns="http://preservica.com/XIP/v7.0">
-          {
-        Seq(metadata.entityNode)
+  ): IO[List[MetadataObject]] =
+    for {
+      entitySpecificMetadata <-
+        metadata match {
+          case ioMetadata: IoMetadata =>
+            IO(
+              Seq(ioMetadata.entityNode)
+                ++ ioMetadata.representations.flatMap(representation => Seq(newlineAndIndent, representation))
+            )
+          case coMetadata: CoMetadata =>
+            IO(
+              Seq(coMetadata.entityNode)
+                ++ coMetadata.generationNodes.flatMap(generationNode => Seq(newlineAndIndent, generationNode))
+                ++ coMetadata.bitstreamNodes.flatMap(bitstreamNode => Seq(newlineAndIndent, bitstreamNode))
+            )
+          case _ => IO.raiseError(new Exception(s"${metadata.getClass} is not a supported metadata type"))
+        }
+
+      consolidatedMetadata =
+        entitySpecificMetadata
           ++ metadata.identifiers.flatMap(identifier => Seq(newlineAndIndent, identifier))
+          ++ metadata.links.flatMap(link => Seq(newlineAndIndent, link))
           ++ metadata.metadataNodes.flatMap(metadataNode => Seq(newlineAndIndent, metadataNode))
-      }
+          ++ metadata.eventActions.flatMap(eventAction => Seq(newlineAndIndent, eventAction))
+
+      allMetadataAsXml =
+        <XIP xmlns="http://preservica.com/XIP/v7.0">
+          {consolidatedMetadata}
         </XIP>
 
-    val metadataXmlAsString = consolidatedMetadata.toString()
-    xmlValidator.xmlStringIsValid(metadataXmlAsString).map { _ =>
-      val checksum = DigestUtils.sha256Hex(metadataXmlAsString)
-      List(MetadataObject(ioRef, repType, fileName, checksum, consolidatedMetadata, path))
-    }
-  }
+      allMetadataAsXmlString = allMetadataAsXml.toString()
+
+      _ <- xmlValidator.xmlStringIsValid(allMetadataAsXmlString)
+    } yield List(
+      MetadataObject(ioRef, repType, fileName, DigestUtils.sha256Hex(allMetadataAsXmlString), allMetadataAsXml, path)
+    )
 
   private lazy val allRepresentationTypes: Map[String, RepresentationType] = Map(
     Access.toString -> Access,
