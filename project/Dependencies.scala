@@ -17,7 +17,7 @@ object Dependencies {
   lazy val pureConfig = "com.github.pureconfig" %% "pureconfig-core" % pureConfigVersion
   lazy val lambdaCore = "com.amazonaws" % "aws-lambda-java-core" % "1.2.2"
   lazy val lambdaJavaEvents = "com.amazonaws" % "aws-lambda-java-events" % "3.11.1"
-  lazy val sqsClient = "uk.gov.nationalarchives" %% "da-sqs-client" % "0.1.65"
+  lazy val sqsClient = "uk.gov.nationalarchives" %% "da-sqs-client" % "0.1.67"
   lazy val scalaTest = "org.scalatest" %% "scalatest" % scalaTestVersion
   lazy val mockito = "org.scalatestplus" %% "mockito-5-10" % s"$scalaTestVersion.0"
 }
