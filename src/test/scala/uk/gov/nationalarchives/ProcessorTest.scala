@@ -3,8 +3,9 @@ package uk.gov.nationalarchives
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import fs2.io.file.Path
+import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.when
+import org.mockito.Mockito.{doReturn, when}
 import org.scalatestplus.mockito.MockitoSugar
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
@@ -13,13 +14,13 @@ import uk.gov.nationalarchives.DisasterRecoveryObject.MetadataObject
 import uk.gov.nationalarchives.Main.IdWithSourceAndDestPaths
 import uk.gov.nationalarchives.Message.InformationObjectMessage
 import uk.gov.nationalarchives.OcflService.MissingAndChangedObjects
-import uk.gov.nationalarchives.dp.client.Entities.Entity
-import uk.gov.nationalarchives.dp.client.EntityClient.EntityMetadata
+import uk.gov.nationalarchives.dp.client.EntityClient.IoMetadata
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.testUtils.ExternalServicesTestUtils.*
 
 import java.util.UUID
+import scala.xml.Elem
 
 class ProcessorTest extends AnyFlatSpec with MockitoSugar {
   "process" should "retrieve the metadata if an information object update is received" in {
@@ -46,6 +47,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       1,
       idsOfEntityToGetMetadataFrom = List(id),
       entityTypesToGetMetadataFrom = List(ContentObject),
+      xmlRequestsToValidate = List(utils.coXmlToValidate),
       createdIdSourceAndDestinationPathAndId = List(Nil, Nil),
       drosToLookup = List(
         List(
@@ -68,6 +70,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       1,
       idsOfEntityToGetMetadataFrom = List(utils.coId),
       entityTypesToGetMetadataFrom = List(ContentObject),
+      xmlRequestsToValidate = List(utils.coXmlToValidate),
       createdIdSourceAndDestinationPathAndId = List(Nil, Nil),
       drosToLookup = List(
         List(
@@ -142,7 +145,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       1,
       idsOfEntityToGetMetadataFrom = List(parentRef, id),
       entityTypesToGetMetadataFrom = List(InformationObject, ContentObject),
-      xmlRequestsToValidate = List(utils.xmlToValidate, utils.xmlToValidate),
+      xmlRequestsToValidate = List(utils.ioXmlToValidate, utils.coXmlToValidate),
       createdIdSourceAndDestinationPathAndId = List(Nil, Nil),
       drosToLookup = List(
         List(
@@ -181,7 +184,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 Some("Preservation_1"),
                 "changed",
                 "checksum",
-                utils.consolidatedMetadata,
+                utils.ioConsolidatedMetadata,
                 "destinationPath"
               )
             )
@@ -216,7 +219,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 Some("Preservation_1"),
                 "missing",
                 "checksum",
-                utils.consolidatedMetadata,
+                utils.ioConsolidatedMetadata,
                 "destinationPath"
               )
             ),
@@ -250,7 +253,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 Some("Preservation_1"),
                 "missing",
                 "checksum",
-                utils.consolidatedMetadata,
+                utils.ioConsolidatedMetadata,
                 "destinationPath"
               )
             ),
@@ -260,7 +263,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 Some("Preservation_1"),
                 "changed",
                 "checksum",
-                utils.consolidatedMetadata,
+                utils.ioConsolidatedMetadata,
                 "destinationPath2"
               )
             )
@@ -284,7 +287,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       repTypes = Nil,
       repIndexes = Nil,
       idsOfEntityToGetMetadataFrom = List(missingFileId, changedFileId),
-      xmlRequestsToValidate = List(utils.xmlToValidate, utils.xmlToValidate),
+      xmlRequestsToValidate = List(utils.ioXmlToValidate, utils.ioXmlToValidate),
       createdIdSourceAndDestinationPathAndId = List(
         List(IdWithSourceAndDestPaths(missingFileId, Path(s"$missingFileId/missing").toNioPath, "destinationPath")),
         List(IdWithSourceAndDestPaths(changedFileId, Path(s"$changedFileId/changed").toNioPath, "destinationPath2"))
@@ -302,16 +305,22 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
   "process" should "throw an Exception if XML string passed to validator is invalid" in {
     val utils = new ProcessorTestUtils()
 
-    when(utils.entityClient.metadataForEntity(any[Entity]))
-      .thenReturn(
-        IO.pure(
-          EntityMetadata(
-            <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><InvalidTag/></InformationObject>,
-            Nil,
-            Nil
+    doReturn(
+      IO.pure(
+        IoMetadata(
+          <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><InvalidTag/></InformationObject>,
+          Seq(
+            <Representation><InformationObject/><Name/><Type/><ContentObjects/><RepresentationFormats/><RepresentationProperties/></Representation>
+          ),
+          Seq(<Identifier><ApiId/><Type/><Value/></Identifier>),
+          Seq(<Links><Link/></Links>),
+          Seq(<Metadata><Content/></Metadata>),
+          Seq(
+            <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date/><User/></Event><Date></Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity></EventAction>
           )
         )
       )
+    ).when(utils.entityClient).metadataForEntity(ArgumentMatchers.argThat(new EntityWithSpecificType("IO")))
 
     val res = utils.processor.process(utils.duplicatesIoMessageResponses).attempt.unsafeRunSync()
 
@@ -329,6 +338,11 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       xmlRequestsToValidate = List(
         <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><InvalidTag/></InformationObject>
+          <Representation><InformationObject/><Name/><Type/><ContentObjects/><RepresentationFormats/><RepresentationProperties/></Representation>
+          <Identifier><ApiId/><Type/><Value/></Identifier>
+          <Links><Link/></Links>
+          <Metadata><Content/></Metadata>
+          <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date/><User/></Event><Date/><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity></EventAction>
         </XIP>
       ),
       drosToLookup = Nil,
