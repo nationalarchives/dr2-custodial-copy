@@ -1,0 +1,26 @@
+@import uk.gov.nationalarchives.utils.Utils.OcflFile
+@(files: List[OcflFile])
+
+@main("Results") {
+    <table class="govuk-table">
+        <caption class="govuk-table__caption govuk-table__caption--m">Search Results</caption>
+        <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header">Name</th>
+                <th scope="col" class="govuk-table__header"></th>
+            </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+            @for(file <- files) {
+                <tr class="govuk-table__row">
+                    <th scope="row" class="govuk-table__header">@file.fileName</th>
+                    <td class="govuk-table__cell">
+                        <a class="govuk-link" href="/download/@file.fileId" download="@file.fileName">Download</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+}
+
