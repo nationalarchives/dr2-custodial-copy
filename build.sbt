@@ -15,6 +15,15 @@ def tagDockerImage(imageName: String): Unit = {
   s"docker push $imageName:${sys.env("ENVIRONMENT_TAG")}".!!
 }
 
+def setupDirectories(serviceName: String) =
+  Cmd("RUN", s"""apk update && apk upgrade && apk add openjdk21-jre && \\
+               |    mkdir -p /poduser/work /poduser/repo /poduser/version /poduser/database && \\
+               |    chown -R 1002:1005 /poduser && \\
+               |    mkdir /poduser/logs && \\
+               |    touch /poduser/logs/$serviceName.log && \\
+               |    chown -R nobody:nobody /poduser/logs && \\
+               |    chmod 644 /poduser/logs/$serviceName.log""".stripMargin)
+
 lazy val root = (project in file("."))
   .aggregate(disasterRecovery, webapp, builder, utils)
   .settings(
@@ -22,7 +31,7 @@ lazy val root = (project in file("."))
   )
 
 lazy val disasterRecovery = (project in file("disaster-recovery"))
-  .enablePlugins(DockerPlugin)
+  .enablePlugins(DockerPlugin, BuildInfoPlugin)
   .settings(tagSettings)
   .settings(commonSettings)
   .settings(
@@ -31,13 +40,7 @@ lazy val disasterRecovery = (project in file("disaster-recovery"))
     dockerCommands ++= Seq(
       Cmd("FROM","alpine"),
       Cmd("COPY", s"2/opt/docker/lib/${(assembly / assemblyJarName).value}", s"/opt/${(assembly / assemblyJarName).value}"),
-      Cmd("RUN", """apk update && apk upgrade && apk add openjdk21-jre && \
-                   |    mkdir -p /poduser/work /poduser/repo /poduser/version && \
-                   |    chown -R 1002:1005 /poduser && \
-                   |    mkdir /poduser/logs && \
-                   |    touch /poduser/logs/disaster-recovery.log && \
-                   |    chown -R nobody:nobody /poduser/logs && \
-                   |    chmod 644 /poduser/logs/disaster-recovery.log""".stripMargin),
+      setupDirectories("disaster-recovery"),
       Cmd("USER", "1002"),
       ExecCmd("CMD", "java", "-jar", s"/opt/${(assembly / assemblyJarName).value}")
     ),
@@ -146,11 +149,9 @@ lazy val commonSettings = Seq(
   Docker / version := sys.env.getOrElse("DOCKER_TAG", version.value),
   dockerCommands := Seq(
     Cmd("FROM", "alpine"),
-    Cmd("RUN",
-      """apk update && apk upgrade && apk add openjdk21-jre bash && \
-        |    mkdir -p /root/database /root/repo /root/work""".stripMargin),
+    setupDirectories(name.value),
     Cmd("COPY", s"2/opt/docker/lib/${(assembly / assemblyJarName).value}", s"/opt/${(assembly / assemblyJarName).value}"),
-    Cmd("RUN", "ls -la", "/opt"),
+    Cmd("USER", "1002"),
     ExecCmd("CMD", "java", "-jar", s"/opt/${(assembly / assemblyJarName).value}")
   )
 )
