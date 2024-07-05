@@ -8,8 +8,6 @@ object Dependencies {
 
   lazy val fs2 = "co.fs2" %% "fs2-core" % "3.10.2"
   lazy val fs2Core = "co.fs2" %% "fs2-core" % "3.10.2"
-  lazy val lambdaCore = "com.amazonaws" % "aws-lambda-java-core" % "1.2.2"
-  lazy val lambdaJavaEvents = "com.amazonaws" % "aws-lambda-java-events" % "3.11.1"
   lazy val log4Cats = "org.typelevel" %% "log4cats-core" % log4CatsVersion
   lazy val log4CatsSlf4j = "org.typelevel" %% "log4cats-slf4j" % log4CatsVersion
   lazy val log4jCore = "org.apache.logging.log4j" % "log4j-core" % logbackVersion
