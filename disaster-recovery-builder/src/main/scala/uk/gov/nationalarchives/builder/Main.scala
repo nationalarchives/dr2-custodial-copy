@@ -22,7 +22,7 @@ object Main extends IOApp {
 
   given Decoder[Message] = (c: HCursor) =>
     for {
-      id <- c.downField("id").as[String]
+      id <- c.downField("ioRef").as[String]
     } yield Message(UUID.fromString(id))
 
   private def logError(err: Throwable) = for {
