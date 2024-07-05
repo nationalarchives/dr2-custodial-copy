@@ -36,14 +36,8 @@ lazy val disasterRecovery = (project in file("disaster-recovery"))
   .settings(commonSettings)
   .settings(
     name := "dr2-disaster-recovery",
+    assembly / assemblyJarName := "disaster-recovery.jar",
     scalacOptions += "-Wunused:imports",
-    dockerCommands ++= Seq(
-      Cmd("FROM","alpine"),
-      Cmd("COPY", s"2/opt/docker/lib/${(assembly / assemblyJarName).value}", s"/opt/${(assembly / assemblyJarName).value}"),
-      setupDirectories("disaster-recovery"),
-      Cmd("USER", "1002"),
-      ExecCmd("CMD", "java", "-jar", s"/opt/${(assembly / assemblyJarName).value}")
-    ),
     libraryDependencies ++= Seq(
       preservicaClient,
       sqsClient,
