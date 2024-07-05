@@ -4,20 +4,26 @@ import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits.*
 import uk.gov.nationalarchives.builder.Configuration.impl
 import fs2.Stream
-import io.circe.generic.auto.*
+import io.circe.{Decoder, HCursor}
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import pureconfig.ConfigReader
 import pureconfig.generic.derivation.default.*
 import uk.gov.nationalarchives.DASQSClient
 
+import java.net.URI
 import java.util.UUID
 import scala.concurrent.duration.*
 
 object Main extends IOApp {
 
-  case class Config(databasePath: String, queueUrl: String, ocflRepoDir: String, ocflWorkDir: String) derives ConfigReader
+  case class Config(databasePath: String, queueUrl: String, ocflRepoDir: String, ocflWorkDir: String, proxyUrl: Option[URI] = None) derives ConfigReader
 
   case class Message(id: UUID)
+
+  given Decoder[Message] = (c: HCursor) =>
+    for {
+      id <- c.downField("id").as[String]
+    } yield Message(UUID.fromString(id))
 
   private def logError(err: Throwable) = for {
     logger <- Slf4jLogger.create[IO]
@@ -25,7 +31,7 @@ object Main extends IOApp {
   } yield ()
 
   override def run(args: List[String]): IO[ExitCode] = for {
-    sqs <- IO(DASQSClient[IO]())
+    sqs <- IO(Configuration[IO].config.proxyUrl.map(url => DASQSClient[IO](url)).getOrElse(DASQSClient[IO]()))
     _ <- {
       Stream.fixedRateStartImmediately[IO](20.seconds) >>
         runBuilder(sqs)
