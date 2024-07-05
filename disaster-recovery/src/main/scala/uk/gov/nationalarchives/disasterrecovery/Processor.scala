@@ -55,7 +55,7 @@ class Processor(
             IO(
               Seq(coMetadata.entityNode)
                 ++ coMetadata.generationNodes.flatMap(generationNode => Seq(newlineAndIndent, generationNode))
-                ++ coMetadata.bitstreamNodes.flatMap(bitstreamNode => Seq(newlineAndIndent, bitstreamNode))
+                ++ coMetadata.bitstreamNodes.flatMap(bitstreamNode => newlineAndIndent :: (bitstreamNode \ "Bitstream").toList)
             )
           case _ => IO.raiseError(new Exception(s"${metadata.getClass} is not a supported metadata type"))
         }
