@@ -86,7 +86,6 @@ lazy val webapp = (project in file("disaster-recovery-webapp"))
   .settings(commonSettings)
   .settings(tagSettings)
   .settings(
-    organization := "com.example",
     assembly / assemblyJarName := "disaster-recovery-webapp.jar",
     name := "disaster-recovery-webapp",
     libraryDependencies ++= Seq(
