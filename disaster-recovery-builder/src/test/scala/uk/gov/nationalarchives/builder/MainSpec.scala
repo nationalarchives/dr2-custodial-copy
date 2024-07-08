@@ -31,8 +31,8 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
   override def beforeEach(): Unit = sqsServer.resetAll()
 
   def body(id: UUID): String = {
-    val md5 = DigestUtil.computeDigestHex(DigestAlgorithm.md5, s"{\"id\":\"$id\"}")
-    s"""{"Messages": [{"Body": "{\\"id\\":\\"$id\\"}","MD5OfBody": "$md5","ReceiptHandle": "A"}]}"""
+    val md5 = DigestUtil.computeDigestHex(DigestAlgorithm.md5, s"{\"ioRef\":\"$id\"}")
+    s"""{"Messages": [{"Body": "{\\"ioRef\\":\\"$id\\"}","MD5OfBody": "$md5","ReceiptHandle": "A"}]}"""
   }
 
   val sqsServer = new WireMockServer(9001)
