@@ -43,7 +43,7 @@ jobs:
       - name: Send success message
         uses: nationalarchives/tdr-github-actions/.github/actions/slack-send@main
         with:
-          message: "*disaster-recovery* *disaster-recovery-builder* *disaster-recovery-webapp* :whale: The '${{ github.event.inputs.to-deploy }}' image has been tagged with '${{ github.event.inputs.environment }}' in ECR"
+          message: "*disaster-recovery-backend*, *disaster-recovery-db-builder*, *disaster-recovery-webapp* :whale: The '${{ github.event.inputs.to-deploy }}' image has been tagged with '${{ github.event.inputs.environment }}' in ECR"
           slack-url: ${{ secrets.SLACK_WEBHOOK }}
       - name: Send failure message
         uses: nationalarchives/dr2-github-actions/.github/actions/slack-send@main

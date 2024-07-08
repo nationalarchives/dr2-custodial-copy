@@ -29,6 +29,9 @@ object TestUtils:
       .build()
   }
 
+  val coRef: UUID = UUID.randomUUID
+  val coRefTwo: UUID = UUID.randomUUID
+
   val completeIoMetadataContent: Elem = <Metadata>
     <Identifiers>
       <Identifier>
@@ -44,13 +47,13 @@ object TestUtils:
     <Metadata>
       <ContentObject>
         <Title>Content Title</Title>
-        <Ref>Reference</Ref>
+        <Ref>{coRef}</Ref>
       </ContentObject>
     </Metadata>,
     <Metadata>
       <ContentObject>
         <Title>Content Title2</Title>
-        <Ref>Reference2</Ref>
+        <Ref>{coRefTwo}</Ref>
       </ContentObject>
     </Metadata>
   )

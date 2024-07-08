@@ -5,6 +5,7 @@ import cats.implicits.*
 import uk.gov.nationalarchives.webapp.FrontEndRoutes.SearchResponse
 import uk.gov.nationalarchives.utils.Utils.OcflFile
 import doobie.Transactor
+import doobie.util.{Get, Put}
 import doobie.implicits.*
 import doobie.util.fragments.whereAndOpt
 import doobie.util.log.LogHandler
@@ -12,6 +13,7 @@ import doobie.util.transactor.Transactor.Aux
 import pureconfig.{ConfigReader, ConfigSource}
 import pureconfig.generic.derivation.default.*
 import pureconfig.module.catseffect.syntax.*
+import uk.gov.nationalarchives.utils.Utils.given
 
 import java.util.UUID
 
@@ -21,7 +23,7 @@ trait Assets[F[_]]:
   def findFiles(searchResponse: SearchResponse): F[List[OcflFile]]
 
 object Assets:
-  private case class Config(databasePath: String) derives ConfigReader
+  case class Config(databasePath: String) derives ConfigReader
 
   def apply[F[_]](using ev: Assets[F]): Assets[F] = ev
   given instance[F[_]: Async]: Assets[F] = new Assets[F]:
@@ -36,7 +38,7 @@ object Assets:
 
     override def filePath(id: UUID): F[String] = for {
       xa <- loadXa
-      potentialPath <- sql"SELECT path from files where fileId = ${id.toString}".query[String].to[List].transact(xa)
+      potentialPath <- sql"SELECT path from files where fileId = $id".query[String].to[List].transact(xa)
       path <- Async[F].fromOption(potentialPath.headOption, new RuntimeException(s"Id $id not found in the database"))
     } yield path
 

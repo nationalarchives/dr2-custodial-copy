@@ -17,18 +17,18 @@ class OcflSpec extends AnyFlatSpec:
       override def config: Config = testConfig
 
     val files = Ocfl[IO].generate(id).unsafeRunSync()
-    val firstFile = files.minBy(_.fileId)
-    val secondFile = files.maxBy(_.fileId)
+    val firstFile = files.maxBy(_.fileId)
+    val secondFile = files.minBy(_.fileId)
 
-    firstFile.id should equal(id.toString)
+    firstFile.id should equal(id)
     firstFile.name should equal("Title")
-    firstFile.fileId should equal("Reference")
+    firstFile.fileId should equal(coRef)
     firstFile.zref should equal("Zref")
     firstFile.fileName should equal("Content Title")
 
-    secondFile.id should equal(id.toString)
+    secondFile.id should equal(id)
     secondFile.name should equal("Title")
-    secondFile.fileId should equal("Reference2")
+    secondFile.fileId should equal(coRefTwo)
     secondFile.zref should equal("Zref")
     secondFile.fileName should equal("Content Title2")
   }

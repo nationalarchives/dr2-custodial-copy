@@ -16,12 +16,14 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
 
   override def afterEach(): Unit = Files.delete(Path.of("test-database"))
 
+  given Configuration = new Configuration:
+    override def config: Config = Config("test-database", "", "", "")
+
   "write" should "should write the values to the database" in {
-    given Configuration = new Configuration:
-      override def config: Config = Config("test-database", "", "", "")
     createTable()
-    val id = UUID.randomUUID.toString
-    val file = ocflFile(id, "fileId")
+    val id = UUID.randomUUID
+    val fileId = UUID.randomUUID()
+    val file = ocflFile(id, fileId)
     Database[IO].write(List(file)).unsafeRunSync()
     val response = readFiles(id).unsafeRunSync()
 
@@ -29,12 +31,10 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
   }
 
   "write" should "write nothing if an empty list is passed" in {
-    given Configuration = new Configuration:
-      override def config: Config = Config("test-database", "", "", "")
-
     createTable()
-    val id = UUID.randomUUID.toString
-    val file = ocflFile(id, "fileId")
+    val id = UUID.randomUUID
+    val fileId = UUID.randomUUID()
+    val file = ocflFile(id, fileId)
     Database[IO].write(Nil).unsafeRunSync()
     val response = readFiles(id).unsafeRunSync()
 
@@ -42,11 +42,9 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
   }
 
   "write" should "return an error if there is an error with the database" in {
-    given Configuration = new Configuration:
-      override def config: Config = Config("test-database", "", "", "")
-
-    val id = UUID.randomUUID.toString
-    val file = ocflFile(id, "fileId")
+    val id = UUID.randomUUID
+    val fileId = UUID.randomUUID()
+    val file = ocflFile(id, fileId)
 
     val ex = intercept[Exception](Database[IO].write(Nil).unsafeRunSync())
     ex.getMessage should equal("[SQLITE_ERROR] SQL error or missing database (no such table: files)")

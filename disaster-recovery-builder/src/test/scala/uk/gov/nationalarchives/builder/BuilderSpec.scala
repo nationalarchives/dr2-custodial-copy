@@ -17,16 +17,17 @@ class BuilderSpec extends AnyFlatSpec:
     val idOne = UUID.randomUUID
     val idTwo = UUID.randomUUID
     val ids = List(idOne, idTwo)
+    val fileId = UUID.randomUUID()
 
     given Ocfl[IO] = new Ocfl[IO](config):
       override def generate(id: UUID): IO[List[OcflFile]] = IO {
         ids.contains(id) should equal(true)
-        List(OcflFile(1, id.toString, "name", "fileId", "zref", "path", "fileName"))
+        List(OcflFile(1, id, "name", fileId, "zref", "path", "fileName"))
       }
     given Database[IO] = (files: List[OcflFile]) =>
       IO {
         files.length == 2 should equal(true)
-        assert(files.map(_.id).map(UUID.fromString).sorted == ids.sorted)
+        assert(files.map(_.id).sorted == ids.sorted)
       }
 
     val messages = List(MessageResponse[Message]("", Message(idOne)), MessageResponse[Message]("", Message(idTwo)))

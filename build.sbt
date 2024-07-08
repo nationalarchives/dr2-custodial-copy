@@ -9,7 +9,6 @@ ThisBuild / scalaVersion := "3.4.2"
 lazy val tagImage = taskKey[Unit]("Sets a GitHub actions output for the latest tag")
 
 def tagDockerImage(imageName: String): Unit = {
-  println(imageName)
   s"docker pull $imageName:${sys.env("DOCKER_TAG")}".!!
   s"docker tag $imageName:${sys.env("DOCKER_TAG")} $imageName:${sys.env("ENVIRONMENT_TAG")}".!!
   s"docker push $imageName:${sys.env("ENVIRONMENT_TAG")}".!!
@@ -50,7 +49,6 @@ lazy val disasterRecovery = (project in file("disaster-recovery"))
 lazy val utils = (project in file("utils"))
   .settings(
     name := "disaster-recovery-utils",
-    scalaVersion := "3.4.0",
     scalacOptions += "-Wunused:imports",
     publish / skip := true,
     libraryDependencies ++= Seq(
@@ -74,8 +72,7 @@ lazy val builder = (project in file("disaster-recovery-builder"))
   .settings(
     name := "disaster-recovery-builder",
     scalacOptions += "-Wunused:imports",
-    scalaVersion := "3.4.0",
-    assembly / assemblyJarName := "builder.jar",
+    assembly / assemblyJarName := "disaster-recovery-db-builder.jar",
     libraryDependencies ++= Seq(
       ocfl,
       fs2,
@@ -90,9 +87,8 @@ lazy val webapp = (project in file("disaster-recovery-webapp"))
   .settings(tagSettings)
   .settings(
     organization := "com.example",
-    assembly / assemblyJarName := "webapp.jar",
+    assembly / assemblyJarName := "disaster-recovery-webapp.jar",
     name := "disaster-recovery-webapp",
-    scalaVersion := "3.4.0",
     libraryDependencies ++= Seq(
       http4sEmber,
       http4sDsl,

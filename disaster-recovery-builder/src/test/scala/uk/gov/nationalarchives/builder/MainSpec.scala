@@ -57,19 +57,19 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
 
     Main.runBuilder(daSQSClient).compile.drain.unsafeRunSync()
 
-    val files = readFiles(id.toString).unsafeRunSync()
-    val firstFile = files.minBy(_.fileId)
-    val secondFile = files.maxBy(_.fileId)
+    val files = readFiles(id).unsafeRunSync()
+    val firstFile = files.maxBy(_.fileId)
+    val secondFile = files.minBy(_.fileId)
 
-    firstFile.id should equal(id.toString)
+    firstFile.id should equal(id)
     firstFile.name should equal("Title")
-    firstFile.fileId should equal("Reference")
+    firstFile.fileId should equal(coRef)
     firstFile.zref should equal("Zref")
     firstFile.fileName should equal("Content Title")
 
-    secondFile.id should equal(id.toString)
+    secondFile.id should equal(id)
     secondFile.name should equal("Title")
-    secondFile.fileId should equal("Reference2")
+    secondFile.fileId should equal(coRefTwo)
     secondFile.zref should equal("Zref")
     secondFile.fileName should equal("Content Title2")
   }
@@ -84,12 +84,12 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
 
     Main.runBuilder(daSQSClient).compile.drain.unsafeRunSync()
 
-    val files = readFiles(id.toString).unsafeRunSync()
+    val files = readFiles(id).unsafeRunSync()
     files.length should equal(1)
     val firstFile = files.head
-    firstFile.id should equal(id.toString)
+    firstFile.id should equal(id)
     firstFile.name should equal("Title")
-    firstFile.fileId should equal("Reference")
+    firstFile.fileId should equal(coRef)
     firstFile.zref should equal("Zref")
     firstFile.fileName should equal("Content Title")
   }
@@ -104,7 +104,7 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
 
     Main.runBuilder(daSQSClient).compile.drain.unsafeRunSync()
 
-    val files = readFiles(id.toString).unsafeRunSync()
+    val files = readFiles(id).unsafeRunSync()
     files.length should equal(1)
     val firstFile = files.head
     Files.readString(Paths.get(firstFile.path)) should equal("test")
@@ -112,6 +112,7 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
 
   "runBuilder" should "return empty string for missing metadata values" in {
     val id = UUID.randomUUID
+    val coId = UUID.randomUUID
     val ioMetadata =
       <Metadata>
         <Identifiers/>
@@ -120,7 +121,7 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
 
     val coMetadata =
       <Metadata>
-        <ContentObject/>
+        <ContentObject><Ref>{coId}</Ref></ContentObject>
       </Metadata>
 
     val testConfig = initialiseRepo(id, ioMetadata, coMetadata :: Nil)
@@ -131,14 +132,13 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
 
     Main.runBuilder(daSQSClient).compile.drain.unsafeRunSync()
 
-    val files = readFiles(id.toString).unsafeRunSync()
+    val files = readFiles(id).unsafeRunSync()
 
     files.size should equal(1)
 
     val file = files.head
-    file.id should equal(id.toString)
+    file.id should equal(id)
     file.name.isBlank should equal(true)
-    file.fileId.isBlank should equal(true)
     file.zref.isBlank should equal(true)
     file.fileName.isBlank should equal(true)
   }

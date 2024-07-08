@@ -1,11 +1,13 @@
 package uk.gov.nationalarchives.utils
 
 import cats.effect.IO
-import doobie.Transactor
+import doobie.{Get, Transactor}
 import doobie.implicits.*
 import doobie.util.transactor.Transactor.Aux
 import cats.effect.unsafe.implicits.global
+import doobie.util.Put
 import uk.gov.nationalarchives.utils.Utils.OcflFile
+import uk.gov.nationalarchives.utils.Utils.given
 
 import java.util.UUID
 
@@ -21,20 +23,20 @@ object TestUtils:
       .transact(xa)
       .unsafeRunSync()
 
-  def createFile(fileId: String = UUID.randomUUID.toString, zref: String = "zref"): IO[OcflFile] = {
-    val id = UUID.randomUUID.toString
+  def createFile(fileId: UUID = UUID.randomUUID, zref: String = "zref"): IO[OcflFile] = {
+    val id = UUID.randomUUID
     sql"""INSERT INTO files (version, id, name, fileId, zref, path, fileName)
-                 VALUES (1, $id, 'name', $fileId, $zref, 'path', 'fileName')""".update.run
+                 VALUES (1, ${id.toString}, 'name', ${fileId.toString}, $zref, 'path', 'fileName')""".update.run
       .transact(xa)
       .map(_ => ocflFile(id, fileId, zref))
   }
 
-  def readFiles(id: String): IO[List[OcflFile]] = {
+  def readFiles(id: UUID): IO[List[OcflFile]] = {
     sql"SELECT * FROM files where id = $id"
       .query[OcflFile]
       .to[List]
       .transact(xa)
   }
 
-  def ocflFile(id: String, fileId: String, zref: String = "zref"): OcflFile =
+  def ocflFile(id: UUID, fileId: UUID, zref: String = "zref"): OcflFile =
     OcflFile(1, id, "name", fileId, zref, "path", "fileName")

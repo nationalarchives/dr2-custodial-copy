@@ -19,14 +19,14 @@ class AssetsSpec extends AnyFlatSpec with BeforeAndAfterAll:
 
   override def beforeAll(): Unit = createTable()
 
-  private def ocflFile(id: String, fileId: String, zref: String = "zref") = OcflFile(1, id, "name", fileId, zref, "path", "fileName")
+  private def ocflFile(id: UUID, fileId: UUID, zref: String = "zref") = OcflFile(1, id, "name", fileId, zref, "path", "fileName")
 
   override def afterAll(): Unit = Files.delete(Paths.get("test-database"))
 
   "filePath" should "return a file path if the id is in the database" in {
     val id = UUID.randomUUID
     val path = for {
-      _ <- createFile(id.toString)
+      _ <- createFile(id)
       path <- Assets[IO].filePath(id)
     } yield path
     path.unsafeRunSync() should equal("path")
@@ -66,6 +66,6 @@ class AssetsSpec extends AnyFlatSpec with BeforeAndAfterAll:
 
   "findFiles" should "return an empty list if there are no matching entries in the database" in {
     for {
-      files <- Assets[IO].findFiles(SearchResponse("id".some, "zref".some))
+      files <- Assets[IO].findFiles(SearchResponse(UUID.randomUUID.some, "zref".some))
     } yield files.isEmpty should equal(true)
   }.unsafeRunSync()

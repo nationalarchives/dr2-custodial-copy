@@ -64,8 +64,8 @@ object Ocfl:
         val filePrefix = s"$coMetadataPath/original/g1/"
         val coMetadata = loadMetadataXml(coMetadataFile)
         val name = (coMetadata \ "ContentObject" \ "Title").text
-        val fileId = (coMetadata \ "ContentObject" \ "Ref").text
+        val fileId = UUID.fromString((coMetadata \ "ContentObject" \ "Ref").text)
         val storageRelativePath = files.find(_.getPath.startsWith(filePrefix)).map(_.getStorageRelativePath).getOrElse("")
-        OcflFile(objectVersion.getVersionNum.getVersionNum, id.toString, title, fileId, zref, s"${config.ocflRepoDir}/$storageRelativePath", name)
+        OcflFile(objectVersion.getVersionNum.getVersionNum, id, title, fileId, zref, s"${config.ocflRepoDir}/$storageRelativePath", name)
       }
     }

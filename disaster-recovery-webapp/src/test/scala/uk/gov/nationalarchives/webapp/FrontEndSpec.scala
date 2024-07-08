@@ -52,7 +52,7 @@ class FrontEndSpec extends AnyFlatSpec:
     given Assets[IO] = new Assets[IO]:
       override def filePath(id: UUID): IO[String] = IO("")
       override def findFiles(searchResponse: FrontEndRoutes.SearchResponse): IO[List[Utils.OcflFile]] =
-        IO(List(OcflFile(1, "id", "name", searchResponse.id.get, "zref", "path", searchResponse.zref.get)))
+        IO(List(OcflFile(1, UUID.randomUUID, "name", searchResponse.id.get, "zref", "path", searchResponse.zref.get)))
 
     val request = Request[IO](Method.POST, uri"/search").withEntity(UrlForm(("id", id), ("zref", "zref")))
     val response = FrontEndRoutes.ocflRoutes[IO].orNotFound(request)

@@ -22,7 +22,7 @@ object FrontEndRoutes:
       }
     }
 
-  case class SearchResponse(id: Option[String], zref: Option[String])
+  case class SearchResponse(id: Option[UUID], zref: Option[String])
 
   def ocflRoutes[F[_]: Async: Assets]: HttpRoutes[F] =
     val dsl = new Http4sDsl[F] {}
@@ -41,7 +41,7 @@ object FrontEndRoutes:
       case req @ POST -> Root / "search" =>
         for {
           form <- req.as[UrlForm]
-          files <- Assets[F].findFiles(SearchResponse(form.value("id"), form.value("zref")))
+          files <- Assets[F].findFiles(SearchResponse(form.value("id").map(UUID.fromString), form.value("zref")))
           resp <- Ok(results(files).body)
         } yield resp.asHtml
     }
