@@ -35,14 +35,15 @@ jobs:
         with:
           registry: ${{ secrets.MANAGEMENT_ACCOUNT }}.dkr.ecr.eu-west-2.amazonaws.com
       - name: Tag image
-        run: |
-          docker pull ${{ secrets.MANAGEMENT_ACCOUNT }}.dkr.ecr.eu-west-2.amazonaws.com/dr2-disaster-recovery:${{ github.event.inputs.to-deploy }}
-          docker tag ${{ secrets.MANAGEMENT_ACCOUNT }}.dkr.ecr.eu-west-2.amazonaws.com/dr2-disaster-recovery:${{ github.event.inputs.to-deploy }} ${{ secrets.MANAGEMENT_ACCOUNT }}.dkr.ecr.eu-west-2.amazonaws.com/dr2-disaster-recovery:${{ github.event.inputs.environment }}
-          docker push ${{ secrets.MANAGEMENT_ACCOUNT }}.dkr.ecr.eu-west-2.amazonaws.com/dr2-disaster-recovery:${{ github.event.inputs.environment }}
+        run: sbt tagImage
+        env:
+          MANAGEMENT_ACCOUNT_NUMBER: ${{ secrets.MANAGEMENT_ACCOUNT }}
+          DOCKER_TAG: ${{ github.event.inputs.to-deploy }}
+          ENVIRONMENT_TAG: ${{ github.event.inputs.environment }}
       - name: Send success message
         uses: nationalarchives/tdr-github-actions/.github/actions/slack-send@main
         with:
-          message: "*disaster-recovery* :whale: The '${{ github.event.inputs.to-deploy }}' image has been tagged with '${{ github.event.inputs.environment }}' in ECR"
+          message: "*disaster-recovery-backend*, *disaster-recovery-db-builder*, *disaster-recovery-webapp* :whale: The '${{ github.event.inputs.to-deploy }}' image has been tagged with '${{ github.event.inputs.environment }}' in ECR"
           slack-url: ${{ secrets.SLACK_WEBHOOK }}
       - name: Send failure message
         uses: nationalarchives/dr2-github-actions/.github/actions/slack-send@main

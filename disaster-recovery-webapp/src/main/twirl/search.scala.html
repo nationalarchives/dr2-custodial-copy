@@ -1,0 +1,23 @@
+@()
+@main("Search") {
+
+    <h1 class="govuk-heading-l">Search for a file</h1>
+    <form method="post" action="/search">
+        <div class="govuk-form-group">
+            <h1 class="govuk-label-wrapper">
+                <label class="govuk-label govuk-label--s" for="id">
+                    Asset ID
+                </label>
+            </h1>
+            <input  class="govuk-input" id="id" name="id" type="text"/>
+
+            <h1 class="govuk-label-wrapper">
+                <label class="govuk-label govuk-label--s" for="zref">
+                    ZRef
+                </label>
+            </h1>
+            <input class="govuk-input" id="zref" name="zref" type="text"/>
+        </div>
+        <button class="govuk-button" type="submit">Search</button>
+    </form>
+}
