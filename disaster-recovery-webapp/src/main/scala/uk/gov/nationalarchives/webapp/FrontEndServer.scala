@@ -15,7 +15,7 @@ object FrontEndServer:
       FrontEndRoutes.ocflRoutes[F] <+> resourceServiceBuilder[F]("/").toRoutes
     ).orNotFound
 
-    val finalHttpApp = Logger.httpApp(true, true)(httpApp)
+    val finalHttpApp = Logger.httpApp(true, false)(httpApp)
 
     for {
       _ <-

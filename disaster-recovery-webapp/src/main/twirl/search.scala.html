@@ -4,19 +4,11 @@
     <h1 class="govuk-heading-l">Search for a file</h1>
     <form method="post" action="/search">
         <div class="govuk-form-group">
-            <h1 class="govuk-label-wrapper">
-                <label class="govuk-label govuk-label--s" for="id">
-                    Asset ID
-                </label>
-            </h1>
-            <input  class="govuk-input" id="id" name="id" type="text"/>
-
-            <h1 class="govuk-label-wrapper">
-                <label class="govuk-label govuk-label--s" for="zref">
-                    ZRef
-                </label>
-            </h1>
-            <input class="govuk-input" id="zref" name="zref" type="text"/>
+            @input("id", "Asset ID")
+            @input("zref", "ZRef")
+            @input("sourceId", "Source ID")
+            @input("citation", "Neutral Citation")
+            @date("Ingest date", "ingest-date")
         </div>
         <button class="govuk-button" type="submit">Search</button>
     </form>

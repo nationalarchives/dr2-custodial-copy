@@ -44,7 +44,10 @@ object Main extends IOApp {
     Stream
       .eval {
         for {
+          logger <- Slf4jLogger.create[IO]
+          _ <- logger.info("Receiving messages")
           messages <- sqs.receiveMessages[Message](queueUrl)
+          _ <- logger.info(s"Received ${messages.length} messages from queue $queueUrl")
         } yield messages
       }
       .evalMap { messages =>

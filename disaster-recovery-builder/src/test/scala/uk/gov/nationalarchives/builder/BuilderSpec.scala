@@ -7,7 +7,9 @@ import uk.gov.nationalarchives.builder.Main.{Config, Message}
 import uk.gov.nationalarchives.utils.Utils.OcflFile
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import cats.effect.unsafe.implicits.global
+import cats.syntax.all.*
 import java.nio.file.Files
+import java.time.Instant
 import java.util.UUID
 
 class BuilderSpec extends AnyFlatSpec:
@@ -22,7 +24,7 @@ class BuilderSpec extends AnyFlatSpec:
     given Ocfl[IO] = new Ocfl[IO](config):
       override def generate(id: UUID): IO[List[OcflFile]] = IO {
         ids.contains(id) should equal(true)
-        List(OcflFile(1, id, "name", fileId, "zref", "path", "fileName"))
+        List(OcflFile(1, id, "name".some, fileId, "zref".some, "path".some, "fileName".some, Instant.now.some, "sourceId".some, "citation".some))
       }
     given Database[IO] = (files: List[OcflFile]) =>
       IO {

@@ -101,6 +101,8 @@ lazy val tagSettings = Seq(
 
 lazy val commonSettings = Seq(
   libraryDependencies ++= Seq(
+    scalaCheck % Test,
+    scalaCheckPlus % Test,
     scalaTest % Test,
     mockito % Test,
     wiremock % Test,

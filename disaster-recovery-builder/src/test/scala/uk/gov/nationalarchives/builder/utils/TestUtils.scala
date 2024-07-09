@@ -32,17 +32,30 @@ object TestUtils:
   val coRef: UUID = UUID.randomUUID
   val coRefTwo: UUID = UUID.randomUUID
 
-  val completeIoMetadataContent: Elem = <Metadata>
-    <Identifiers>
-      <Identifier>
-        <Type>BornDigitalRef</Type>
-        <Value>Zref</Value>
-      </Identifier>
-    </Identifiers>
+  val completeIoMetadataContent: Elem = <XIP>
+    <Identifier>
+      <Type>BornDigitalRef</Type>
+      <Value>Zref</Value>
+    </Identifier>
+    <Identifier>
+      <Type>SourceID</Type>
+      <Value>SourceID</Value>
+    </Identifier>
+    <Identifier>
+      <Type>NeutralCitation</Type>
+      <Value>Citation</Value>
+    </Identifier>
     <InformationObject>
       <Title>Title</Title>
     </InformationObject>
-  </Metadata>
+    <Metadata>
+      <Content>
+        <Source>
+          <IngestDateTime>2024-07-03T11:39:15.372Z</IngestDateTime>
+        </Source>
+      </Content>
+    </Metadata>
+  </XIP>
   val completeCoMetadataContentElements: List[Elem] = List(
     <Metadata>
       <ContentObject>

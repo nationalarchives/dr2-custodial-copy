@@ -1,10 +1,11 @@
 package uk.gov.nationalarchives.builder
 
 import cats.effect.IO
+import cats.syntax.all.*
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.flatspec.AnyFlatSpec
 import uk.gov.nationalarchives.builder.Main.Config
-import uk.gov.nationalarchives.utils.TestUtils.{createTable, ocflFile, readFiles}
+import uk.gov.nationalarchives.utils.TestUtils.{createFile, createTable, ocflFile, readFiles}
 import uk.gov.nationalarchives.utils.Utils.OcflFile
 import cats.effect.unsafe.implicits.global
 import org.scalatest.matchers.should.Matchers.*
@@ -28,6 +29,16 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     val response = readFiles(id).unsafeRunSync()
 
     response.head should equal(file)
+  }
+
+  "write" should "should write the updated values to the database if a row already exists" in {
+    createTable()
+    val file = createFile().unsafeRunSync().copy(zref = "Another zref".some)
+
+    Database[IO].write(List(file)).unsafeRunSync()
+    val response = readFiles(file.id).unsafeRunSync()
+
+    response.head.zref.get should equal("Another zref")
   }
 
   "write" should "write nothing if an empty list is passed" in {

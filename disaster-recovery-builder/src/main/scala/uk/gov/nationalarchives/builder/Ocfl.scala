@@ -11,6 +11,7 @@ import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.storage.{OcflStorage, OcflStorageBuilder}
 
 import java.nio.file.{Files, Paths}
+import java.time.Instant
 import java.util.UUID
 import scala.jdk.CollectionConverters.*
 import scala.xml.XML
@@ -45,27 +46,49 @@ object Ocfl:
       def loadMetadataXml(file: OcflObjectVersionFile) = XML.loadString(Files.readString(Paths.get(config.ocflRepoDir, file.getStorageRelativePath)))
 
       val ioMetadata = files.find(_.getPath.contains(s"IO_Metadata.xml")).map(loadMetadataXml)
-      val zref = ioMetadata
+
+      def getIdentifier(identifierName: String) = ioMetadata
         .flatMap { metadata =>
-          (metadata \ "Identifiers" \ "Identifier").toList
-            .find(i => (i \ "Type").text == "BornDigitalRef")
+          (metadata \ "Identifier").toList
+            .find(i => (i \ "Type").text == identifierName)
             .map(i => (i \ "Value").text)
         }
-        .getOrElse("")
+
+      val zref = getIdentifier("BornDigitalRef")
+      val sourceId = getIdentifier("SourceID")
+      val citation = getIdentifier("NeutralCitation")
 
       val title = ioMetadata
-        .map { metadata =>
-          (metadata \ "InformationObject" \ "Title").text
+        .flatMap { metadata =>
+          {
+            val titleText = (metadata \ "InformationObject" \ "Title").text
+            if (titleText.isEmpty) None else Option(titleText)
+          }
         }
-        .getOrElse("")
+
+      val ingestDateTime = ioMetadata.map { metadata =>
+        Instant.parse((metadata \ "Metadata" \ "Content" \ "Source" \ "IngestDateTime").text)
+      }
 
       files.filter(_.getPath.contains(s"CO_Metadata.xml")).map { coMetadataFile =>
         val coMetadataPath = coMetadataFile.getPath.split("/").dropRight(1).mkString("/")
         val filePrefix = s"$coMetadataPath/original/g1/"
         val coMetadata = loadMetadataXml(coMetadataFile)
         val name = (coMetadata \ "ContentObject" \ "Title").text
+        val nameOpt = if (name.isBlank) None else Option(name)
         val fileId = UUID.fromString((coMetadata \ "ContentObject" \ "Ref").text)
-        val storageRelativePath = files.find(_.getPath.startsWith(filePrefix)).map(_.getStorageRelativePath).getOrElse("")
-        OcflFile(objectVersion.getVersionNum.getVersionNum, id, title, fileId, zref, s"${config.ocflRepoDir}/$storageRelativePath", name)
+        val storageRelativePathOpt = files.find(_.getPath.startsWith(filePrefix)).map(_.getStorageRelativePath)
+        OcflFile(
+          objectVersion.getVersionNum.getVersionNum,
+          id,
+          title,
+          fileId,
+          zref,
+          storageRelativePathOpt.map(path => s"${config.ocflRepoDir}/$path"),
+          nameOpt,
+          ingestDateTime,
+          sourceId,
+          citation
+        )
       }
     }
