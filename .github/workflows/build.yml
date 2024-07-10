@@ -9,23 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Import GPG key
-        id: import_gpg
-        uses: crazy-max/ghaction-import-gpg@v6
-        with:
-          git_user_signingkey: true
-          git_commit_gpgsign: true
-          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          passphrase: ${{ secrets.GPG_PASSPHRASE }}
-      - id: build
-        run: |
-          git config --global user.email digitalpreservation@nationalarchives.gov.uk
-          git config --global user.name tna-digital-archiving-jenkins
-          git checkout -b $BRANCH_NAME
-          git push -u origin $BRANCH_NAME
-          sbt 'release with-defaults'
-        env:
-          BRANCH_NAME: version-bump-${{ github.run_id }}${{ github.run_attempt }}
       - name: Configure AWS credentials from management account
         uses: aws-actions/configure-aws-credentials@v4.0.2
         with:
@@ -36,23 +19,18 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ secrets.MANAGEMENT_ACCOUNT }}.dkr.ecr.eu-west-2.amazonaws.com
+      - id: next-tag
+        uses: nationalarchives/dr2-github-actions/.github/actions/get-next-version@main
+        with:
+          repo-name: dr2-disaster-recovery
       - id: build-image
         run: | 
-          sbt assembly
-          docker build --pull --no-cache -t ${{ secrets.MANAGEMENT_ACCOUNT }}.dkr.ecr.eu-west-2.amazonaws.com/dr2-disaster-recovery:${{ steps.build.outputs.latest-tag}} .
-          docker push ${{ secrets.MANAGEMENT_ACCOUNT }}.dkr.ecr.eu-west-2.amazonaws.com/dr2-disaster-recovery:${{ steps.build.outputs.latest-tag}}
-          gh workflow run deploy.yml -f environment=intg -f to-deploy=${{ steps.build.outputs.latest-tag}}
+          sbt Docker/publish
+          gh workflow run deploy.yml -f environment=intg -f to-deploy=${{ steps.next-tag.outputs.next-version }}
         env:
           GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
-      - name: Create Pull Request
-        run: gh pr create --fill --label 'Version bump'
-        env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
-      - name: Send success message
-        uses: nationalarchives/dr2-github-actions/.github/actions/slack-send@main
-        with:
-          message: ":white_check_mark: disaster recovery has been published"
-          slack-url: ${{ secrets.SLACK_WEBHOOK }}
+          MANAGEMENT_ACCOUNT_NUMBER: ${{ secrets.MANAGEMENT_ACCOUNT }}
+          DOCKER_TAG: ${{ steps.next-tag.outputs.next-version }}
       - name: Send failure message
         uses: nationalarchives/dr2-github-actions/.github/actions/slack-send@main
         if: failure()
