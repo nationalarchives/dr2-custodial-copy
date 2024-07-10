@@ -552,7 +552,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     )
       .thenReturn(IO.pure(List(PublishBatchResponse.builder.build)))
 
-    when(sqsClient.deleteMessage(queueUrlCaptor.capture, receiptHandleCaptor.capture))
+    when(sqsClient.deleteMessage(ArgumentMatchers.eq("queueUrl"), ArgumentMatchers.startsWith("receiptHandle")))
       .thenReturn(IO.pure(DeleteMessageResponse.builder.build))
 
     val ocflService: OcflService = mockOcflService(missingObjects, changedObjects, throwErrorInMissingAndChangedObjects)
@@ -592,7 +592,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         createdIdSourceAndDestinationPathAndId: List[List[IdWithSourceAndDestPaths]] = Nil,
         drosToLookup: List[List[String]] = List(List(s"$ioId/IO_Metadata.xml")),
         snsMessagesToSend: List[CoSnsMessage | IoSnsMessage] = Nil,
-        receiptHandles: List[String] = List("receiptHandle", "receiptHandle", "receiptHandle")
+        receiptHandles: List[String] = List("receiptHandle1", "receiptHandle1", "receiptHandle1")
     ): Assertion = {
 
       verify(entityClient, times(numOfGetBitstreamInfoCalls)).getBitstreamInfo(getBitstreamsCoIdCaptor.capture)
@@ -611,7 +611,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       verify(ocflService, times(createdIdSourceAndDestinationPathAndId.length))
         .createObjects(idWithSourceAndDestPathsCaptor.capture())
       verify(sqsClient, times(receiptHandles.length))
-        .deleteMessage(ArgumentMatchers.eq("queueUrl"), ArgumentMatchers.startsWith("receiptHandle"))
+        .deleteMessage(queueUrlCaptor.capture, receiptHandleCaptor.capture)
 
       val numOfTimesSnsMsgShouldBeSent =
         if (snsMessagesToSend.nonEmpty || createdIdSourceAndDestinationPathAndId.flatten.nonEmpty) 1 else 0
@@ -635,6 +635,9 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
 
       repTypeCaptor.getAllValues.asScala.toList should equal(repTypes)
       repIndexCaptor.getAllValues.asScala.toList should equal(repIndexes)
+
+      queueUrlCaptor.getAllValues.asScala.toList should equal(List.fill(receiptHandles.length)("queueUrl"))
+      receiptHandleCaptor.getAllValues.asScala.toList should equal(receiptHandles)
 
       val expectedIdsWithSourceAndDestPath = createdIdSourceAndDestinationPathAndId.flatten
       idWithSourceAndDestPathsCaptor.getAllValues.asScala.toList.flatten.zipWithIndex.foreach {

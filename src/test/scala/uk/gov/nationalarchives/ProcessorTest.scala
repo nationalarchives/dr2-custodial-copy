@@ -58,7 +58,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
           s"$parentRef/Preservation_1/$id/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
         )
-      )
+      ),
+      receiptHandles = List("receiptHandle2", "receiptHandle2", "receiptHandle2")
     )
   }
 
@@ -135,7 +136,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
           s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
         )
       ),
-      receiptHandles = (1 to 6).toList.map(_ => "receiptHandle")
+      receiptHandles = List(1, 1, 1, 2, 2, 2).map(n => s"receiptHandle$n")
     )
   }
 
