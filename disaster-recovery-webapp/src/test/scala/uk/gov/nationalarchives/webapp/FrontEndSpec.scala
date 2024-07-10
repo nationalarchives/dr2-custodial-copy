@@ -78,6 +78,9 @@ class FrontEndSpec extends AnyFlatSpec:
 
     searchContains("<caption class=\"govuk-table__caption govuk-table__caption--m\">Search Results</caption>")
     searchContains(s"<a class=\"govuk-link\" href=\"/download/$id\" download=\"zref\">Download</a>")
+    searchContains("""<td class="govuk-table__cell">zref</td>""")
+    searchContains("""<td class="govuk-table__cell govuk-!-width-one-quarter">2024-07-09</td>""")
+    searchContains("""<td class="govuk-table__cell">citation</td>""")
     searchContains("<th scope=\"row\" class=\"govuk-table__header\">zref</th>")
   }
 
