@@ -1,5 +1,6 @@
 import sbt.*
 object Dependencies {
+  lazy val daAwsClientsVersion = "0.1.68"
   private lazy val logbackVersion = "2.23.1"
   private lazy val log4CatsVersion = "2.6.0"
   private lazy val pureConfigVersion = "0.17.7"
@@ -17,7 +18,8 @@ object Dependencies {
   lazy val pureConfig = "com.github.pureconfig" %% "pureconfig-core" % pureConfigVersion
   lazy val lambdaCore = "com.amazonaws" % "aws-lambda-java-core" % "1.2.2"
   lazy val lambdaJavaEvents = "com.amazonaws" % "aws-lambda-java-events" % "3.11.1"
-  lazy val sqsClient = "uk.gov.nationalarchives" %% "da-sqs-client" % "0.1.65"
+  lazy val snsClient = "uk.gov.nationalarchives" %% "da-sns-client" % daAwsClientsVersion
+  lazy val sqsClient = "uk.gov.nationalarchives" %% "da-sqs-client" % daAwsClientsVersion
   lazy val scalaTest = "org.scalatest" %% "scalatest" % scalaTestVersion
   lazy val mockito = "org.scalatestplus" %% "mockito-5-10" % s"$scalaTestVersion.0"
 }

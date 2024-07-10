@@ -62,6 +62,7 @@ lazy val root = (project in file("."))
       log4jCore,
       log4jTemplateJson,
       preservicaClient,
+      snsClient,
       sqsClient,
       fs2Core,
       ocfl,

@@ -6,17 +6,21 @@ import fs2.io.file.Path
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doReturn, when}
-import org.scalatestplus.mockito.MockitoSugar
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
+import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.DisasterRecoveryObject.MetadataObject
 import uk.gov.nationalarchives.Main.IdWithSourceAndDestPaths
 import uk.gov.nationalarchives.Message.InformationObjectMessage
 import uk.gov.nationalarchives.OcflService.MissingAndChangedObjects
+import uk.gov.nationalarchives.Processor.{CoSnsMessage, DependenciesForIoSnsMsg, IoSnsMessage}
+import uk.gov.nationalarchives.Processor.ObjectStatus.{Created, Updated}
+import uk.gov.nationalarchives.Processor.ObjectType.Metadata
+import uk.gov.nationalarchives.dp.client.Entities.Entity
+import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.IoMetadata
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
-import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.testUtils.ExternalServicesTestUtils.*
 
 import java.util.UUID
@@ -51,7 +55,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       createdIdSourceAndDestinationPathAndId = List(Nil, Nil),
       drosToLookup = List(
         List(
-          s"$parentRef/Preservation_1/$id/original/g1/name",
+          s"$parentRef/Preservation_1/$id/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
         )
       )
@@ -74,7 +78,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       createdIdSourceAndDestinationPathAndId = List(Nil, Nil),
       drosToLookup = List(
         List(
-          s"$parentRef/Preservation_1/$id/original/g1/name",
+          s"$parentRef/Preservation_1/$id/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
         )
       )
@@ -150,7 +154,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       drosToLookup = List(
         List(
           s"$parentRef/IO_Metadata.xml",
-          s"$parentRef/Preservation_1/$id/original/g1/name",
+          s"$parentRef/Preservation_1/$id/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
         )
       ),
@@ -185,7 +189,22 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 "changed",
                 "checksum",
                 utils.ioConsolidatedMetadata,
-                "destinationPath"
+                "destinationPath",
+                DependenciesForIoSnsMsg(
+                  Entity(
+                    Some(InformationObject),
+                    id,
+                    None,
+                    None,
+                    deleted = false,
+                    None,
+                    parent = Some(UUID.randomUUID())
+                  ),
+                  Seq(
+                    <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>,
+                    <Identifier><ApiId/><Type>sourceID</Type><Value>sourceIDValue</Value><Entity/></Identifier>
+                  )
+                )
               )
             )
           )
@@ -201,6 +220,9 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
         List(
           IdWithSourceAndDestPaths(id, Path(s"$id/changed").toNioPath, "destinationPath")
         ) // 2nd call to 'createObjects' with changedObjectsPaths arg
+      ),
+      snsMessagesToSend = List(
+        IoSnsMessage(id, Metadata, Updated, "SourceIDValue")
       )
     )
   }
@@ -220,7 +242,22 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 "missing",
                 "checksum",
                 utils.ioConsolidatedMetadata,
-                "destinationPath"
+                "destinationPath",
+                DependenciesForIoSnsMsg(
+                  Entity(
+                    Some(InformationObject),
+                    id,
+                    None,
+                    None,
+                    deleted = false,
+                    None,
+                    parent = Some(UUID.randomUUID())
+                  ),
+                  Seq(
+                    <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>,
+                    <Identifier><ApiId/><Type>sourceID</Type><Value>sourceIDValue</Value><Entity/></Identifier>
+                  )
+                )
               )
             ),
             Nil
@@ -234,7 +271,10 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       repTypes = Nil,
       repIndexes = Nil,
       createdIdSourceAndDestinationPathAndId =
-        List(List(IdWithSourceAndDestPaths(id, Path(s"$id/missing").toNioPath, "destinationPath")), List())
+        List(List(IdWithSourceAndDestPaths(id, Path(s"$id/missing").toNioPath, "destinationPath")), List()),
+      snsMessagesToSend = List(
+        IoSnsMessage(id, Metadata, Created, "SourceIDValue")
+      )
     )
   }
 
@@ -254,7 +294,22 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 "missing",
                 "checksum",
                 utils.ioConsolidatedMetadata,
-                "destinationPath"
+                "destinationPath",
+                DependenciesForIoSnsMsg(
+                  Entity(
+                    Some(InformationObject),
+                    missingFileId,
+                    None,
+                    None,
+                    deleted = false,
+                    None,
+                    parent = Some(UUID.randomUUID())
+                  ),
+                  Seq(
+                    <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>,
+                    <Identifier><ApiId/><Type>sourceID</Type><Value>sourceIDValue</Value><Entity/></Identifier>
+                  )
+                )
               )
             ),
             List(
@@ -264,7 +319,22 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 "changed",
                 "checksum",
                 utils.ioConsolidatedMetadata,
-                "destinationPath2"
+                "destinationPath2",
+                DependenciesForIoSnsMsg(
+                  Entity(
+                    Some(InformationObject),
+                    changedFileId,
+                    None,
+                    None,
+                    deleted = false,
+                    None,
+                    parent = Some(UUID.randomUUID())
+                  ),
+                  Seq(
+                    <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>,
+                    <Identifier><ApiId/><Type>sourceID</Type><Value>sourceIDValue</Value><Entity/></Identifier>
+                  )
+                )
               )
             )
           )
@@ -297,6 +367,10 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
           s"$missingFileId/IO_Metadata.xml",
           s"$changedFileId/IO_Metadata.xml"
         )
+      ),
+      snsMessagesToSend = List(
+        IoSnsMessage(missingFileId, Metadata, Created, "SourceIDValue"),
+        IoSnsMessage(changedFileId, Metadata, Updated, "SourceIDValue")
       ),
       receiptHandles = List("receiptHandle1", "receiptHandle2")
     )

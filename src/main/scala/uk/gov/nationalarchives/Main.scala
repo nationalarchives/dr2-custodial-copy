@@ -26,7 +26,8 @@ object Main extends IOApp {
       repoDir: String,
       workDir: String,
       proxyUrl: Option[URI],
-      versionPath: String
+      versionPath: String,
+      topicArn: String
   ) derives ConfigReader
 
   private def sqsClient(config: Config): DASQSClient[IO] =
@@ -70,7 +71,8 @@ object Main extends IOApp {
       )
       service <- OcflService(config)
       sqs = sqsClient(config)
-      processor <- Processor(config, sqs, service, client)
+      sns = DASNSClient[IO]()
+      processor <- Processor(config, sqs, service, client, sns)
       _ <- {
         Stream.fixedRateStartImmediately[IO](20.seconds) >>
           runDisasterRecovery(sqs, config, processor)

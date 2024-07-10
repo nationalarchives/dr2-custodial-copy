@@ -55,7 +55,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
         <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
-          <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+          <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>
+          <Identifier><ApiId/><Type>sourceID</Type><Value>sourceIDValue</Value><Entity/></Identifier>
           <Link><Type/><FromEntity/><ToEntity/></Link>
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
           <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
@@ -102,7 +103,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
         <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
-          <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+          <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>
+          <Identifier><ApiId/><Type>sourceID</Type><Value>sourceIDValue</Value><Entity/></Identifier>
           <Link><Type/><FromEntity/><ToEntity/></Link>
           <Metadata><Ref/><Entity/><Content><differentThing xmlns="http://www.mockSchema.com/test/v42"/></Content></Metadata>
           <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
@@ -140,7 +142,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
         <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
-          <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+          <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>
+          <Identifier><ApiId/><Type>sourceID</Type><Value>sourceIDValue</Value><Entity/></Identifier>
           <Link><Type/><FromEntity/><ToEntity/></Link>
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"/></Content></Metadata>
           <Metadata><Ref/><Entity/><Content><anotherThing xmlns="http://www.mockSchema.com/test/v42"/></Content></Metadata>
@@ -165,7 +168,14 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     when(preservicaClient.metadataForEntity(any[Entity])).thenThrow(new RuntimeException("Error getting metadata"))
 
     val processor =
-      new Processor(utils.config, utils.sqsClient, utils.ocflService, preservicaClient, utils.xmlValidator)
+      new Processor(
+        utils.config,
+        utils.sqsClient,
+        utils.ocflService,
+        preservicaClient,
+        utils.xmlValidator,
+        utils.snsClient
+      )
     val err: Throwable =
       Main
         .runDisasterRecovery(utils.sqsClient, utils.config, processor)
@@ -179,7 +189,18 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
   }
 
   "runDisasterRecovery" should "return an error if a CO has no parent" in {
-    val bitstreamInfo = Seq(BitStreamInfo("name1", 1, "", Fixity("SHA256", ""), 1, Original, None, None))
+    val bitstreamInfo = Seq(
+      BitStreamInfo(
+        "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+        1,
+        "",
+        Fixity("SHA256", ""),
+        1,
+        Original,
+        None,
+        None
+      )
+    )
     val utils = new MainTestUtils(List(ContentObject), 0, bitstreamInfo1Responses = bitstreamInfo)
 
     val err: Throwable =
@@ -199,7 +220,18 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val utils = new MainTestUtils(
       List(ContentObject),
       0,
-      bitstreamInfo2Responses = Seq(BitStreamInfo("name1", 1, "", Fixity("SHA256", ""), 1, Original, None, Some(ioId))),
+      bitstreamInfo2Responses = Seq(
+        BitStreamInfo(
+          "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+          1,
+          "",
+          Fixity("SHA256", ""),
+          1,
+          Original,
+          None,
+          Some(ioId)
+        )
+      ),
       addAccessRepUrl = true
     )
     val coId = utils.coId1
@@ -239,7 +271,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
         repo.getObject(ioId.toHeadVersion).getFile(expectedCoFileDestinationFilePath).getStorageRelativePath
       val coContent = Files.readAllBytes(Paths.get(utils.repoDir.toString, coStoragePath)).map(_.toChar).mkString
 
-      coContent must equal(s"File content for name1")
+      coContent must equal(s"File content for 90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt")
     }
 
   "runDisasterRecovery" should "not write a new version, nor a new bitstream if there is an CO update with the same bitstream" in {
@@ -252,8 +284,18 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       expectedVersionBeforeAndAfter,
       typesOfMetadataFilesInRepo = List(ContentObject),
       fileContentToWriteToEachFileInRepo = List(fileContent),
-      bitstreamInfo1Responses =
-        List(BitStreamInfo("name1", 1, "", Fixity("SHA256", checksum), 1, Original, None, Some(ioId)))
+      bitstreamInfo1Responses = List(
+        BitStreamInfo(
+          "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+          1,
+          "",
+          Fixity("SHA256", checksum),
+          1,
+          Original,
+          None,
+          Some(ioId)
+        )
+      )
     )
     val repo = utils.repo
 
@@ -272,8 +314,18 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
         2,
         typesOfMetadataFilesInRepo = List(ContentObject),
         fileContentToWriteToEachFileInRepo = List(fileContent),
-        bitstreamInfo1Responses =
-          List(BitStreamInfo("name1", 1, "", Fixity("SHA256", "DifferentContent"), 1, Original, None, Some(ioId)))
+        bitstreamInfo1Responses = List(
+          BitStreamInfo(
+            "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+            1,
+            "",
+            Fixity("SHA256", "DifferentContent"),
+            1,
+            Original,
+            None,
+            Some(ioId)
+          )
+        )
       )
 
       val repo = utils.repo
@@ -289,18 +341,18 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
         repo.getObject(ioId.toHeadVersion).getFile(expectedCoFileDestinationFilePath).getStorageRelativePath
       val coContent = Files.readAllBytes(Paths.get(utils.repoDir.toString, coStoragePath)).map(_.toChar).mkString
 
-      coContent must equal(s"File content for name1")
+      coContent must equal(s"File content for 90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt")
     }
 
   "runDisasterRecovery" should "write multiple bitstreams to the same version and to the correct location" in {
     val ioId = UUID.randomUUID()
     val fixity = Fixity("SHA256", "")
     val bitStreamInfoList = Seq(
-      BitStreamInfo("name1", 1, "", fixity, 1, Original, None, Some(ioId)),
-      BitStreamInfo("name2", 1, "", fixity, 2, Derived, None, Some(ioId))
+      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt", 1, "", fixity, 1, Original, None, Some(ioId)),
+      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2", 1, "", fixity, 2, Derived, None, Some(ioId))
     )
     val bitStreamInfoList2 = Seq(
-      BitStreamInfo("name3", 1, "", fixity, 1, Original, None, Some(ioId))
+      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt3", 1, "", fixity, 1, Original, None, Some(ioId))
     )
 
     val utils = new MainTestUtils(
@@ -318,11 +370,12 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
 
     val expectedCoFileDestinationFilePaths = List(
-      s"$ioId/Preservation_1/$coId/original/g1/name1",
-      s"$ioId/Preservation_1/$coId/derived/g2/name2",
-      s"$ioId/Preservation_1/$coId2/original/g1/name3",
-      s"$ioId/Access_1/$coId3/original/g1/name1"
+      s"$ioId/Preservation_1/$coId/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+      s"$ioId/Preservation_1/$coId/derived/g2/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2",
+      s"$ioId/Preservation_1/$coId2/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt3",
+      s"$ioId/Access_1/$coId3/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt"
     )
+
     expectedCoFileDestinationFilePaths.foreach { path =>
       repo.getObject(ioId.toHeadVersion).containsFile(path) must be(true)
     }
@@ -345,7 +398,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val sqsClient = utils.sqsClient
     when(preservicaClient.getBitstreamInfo(any[UUID])).thenThrow(new RuntimeException("Error getting bitstream info"))
 
-    val processor = new Processor(utils.config, sqsClient, utils.ocflService, preservicaClient, utils.xmlValidator)
+    val processor =
+      new Processor(utils.config, sqsClient, utils.ocflService, preservicaClient, utils.xmlValidator, utils.snsClient)
     val err: Throwable =
       Main.runDisasterRecovery(sqsClient, utils.config, processor).compile.drain.attempt.unsafeRunSync().left.value
     err.getMessage must equal("Error getting bitstream info")
@@ -360,8 +414,18 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
         List(ContentObject),
         1,
         fileContentToWriteToEachFileInRepo = List(fileContent),
-        bitstreamInfo1Responses =
-          List(BitStreamInfo("name1", 1, "", Fixity("SHA256", checksum), 1, Original, None, Some(ioId)))
+        bitstreamInfo1Responses = List(
+          BitStreamInfo(
+            "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+            1,
+            "",
+            Fixity("SHA256", checksum),
+            1,
+            Original,
+            None,
+            Some(ioId)
+          )
+        )
       )
       val repo = utils.repo
       val expectedCoMetadataFileDestinationPath = utils.expectedCoMetadataFileDestinationPath
@@ -381,7 +445,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
         <XIP xmlns="http://preservica.com/XIP/v7.0">
           <ContentObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></ContentObject>
           <Generation original="true" active="true"><ContentObject>someContent</ContentObject></Generation>
-          <Bitstream><Filename>testName</Filename><FileSize>10</FileSize><Fixities/></Bitstream>
+          <Bitstream><Filename>90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt</Filename><FileSize>1</FileSize><Fixities><Fixity><FixityAlgorithmRef>SHA256</FixityAlgorithmRef><FixityValue>a3f79ff30708357d9b94d2e11507a9b30bef88d816bfffdc0ec3136939289ff3</FixityValue></Fixity></Fixities></Bitstream>
           <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
           <Link><Type/><FromEntity/><ToEntity/></Link>
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
@@ -402,8 +466,18 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       metadataElemsPreservicaResponse = Seq(
         <Metadata><Ref/><Entity/><Content><differentThing xmlns="http://www.mockSchema.com/test/v42"></differentThing></Content></Metadata>
       ),
-      bitstreamInfo1Responses =
-        List(BitStreamInfo("name1", 1, "", Fixity("SHA256", checksum), 1, Original, None, Some(ioId)))
+      bitstreamInfo1Responses = List(
+        BitStreamInfo(
+          "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+          1,
+          "",
+          Fixity("SHA256", checksum),
+          1,
+          Original,
+          None,
+          Some(ioId)
+        )
+      )
     )
     val repo = utils.repo
 
@@ -425,7 +499,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
         <XIP xmlns="http://preservica.com/XIP/v7.0">
           <ContentObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></ContentObject>
           <Generation original="true" active="true"><ContentObject>someContent</ContentObject></Generation>
-          <Bitstream><Filename>testName</Filename><FileSize>10</FileSize><Fixities/></Bitstream>
+          <Bitstream><Filename>90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt</Filename><FileSize>1</FileSize><Fixities><Fixity><FixityAlgorithmRef>SHA256</FixityAlgorithmRef><FixityValue>532eaabd9574880dbf76b9b8cc00832c20a6ec113d682299550d7a6e0f345e25</FixityValue></Fixity></Fixities></Bitstream>
           <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
           <Link><Type/><FromEntity/><ToEntity/></Link>
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"/></Content></Metadata>
@@ -444,7 +518,14 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
     val ocflService = new OcflService(repo)
     val processor =
-      new Processor(utils.config, utils.sqsClient, ocflService, utils.preservicaClient, utils.xmlValidator)
+      new Processor(
+        utils.config,
+        utils.sqsClient,
+        ocflService,
+        utils.preservicaClient,
+        utils.xmlValidator,
+        utils.snsClient
+      )
 
     val ex = intercept[Exception] {
       runDisasterRecovery(utils.sqsClient, utils.config, processor)
