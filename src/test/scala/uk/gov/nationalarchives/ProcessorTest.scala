@@ -38,7 +38,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     )
   }
 
-  "process" should "retrieve the bitstream info for a CO update message" in {
+  "process" should "retrieve the bitstream info for a CO message" in {
     val utils = new ProcessorTestUtils()
     val id = utils.coId
     val parentRef = utils.ioId
@@ -50,29 +50,6 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       1,
       1,
       idsOfEntityToGetMetadataFrom = List(id),
-      entityTypesToGetMetadataFrom = List(ContentObject),
-      xmlRequestsToValidate = List(utils.coXmlToValidate),
-      createdIdSourceAndDestinationPathAndId = List(Nil, Nil),
-      drosToLookup = List(
-        List(
-          s"$parentRef/Preservation_1/$id/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
-          s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
-        )
-      )
-    )
-  }
-
-  "process" should "retrieve the metadata if a content object update is received" in {
-    val utils = new ProcessorTestUtils()
-    val id = utils.coId
-    val parentRef = utils.ioId
-
-    utils.processor.process(utils.duplicatesCoMessageResponses).unsafeRunSync()
-    utils.verifyCallsAndArguments(
-      1,
-      1,
-      1,
-      idsOfEntityToGetMetadataFrom = List(utils.coId),
       entityTypesToGetMetadataFrom = List(ContentObject),
       xmlRequestsToValidate = List(utils.coXmlToValidate),
       createdIdSourceAndDestinationPathAndId = List(Nil, Nil),

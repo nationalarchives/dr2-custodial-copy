@@ -64,7 +64,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       )
     }
 
-  "runDisasterRecovery" should "not write a new version, nor new IO metadata object if there is an IO update message with " +
+  "runDisasterRecovery" should "not write a new version, nor new IO metadata object if there is an IO message with " +
     "the same metadata" in {
       val utils = new MainTestUtils(typesOfMetadataFilesInRepo = List(InformationObject))
       val ioId = utils.ioId
@@ -75,7 +75,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       utils.latestObjectVersion(repo, ioId) must equal(1)
     }
 
-  "runDisasterRecovery" should "write a new version and a new IO metadata object if there is an IO update with different metadata" in {
+  "runDisasterRecovery" should "write a new version and a new IO metadata object if there is an IO message with different metadata" in {
     val utils = new MainTestUtils(
       typesOfMetadataFilesInRepo = List(InformationObject),
       metadataElemsPreservicaResponse = Seq(
@@ -274,7 +274,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       coContent must equal(s"File content for 90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt")
     }
 
-  "runDisasterRecovery" should "not write a new version, nor a new bitstream if there is an CO update with the same bitstream" in {
+  "runDisasterRecovery" should "not write a new version, nor a new bitstream if there is an CO message with the same bitstream" in {
     val ioId = UUID.randomUUID()
     val fileContent = "Test"
     val checksum = DigestUtils.sha256Hex(fileContent)
@@ -305,7 +305,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
   }
 
   "runDisasterRecovery" should "write a new version and a bitstream to a file, to the correct location in the repository, " +
-    "if there is a CO update with different metadata" in {
+    "if there is a CO message with different metadata" in {
       val fileContent = "Test"
       val ioId = UUID.randomUUID()
 
@@ -454,7 +454,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       )
     }
 
-  "runDisasterRecovery" should "write a new version and new CO metadata object if there is a CO update with different metadata" in {
+  "runDisasterRecovery" should "write a new version and new CO metadata object if there is a CO message with different metadata" in {
     val fileContent = "Test"
     val checksum = DigestUtils.sha256Hex(fileContent)
     val ioId = UUID.randomUUID()
