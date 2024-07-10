@@ -4,7 +4,7 @@ object Dependencies {
   private lazy val log4CatsVersion = "2.6.0"
   private lazy val pureConfigVersion = "0.17.7"
   private lazy val scalaTestVersion = "3.2.18"
-  private lazy val http4sVersion = "1.0.0-M29"
+  private lazy val http4sVersion = "1.0.0-M41"
 
   lazy val fs2 = "co.fs2" %% "fs2-core" % "3.10.2"
   lazy val fs2Core = "co.fs2" %% "fs2-core" % "3.10.2"
