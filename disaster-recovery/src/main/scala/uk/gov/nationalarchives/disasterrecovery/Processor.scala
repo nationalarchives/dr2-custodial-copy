@@ -9,7 +9,7 @@ import org.apache.commons.codec.digest.DigestUtils
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
 import sttp.capabilities.fs2.Fs2Streams
-import uk.gov.nationalarchives.DASQSClient
+import uk.gov.nationalarchives.{DASQSClient, DASNSClient}
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.disasterrecovery.DisasterRecoveryObject.*
 import uk.gov.nationalarchives.disasterrecovery.Main.{Config, IdWithSourceAndDestPaths}
@@ -337,11 +337,8 @@ object Processor {
     val entity: Entity
 
   case class DependenciesForIoSnsMsg(entity: Entity, identifiers: Seq[Node]) extends DependenciesForSnsMsg
-  case class DependenciesForCoSnsMsg(entity: Entity, potentialBitstreamNames: List[String] = Nil)
-      extends DependenciesForSnsMsg
+  case class DependenciesForCoSnsMsg(entity: Entity, potentialBitstreamNames: List[String] = Nil) extends DependenciesForSnsMsg
 
-  case class IoSnsMessage(ioRef: UUID, objectType: ObjectType, status: ObjectStatus, sourceId: String)
-      extends EntitySnsMessage
-  case class CoSnsMessage(ioRef: UUID, objectType: ObjectType, status: ObjectStatus, bitstreamName: UUID)
-      extends EntitySnsMessage
+  case class IoSnsMessage(ioRef: UUID, objectType: ObjectType, status: ObjectStatus, sourceId: String) extends EntitySnsMessage
+  case class CoSnsMessage(ioRef: UUID, objectType: ObjectType, status: ObjectStatus, bitstreamName: UUID) extends EntitySnsMessage
 }

@@ -21,7 +21,6 @@ import uk.gov.nationalarchives.dp.client.Entities.Entity
 import uk.gov.nationalarchives.dp.client.EntityClient
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.GenerationType.*
-import uk.gov.nationalarchives.testUtils.ExternalServicesTestUtils.MainTestUtils
 
 import java.nio.file.{Files, Paths}
 import java.util.UUID

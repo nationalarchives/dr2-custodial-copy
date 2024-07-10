@@ -8,6 +8,7 @@ import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doReturn, when}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
+import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.disasterrecovery.DisasterRecoveryObject.MetadataObject
 import uk.gov.nationalarchives.disasterrecovery.Main.IdWithSourceAndDestPaths
@@ -247,8 +248,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     utils.verifyCallsAndArguments(
       repTypes = Nil,
       repIndexes = Nil,
-      createdIdSourceAndDestinationPathAndId =
-        List(List(IdWithSourceAndDestPaths(id, Path(s"$id/missing").toNioPath, "destinationPath")), List()),
+      createdIdSourceAndDestinationPathAndId = List(List(IdWithSourceAndDestPaths(id, Path(s"$id/missing").toNioPath, "destinationPath")), List()),
       snsMessagesToSend = List(
         IoSnsMessage(id, Metadata, Created, "SourceIDValue")
       )

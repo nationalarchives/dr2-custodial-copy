@@ -2,7 +2,7 @@ package uk.gov.nationalarchives.disasterrecovery
 
 import cats.effect.IO
 import fs2.io.file.*
-import uk.gov.nationalarchives.Processor.DependenciesForSnsMsg
+import uk.gov.nationalarchives.disasterrecovery.Processor.DependenciesForSnsMsg
 import java.util.UUID
 import scala.xml.Elem
 

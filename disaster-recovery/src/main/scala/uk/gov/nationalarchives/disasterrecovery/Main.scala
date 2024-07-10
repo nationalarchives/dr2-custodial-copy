@@ -10,6 +10,7 @@ import pureconfig.module.catseffect.syntax.*
 import uk.gov.nationalarchives.DASQSClient
 import uk.gov.nationalarchives.dp.client.fs2.Fs2Client
 import uk.gov.nationalarchives.disasterrecovery.Message.*
+import uk.gov.nationalarchives.DASNSClient
 
 import java.net.URI
 import java.nio.file

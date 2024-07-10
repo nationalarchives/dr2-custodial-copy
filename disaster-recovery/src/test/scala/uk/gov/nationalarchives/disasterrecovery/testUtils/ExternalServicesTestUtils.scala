@@ -27,7 +27,7 @@ import uk.gov.nationalarchives.disasterrecovery.Message.{ContentObjectMessage, I
 import uk.gov.nationalarchives.disasterrecovery.OcflService.MissingAndChangedObjects
 import uk.gov.nationalarchives.disasterrecovery.OcflService.*
 import uk.gov.nationalarchives.*
-import uk.gov.nationalarchives.Processor.{CoSnsMessage, IoSnsMessage}
+import uk.gov.nationalarchives.disasterrecovery.Processor.{CoSnsMessage, IoSnsMessage}
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.{Entity, fromType}
 import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
@@ -545,8 +545,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     ).when(entityClient).metadataForEntity(ArgumentMatchers.argThat(new EntityWithSpecificType("CO")))
 
     when(
-      snsClient.publish(ArgumentMatchers.eq("topicArn"))(ArgumentMatchers.any[List[CoSnsMessage | IoSnsMessage]]())(
-        using any[Encoder[CoSnsMessage | IoSnsMessage]]
+      snsClient.publish(ArgumentMatchers.eq("topicArn"))(ArgumentMatchers.any[List[CoSnsMessage | IoSnsMessage]]())(using
+        any[Encoder[CoSnsMessage | IoSnsMessage]]
       )
     )
       .thenReturn(IO.pure(List(PublishBatchResponse.builder.build)))
