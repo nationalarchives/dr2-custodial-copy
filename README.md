@@ -46,6 +46,28 @@ Messages are deduped before they are processed.
 
 These are ignored as there is nothing in the structural objects we want to store.
 
+### Example of the OCFL Structure
+```
+<IO_Ref>
+├── IO_Metadata.xml
+└── <Representation_Type>
+    ├── <CO_Ref>
+    │   ├── derived
+    │   │   ├── g2
+    │   │   │   └── 58154e7d-6271-488d-bf78-989d937580d5.pdf
+    │   │   └── g3
+    │   │       └── 58154e7d-6271-488d-bf78-989d937580d5.pdf
+    │   ├── CO_Metadata.xml
+    │   └── original
+    │       └── g1
+    │           └── 58154e7d-6271-488d-bf78-989d937580d5.docx
+    └── <CO_Ref>
+        ├── CO_Metadata.xml
+        └── original
+            └── g1
+                └── c0c767b7-0eaf-41cc-b941-cabd60e50532.json
+```
+
 ### Looking up, Creating and Updating files
 * Once the list of all `MetadataObject`s and `FileObject`s have been generated
 * Check the OCFL repository for an object stored under this IO id.
