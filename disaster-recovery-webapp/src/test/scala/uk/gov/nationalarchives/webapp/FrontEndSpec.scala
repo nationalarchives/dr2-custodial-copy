@@ -85,8 +85,6 @@ class FrontEndSpec extends AnyFlatSpec:
   }
 
   "OcflRoutes /search GET" should "pass the correct parameters to the database call" in {
-    val id = UUID.randomUUID.toString
-
     given Assets[IO] = new Assets[IO]:
       override def filePath(id: UUID): IO[String] = IO("")
 

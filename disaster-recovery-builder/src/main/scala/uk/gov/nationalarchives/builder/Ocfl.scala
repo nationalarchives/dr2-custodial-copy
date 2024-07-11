@@ -32,13 +32,13 @@ trait Ocfl[F[_]](val config: Config):
       .build()
   }
 
-  def generate(id: UUID): F[List[OcflFile]]
+  def generateOcflObjects(id: UUID): F[List[OcflFile]]
 
 object Ocfl:
   def apply[F[_]](using ev: Ocfl[F]): Ocfl[F] = ev
 
   given impl[F[_]: Async](using configuration: Configuration): Ocfl[F] = new Ocfl[F](configuration.config):
-    override def generate(id: UUID): F[List[OcflFile]] = Async[F].pure {
+    override def generateOcflObjects(id: UUID): F[List[OcflFile]] = Async[F].pure {
 
       val objectVersion = repo.getObject(ObjectVersionId.head(id.toString))
       val files = objectVersion.getFiles.asScala.toList

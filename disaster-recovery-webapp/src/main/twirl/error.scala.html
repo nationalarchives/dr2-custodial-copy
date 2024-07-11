@@ -1,0 +1,16 @@
+@(errorMessage: String)
+@main("Results") {
+    <div class="govuk-width-container">
+        <main class="govuk-main-wrapper govuk-main-wrapper--l" id="main-content" role="main">
+            <div class="govuk-grid-row">
+                <div class="govuk-grid-column-two-thirds">
+                    <h1 class="govuk-heading-l">Sorry, there is a problem with the service</h1>
+                    <p class="govuk-body">@errorMessage</p>
+                    <p class="govuk-body">
+                        <a class="govuk-link" href="/">Return to the start page</a>
+                    </p>
+                </div>
+            </div>
+        </main>
+    </div>
+}

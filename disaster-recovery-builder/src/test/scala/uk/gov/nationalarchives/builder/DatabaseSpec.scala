@@ -24,20 +24,27 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     createTable()
     val id = UUID.randomUUID
     val fileId = UUID.randomUUID()
+    val initialResponse = readFiles(id).unsafeRunSync()
     val file = ocflFile(id, fileId)
     Database[IO].write(List(file)).unsafeRunSync()
     val response = readFiles(id).unsafeRunSync()
 
+    initialResponse.isEmpty should equal(true)
     response.head should equal(file)
   }
 
-  "write" should "should write the updated values to the database if a row already exists" in {
+  "write" should "given an id, delete the row and write a new one with the updated values to the database" in {
     createTable()
     val file = createFile().unsafeRunSync().copy(zref = "Another zref".some)
+    val anotherFile = createFile().unsafeRunSync()
 
     Database[IO].write(List(file)).unsafeRunSync()
     val response = readFiles(file.id).unsafeRunSync()
+    val unchangedResponse = readFiles(anotherFile.id).unsafeRunSync()
 
+    unchangedResponse.length should equal(1)
+    unchangedResponse.head.zref.get should equal("zref")
+    response.length should equal(1)
     response.head.zref.get should equal("Another zref")
   }
 

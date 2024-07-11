@@ -22,7 +22,7 @@ class BuilderSpec extends AnyFlatSpec:
     val fileId = UUID.randomUUID()
 
     given Ocfl[IO] = new Ocfl[IO](config):
-      override def generate(id: UUID): IO[List[OcflFile]] = IO {
+      override def generateOcflObjects(id: UUID): IO[List[OcflFile]] = IO {
         ids.contains(id) should equal(true)
         List(OcflFile(1, id, "name".some, fileId, "zref".some, "path".some, "fileName".some, Instant.now.some, "sourceId".some, "citation".some))
       }
@@ -43,7 +43,7 @@ class BuilderSpec extends AnyFlatSpec:
     val ids = List(idOne, idTwo)
 
     given Ocfl[IO] = new Ocfl[IO](config):
-      override def generate(id: UUID): IO[List[OcflFile]] = IO {
+      override def generateOcflObjects(id: UUID): IO[List[OcflFile]] = IO {
         assert(false)
         Nil
       }

@@ -4,10 +4,10 @@ import cats.data.EitherT
 import cats.effect.*
 import cats.implicits.*
 import fs2.io.file.Files
-import html.{results, search}
+import html.{results, search, error}
 import org.http4s.*
 import org.http4s.dsl.Http4sDsl
-import org.http4s.dsl.io.OptionalQueryParamDecoderMatcher
+import org.http4s.dsl.io.{OptionalQueryParamDecoderMatcher, QueryParamDecoderMatcher}
 import org.http4s.headers.*
 
 import java.time.{Instant, LocalDate, ZoneOffset}
@@ -15,7 +15,7 @@ import java.util.UUID
 
 object FrontEndRoutes:
 
-  extension [F[_]](response: Response[F]) private def asHtml: response.Self = response.putHeaders(`Content-Type`(MediaType.text.html))
+  extension [F[_]](response: Response[F]) def asHtml: response.Self = response.putHeaders(`Content-Type`(MediaType.text.html))
 
   extension (form: UrlForm)
     private def value(name: String): Option[String] =
@@ -47,17 +47,17 @@ object FrontEndRoutes:
   private object SourceIdQueryParam extends OptionalQueryParamDecoderMatcher[String]("sourceId")
   private object CitationQueryParam extends OptionalQueryParamDecoderMatcher[String]("citation")
   private object IngestDateQueryParam extends OptionalQueryParamDecoderMatcher[Instant]("ingestDate")
+  private object ErrorMessageQueryParam extends QueryParamDecoderMatcher[String]("message")
 
   case class SearchResponse(id: Option[UUID], zref: Option[String], sourceId: Option[String], citation: Option[String], ingestDateTime: Option[Instant]) {
-    private val params: Vector[(String, Option[String])] = Vector.from {
-      List(
-        ("id", id.map(_.toString)),
-        ("zref", zref),
-        ("sourceId", sourceId),
-        ("citation", citation),
-        ("ingestDate", ingestDateTime.map(_.toEpochMilli.toString))
-      ).filter(_._2.nonEmpty)
-    }
+    private val params: Vector[(String, Option[String])] = Vector(
+      ("id", id.map(_.toString)),
+      ("zref", zref),
+      ("sourceId", sourceId),
+      ("citation", citation),
+      ("ingestDate", ingestDateTime.map(_.toEpochMilli.toString))
+    ).filter(_._2.nonEmpty)
+
     def toQuery: Query = Query.fromVector(params)
   }
 
@@ -95,4 +95,7 @@ object FrontEndRoutes:
         } yield Response[F]()
           .withStatus(Status.Found)
           .withHeaders(Location(Uri.apply(path = Uri.Path.apply(Vector(Uri.Path.Segment("search"))), query = searchResponse.toQuery)))
+      case GET -> Root / "error" :? ErrorMessageQueryParam(errorMessage) =>
+        InternalServerError(error(errorMessage).body).map(_.asHtml)
+
     }

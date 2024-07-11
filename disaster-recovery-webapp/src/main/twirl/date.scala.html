@@ -12,7 +12,7 @@
                     <label class="govuk-label govuk-date-input__label" for="@id-day">
                         Day
                     </label>
-                    <input class="govuk-input govuk-date-input__input govuk-input--width-2" id="@id-day" name="@id-day" type="text" autocomplete="bday-day" inputmode="numeric">
+                    <input class="govuk-input govuk-date-input__input govuk-input--width-2" id="@id-day" name="@id-day" type="number", min="1" max="31">
                 </div>
             </div>
             <div class="govuk-date-input__item">
@@ -20,7 +20,7 @@
                     <label class="govuk-label govuk-date-input__label" for="@id-month">
                         Month
                     </label>
-                    <input class="govuk-input govuk-date-input__input govuk-input--width-2" id="@id-month" name="@id-month" type="text" autocomplete="bday-month" inputmode="numeric">
+                    <input class="govuk-input govuk-date-input__input govuk-input--width-2" id="@id-month" name="@id-month" type="number" min="1" max="12">
                 </div>
             </div>
             <div class="govuk-date-input__item">
@@ -28,7 +28,7 @@
                     <label class="govuk-label govuk-date-input__label" for="@id-year">
                         Year
                     </label>
-                    <input class="govuk-input govuk-date-input__input govuk-input--width-4" id="@id-year" name="@id-year" type="text" autocomplete="bday-year" inputmode="numeric">
+                    <input class="govuk-input govuk-date-input__input govuk-input--width-4" id="@id-year" name="@id-year" type="number" autocomplete="bday-year" inputmode="numeric">
                 </div>
             </div>
         </div>

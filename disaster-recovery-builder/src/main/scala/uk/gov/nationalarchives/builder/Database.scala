@@ -3,11 +3,14 @@ package uk.gov.nationalarchives.builder
 import cats.effect.Async
 import cats.implicits.*
 import doobie.Update
+import doobie.free.connection
+import doobie.free.connection.ConnectionIO
 import doobie.implicits.*
 import doobie.util.Put
 import doobie.util.log.LogHandler
 import doobie.util.transactor.Transactor
 import doobie.util.transactor.Transactor.Aux
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 import uk.gov.nationalarchives.utils.Utils.{OcflFile, given}
 
 import java.util.UUID
@@ -16,7 +19,7 @@ trait Database[F[_]]:
   def write(files: List[OcflFile]): F[Unit]
 
 object Database:
-  def apply[F[_]](using ev: Database[F]): Database[F] = ev
+  def apply[F[_]](using db: Database[F]): Database[F] = db
 
   given impl[F[_]: Async](using configuration: Configuration): Database[F] = new Database[F] {
 
@@ -30,10 +33,14 @@ object Database:
       val deleteSql = "delete from files where id = ?"
       val insertSql =
         "insert into files (version, id, name, fileId, zref, path, fileName, ingestDateTime, sourceId, citation) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-      val deleteAndInsert = for {
-        _ <- Update[UUID](deleteSql).updateMany(files.map(_.id))
-        _ <- Update[OcflFile](insertSql).updateMany(files)
+      val deleteAndInsert: ConnectionIO[(Int, Int)] = for {
+        deleteCount <- Update[UUID](deleteSql).updateMany(files.map(_.id))
+        updateCount <- Update[OcflFile](insertSql).updateMany(files)
+      } yield (updateCount, deleteCount)
+      for {
+        logger <- Slf4jLogger.create[F]
+        (updateCount, deleteCount) <- deleteAndInsert.transact(xa)
+        _ <- logger.info(s"$updateCount rows updated. $deleteCount rows deleted")
       } yield ()
-      deleteAndInsert.transact(xa)
     }
   }
