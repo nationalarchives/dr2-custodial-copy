@@ -35,7 +35,10 @@ jobs:
         with:
           registry: ${{ secrets.MANAGEMENT_ACCOUNT }}.dkr.ecr.eu-west-2.amazonaws.com
       - name: Tag image
-        run: sbt tagImage
+        run: |
+          sbt tagImage
+          git branch -f release-${{ github.event.inputs.environment }} HEAD
+          git push -f origin release-${{ github.event.inputs.environment }}
         env:
           MANAGEMENT_ACCOUNT_NUMBER: ${{ secrets.MANAGEMENT_ACCOUNT }}
           DOCKER_TAG: ${{ github.event.inputs.to-deploy }}
