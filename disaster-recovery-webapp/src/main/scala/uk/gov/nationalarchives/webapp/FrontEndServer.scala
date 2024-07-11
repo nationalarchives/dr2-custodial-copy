@@ -1,22 +1,26 @@
 package uk.gov.nationalarchives.webapp
 
 import cats.data.{Kleisli, OptionT}
-import cats.effect.Async
+import cats.effect.{Async, Resource}
 import cats.syntax.all.*
 import com.comcast.ip4s.*
-import html.error
-import org.http4s.dsl.Http4sDsl
+import fs2.io.net.Network
+import fs2.io.net.Network.forAsync
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.headers.Location
 import org.http4s.implicits.*
 import org.http4s.server.middleware.Logger
 import org.http4s.server.staticcontent.resourceServiceBuilder
-import org.http4s.{HttpRoutes, Query, Response, Status, Uri}
+import org.http4s.*
+import org.typelevel.log4cats.LoggerFactory
+import org.typelevel.log4cats.slf4j.Slf4jFactory
 import uk.gov.nationalarchives.webapp.FrontEndRoutes.*
 
 object FrontEndServer:
 
   def run[F[_]: Async]: F[Nothing] = {
+
+    given LoggerFactory[F] = Slf4jFactory.create[F]
 
     def handleError(err: Throwable) = OptionT.liftF {
       Async[F].pure {
@@ -35,19 +39,24 @@ object FrontEndServer:
         routes(req).handleErrorWith(handleError)
       }
 
-    val httpApp = (
-      handleErrors(FrontEndRoutes.ocflRoutes[F]) <+> resourceServiceBuilder[F]("/").toRoutes
-    ).orNotFound
+    given Network[F] = forAsync
 
-    val finalHttpApp = Logger.httpApp(true, false)(httpApp)
+    val appF = resourceServiceBuilder[F]("/").toRoutes.map { resourceRoutes =>
+      val httpApp = (
+        handleErrors(FrontEndRoutes.ocflRoutes[F]) <+> resourceRoutes
+        ).orNotFound
+
+      Logger.httpApp(true, false)(httpApp)
+    }
 
     for {
-      _ <-
+      app <- Resource.eval[F, HttpApp[F]](appF)
+      a <-
         EmberServerBuilder
           .default[F]
           .withHost(ipv4"0.0.0.0")
           .withPort(port"8080")
-          .withHttpApp(finalHttpApp)
+          .withHttpApp(app)
           .build
     } yield ()
   }.useForever

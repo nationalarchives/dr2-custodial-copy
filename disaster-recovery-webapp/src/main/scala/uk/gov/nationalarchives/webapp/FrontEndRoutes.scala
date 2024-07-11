@@ -4,7 +4,8 @@ import cats.data.EitherT
 import cats.effect.*
 import cats.implicits.*
 import fs2.io.file.Files
-import html.{results, search, error}
+import fs2.io.file.Files.forAsync
+import html.{error, results, search}
 import org.http4s.*
 import org.http4s.dsl.Http4sDsl
 import org.http4s.dsl.io.{OptionalQueryParamDecoderMatcher, QueryParamDecoderMatcher}
@@ -15,7 +16,7 @@ import java.util.UUID
 
 object FrontEndRoutes:
 
-  extension [F[_]](response: Response[F]) def asHtml: response.Self = response.putHeaders(`Content-Type`(MediaType.text.html))
+  extension [F[_]](response: Response[F]) private def asHtml: Response[F] = response.putHeaders(`Content-Type`(MediaType.text.html))
 
   extension (form: UrlForm)
     private def value(name: String): Option[String] =
@@ -64,6 +65,8 @@ object FrontEndRoutes:
   def ocflRoutes[F[_]: Async: Assets]: HttpRoutes[F] =
     val dsl = new Http4sDsl[F] {}
     import dsl.*
+
+    given Files[F] = forAsync
 
     given EntityDecoder[F, SearchResponse] = EntityDecoder.decodeBy[F, SearchResponse](MediaType.application.`x-www-form-urlencoded`) { msg =>
       EitherT {
