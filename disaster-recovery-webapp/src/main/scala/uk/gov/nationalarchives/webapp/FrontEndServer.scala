@@ -44,7 +44,7 @@ object FrontEndServer:
     val appF = resourceServiceBuilder[F]("/").toRoutes.map { resourceRoutes =>
       val httpApp = (
         handleErrors(FrontEndRoutes.ocflRoutes[F]) <+> resourceRoutes
-        ).orNotFound
+      ).orNotFound
 
       Logger.httpApp(true, false)(httpApp)
     }
