@@ -1,6 +1,7 @@
 name: Deploy Disaster Recovery
 permissions:
   id-token: write
+  contents: write
 on:
   workflow_dispatch:
     inputs:
