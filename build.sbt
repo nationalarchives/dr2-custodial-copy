@@ -102,6 +102,8 @@ lazy val tagSettings = Seq(
 
 lazy val commonSettings = Seq(
   libraryDependencies ++= Seq(
+    scalaCheck % Test,
+    scalaCheckPlus % Test,
     scalaTest % Test,
     mockito % Test,
     wiremock % Test,
@@ -135,6 +137,7 @@ lazy val commonSettings = Seq(
     filtered :+ (fatJar -> ("lib/" + fatJar.getName))
   },
   dockerRepository := Some(s"${sys.env.getOrElse("MANAGEMENT_ACCOUNT_NUMBER", "")}.dkr.ecr.eu-west-2.amazonaws.com"),
+  dockerBuildOptions ++= Seq("--no-cache","--pull"),
   Docker / packageName := s"dr2-${baseDirectory.value.getName}",
   Docker / version := sys.env.getOrElse("DOCKER_TAG", version.value),
   dockerCommands := Seq(

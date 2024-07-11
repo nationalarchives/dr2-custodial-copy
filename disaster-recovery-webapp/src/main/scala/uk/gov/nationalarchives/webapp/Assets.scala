@@ -2,19 +2,19 @@ package uk.gov.nationalarchives.webapp
 
 import cats.effect.Async
 import cats.implicits.*
-import uk.gov.nationalarchives.webapp.FrontEndRoutes.SearchResponse
-import uk.gov.nationalarchives.utils.Utils.OcflFile
 import doobie.Transactor
-import doobie.util.{Get, Put}
 import doobie.implicits.*
 import doobie.util.fragments.whereAndOpt
 import doobie.util.log.LogHandler
 import doobie.util.transactor.Transactor.Aux
-import pureconfig.{ConfigReader, ConfigSource}
+import doobie.util.{Get, Put}
 import pureconfig.generic.derivation.default.*
 import pureconfig.module.catseffect.syntax.*
-import uk.gov.nationalarchives.utils.Utils.given
+import pureconfig.{ConfigReader, ConfigSource}
+import uk.gov.nationalarchives.utils.Utils.{OcflFile, given}
+import uk.gov.nationalarchives.webapp.FrontEndRoutes.SearchResponse
 
+import java.time.{Instant, ZoneOffset}
 import java.util.UUID
 
 trait Assets[F[_]]:
@@ -23,7 +23,7 @@ trait Assets[F[_]]:
   def findFiles(searchResponse: SearchResponse): F[List[OcflFile]]
 
 object Assets:
-  case class Config(databasePath: String) derives ConfigReader
+  private case class Config(databasePath: String) derives ConfigReader
 
   def apply[F[_]](using ev: Assets[F]): Assets[F] = ev
   given instance[F[_]: Async]: Assets[F] = new Assets[F]:
@@ -45,7 +45,13 @@ object Assets:
     override def findFiles(searchResponse: SearchResponse): F[List[OcflFile]] = {
       val idWhere = searchResponse.id.map(i => fr"id = $i")
       val zrefWhere = searchResponse.zref.map(z => fr"zref = $z")
-      val query = fr"SELECT * from files" ++ whereAndOpt(idWhere, zrefWhere)
+      val citationWhere = searchResponse.citation.map(c => fr"citation = $c")
+      val sourceIdWhere = searchResponse.sourceId.map(s => fr"sourceId = $s")
+      val ingestDateTimeWhere = searchResponse.ingestDateTime.map { i =>
+        val endOfDay = i.atOffset(ZoneOffset.UTC).toLocalDate.atTime(23, 59, 59).atZone(ZoneOffset.UTC).toInstant
+        fr"ingestDateTime >= $i AND ingestDateTime <= $endOfDay"
+      }
+      val query = fr"SELECT * from files" ++ whereAndOpt(idWhere, zrefWhere, citationWhere, sourceIdWhere, ingestDateTimeWhere)
       loadXa.flatMap { xa =>
         query.query[OcflFile].to[List].transact(xa)
       }
