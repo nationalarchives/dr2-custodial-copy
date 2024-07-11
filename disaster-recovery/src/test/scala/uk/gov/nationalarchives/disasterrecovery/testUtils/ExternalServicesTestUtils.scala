@@ -27,7 +27,7 @@ import uk.gov.nationalarchives.disasterrecovery.Message.{ContentObjectMessage, I
 import uk.gov.nationalarchives.disasterrecovery.OcflService.MissingAndChangedObjects
 import uk.gov.nationalarchives.disasterrecovery.OcflService.*
 import uk.gov.nationalarchives.*
-import uk.gov.nationalarchives.disasterrecovery.Processor.{CoSnsMessage, IoSnsMessage}
+import uk.gov.nationalarchives.disasterrecovery.Processor.SnsMessage
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.{Entity, fromType}
 import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
@@ -227,8 +227,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val responses = List(PublishBatchResponse.builder().build())
 
     when(
-      snsClient.publish[CoSnsMessage | IoSnsMessage](any[String])(any[List[CoSnsMessage | IoSnsMessage]])(using
-        any[Encoder[CoSnsMessage | IoSnsMessage]]
+      snsClient.publish[SnsMessage](any[String])(any[List[SnsMessage]])(using
+        any[Encoder[SnsMessage]]
       )
     )
       .thenReturn(IO.pure(responses))
@@ -477,8 +477,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       ArgumentCaptor.forClass(classOf[List[DisasterRecoveryObject]])
 
     private val topicArnCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
-    private val messagesCaptor: ArgumentCaptor[List[CoSnsMessage | IoSnsMessage]] =
-      ArgumentCaptor.forClass(classOf[List[CoSnsMessage | IoSnsMessage]])
+    private val messagesCaptor: ArgumentCaptor[List[SnsMessage]] =
+      ArgumentCaptor.forClass(classOf[List[SnsMessage]])
     private val receiptHandleCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
 
     private def mockOcflService(
@@ -545,8 +545,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     ).when(entityClient).metadataForEntity(ArgumentMatchers.argThat(new EntityWithSpecificType("CO")))
 
     when(
-      snsClient.publish(ArgumentMatchers.eq("topicArn"))(ArgumentMatchers.any[List[CoSnsMessage | IoSnsMessage]]())(using
-        any[Encoder[CoSnsMessage | IoSnsMessage]]
+      snsClient.publish(ArgumentMatchers.eq("topicArn"))(ArgumentMatchers.any[List[SnsMessage]]())(using
+        any[Encoder[SnsMessage]]
       )
     )
       .thenReturn(IO.pure(List(PublishBatchResponse.builder.build)))
@@ -590,7 +590,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         xmlRequestsToValidate: List[Elem] = List(ioXmlToValidate),
         createdIdSourceAndDestinationPathAndId: List[List[IdWithSourceAndDestPaths]] = Nil,
         drosToLookup: List[List[String]] = List(List(s"$ioId/IO_Metadata.xml")),
-        snsMessagesToSend: List[CoSnsMessage | IoSnsMessage] = Nil,
+        snsMessagesToSend: List[SnsMessage] = Nil,
         receiptHandles: List[String] = List("receiptHandle1", "receiptHandle1", "receiptHandle1")
     ): Assertion = {
 
@@ -615,7 +615,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       val numOfTimesSnsMsgShouldBeSent =
         if (snsMessagesToSend.nonEmpty || createdIdSourceAndDestinationPathAndId.flatten.nonEmpty) 1 else 0
       verify(snsClient, times(numOfTimesSnsMsgShouldBeSent))
-        .publish(topicArnCaptor.capture)(messagesCaptor.capture())(using any[Encoder[CoSnsMessage | IoSnsMessage]])
+        .publish(topicArnCaptor.capture)(messagesCaptor.capture())(using any[Encoder[SnsMessage]])
 
       verify(xmlValidator, times(xmlRequestsToValidate.length))
         .xmlStringIsValid(metadataXmlStringToValidate.capture())

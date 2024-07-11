@@ -14,12 +14,11 @@ import uk.gov.nationalarchives.disasterrecovery.DisasterRecoveryObject.MetadataO
 import uk.gov.nationalarchives.disasterrecovery.Main.IdWithSourceAndDestPaths
 import uk.gov.nationalarchives.disasterrecovery.Message.InformationObjectMessage
 import uk.gov.nationalarchives.disasterrecovery.OcflService.MissingAndChangedObjects
-import uk.gov.nationalarchives.disasterrecovery.Processor.{CoSnsMessage, DependenciesForIoSnsMsg, IoSnsMessage}
 import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectStatus.{Created, Updated}
 import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectType.Metadata
+import uk.gov.nationalarchives.disasterrecovery.Processor.SnsMessage
 import uk.gov.nationalarchives.dp.client.EntityClient.IoMetadata
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
-import uk.gov.nationalarchives.dp.client.Entities.Entity
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.disasterrecovery.testUtils.ExternalServicesTestUtils.*
 
@@ -168,21 +167,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 "checksum",
                 utils.ioConsolidatedMetadata,
                 "destinationPath",
-                DependenciesForIoSnsMsg(
-                  Entity(
-                    Some(InformationObject),
-                    id,
-                    None,
-                    None,
-                    deleted = false,
-                    None,
-                    parent = Some(UUID.randomUUID())
-                  ),
-                  Seq(
-                    <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>,
-                    <Identifier><ApiId/><Type>sourceID</Type><Value>sourceIDValue</Value><Entity/></Identifier>
-                  )
-                )
+                "SourceIDValue"
               )
             )
           )
@@ -200,7 +185,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
         ) // 2nd call to 'createObjects' with changedObjectsPaths arg
       ),
       snsMessagesToSend = List(
-        IoSnsMessage(id, Metadata, Updated, "SourceIDValue")
+        SnsMessage(id, Metadata, Updated, "SourceIDValue")
       )
     )
   }
@@ -221,21 +206,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 "checksum",
                 utils.ioConsolidatedMetadata,
                 "destinationPath",
-                DependenciesForIoSnsMsg(
-                  Entity(
-                    Some(InformationObject),
-                    id,
-                    None,
-                    None,
-                    deleted = false,
-                    None,
-                    parent = Some(UUID.randomUUID())
-                  ),
-                  Seq(
-                    <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>,
-                    <Identifier><ApiId/><Type>sourceID</Type><Value>sourceIDValue</Value><Entity/></Identifier>
-                  )
-                )
+                "SourceIDValue"
               )
             ),
             Nil
@@ -250,7 +221,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       repIndexes = Nil,
       createdIdSourceAndDestinationPathAndId = List(List(IdWithSourceAndDestPaths(id, Path(s"$id/missing").toNioPath, "destinationPath")), List()),
       snsMessagesToSend = List(
-        IoSnsMessage(id, Metadata, Created, "SourceIDValue")
+        SnsMessage(id, Metadata, Created, "SourceIDValue")
       )
     )
   }
@@ -272,21 +243,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 "checksum",
                 utils.ioConsolidatedMetadata,
                 "destinationPath",
-                DependenciesForIoSnsMsg(
-                  Entity(
-                    Some(InformationObject),
-                    missingFileId,
-                    None,
-                    None,
-                    deleted = false,
-                    None,
-                    parent = Some(UUID.randomUUID())
-                  ),
-                  Seq(
-                    <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>,
-                    <Identifier><ApiId/><Type>sourceID</Type><Value>sourceIDValue</Value><Entity/></Identifier>
-                  )
-                )
+                "SourceIDValue"
               )
             ),
             List(
@@ -297,21 +254,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 "checksum",
                 utils.ioConsolidatedMetadata,
                 "destinationPath2",
-                DependenciesForIoSnsMsg(
-                  Entity(
-                    Some(InformationObject),
-                    changedFileId,
-                    None,
-                    None,
-                    deleted = false,
-                    None,
-                    parent = Some(UUID.randomUUID())
-                  ),
-                  Seq(
-                    <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>,
-                    <Identifier><ApiId/><Type>sourceID</Type><Value>sourceIDValue</Value><Entity/></Identifier>
-                  )
-                )
+                "SourceIDValue"
               )
             )
           )
@@ -346,8 +289,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
         )
       ),
       snsMessagesToSend = List(
-        IoSnsMessage(missingFileId, Metadata, Created, "SourceIDValue"),
-        IoSnsMessage(changedFileId, Metadata, Updated, "SourceIDValue")
+        SnsMessage(missingFileId, Metadata, Created, "SourceIDValue"),
+        SnsMessage(changedFileId, Metadata, Updated, "SourceIDValue")
       ),
       receiptHandles = List("receiptHandle1", "receiptHandle2")
     )
@@ -363,7 +306,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
           Seq(
             <Representation><InformationObject/><Name/><Type/><ContentObjects/><RepresentationFormats/><RepresentationProperties/></Representation>
           ),
-          Seq(<Identifier><ApiId/><Type/><Value/></Identifier>),
+          Seq(<Identifier><ApiId/><Type>SourceID</Type><Value>SourceId</Value></Identifier>),
           Seq(<Links><Link/></Links>),
           Seq(<Metadata><Content/></Metadata>),
           Seq(
@@ -390,7 +333,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
         <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><InvalidTag/></InformationObject>
           <Representation><InformationObject/><Name/><Type/><ContentObjects/><RepresentationFormats/><RepresentationProperties/></Representation>
-          <Identifier><ApiId/><Type/><Value/></Identifier>
+          <Identifier><ApiId/><Type>SourceID</Type><Value>SourceId</Value></Identifier>
           <Links><Link/></Links>
           <Metadata><Content/></Metadata>
           <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date/><User/></Event><Date/><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity></EventAction>
