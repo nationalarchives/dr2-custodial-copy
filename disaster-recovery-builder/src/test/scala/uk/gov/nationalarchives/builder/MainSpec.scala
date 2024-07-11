@@ -18,8 +18,10 @@ import uk.gov.nationalarchives.DASQSClient
 import uk.gov.nationalarchives.utils.TestUtils.{createTable, readFiles}
 import cats.effect.unsafe.implicits.global
 import org.scalatest.matchers.should.Matchers.*
+
 import java.net.URI
 import java.nio.file.{Files, Paths}
+import java.time.Instant
 import java.util.UUID
 import scala.jdk.CollectionConverters.*
 import scala.xml.Elem
@@ -58,20 +60,32 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
     Main.runBuilder(daSQSClient).compile.drain.unsafeRunSync()
 
     val files = readFiles(id).unsafeRunSync()
-    val firstFile = files.maxBy(_.fileId)
-    val secondFile = files.minBy(_.fileId)
+    val firstFileOpt = files.find(_.fileId == coRef)
+    val secondFileOpt = files.find(_.fileId == coRefTwo)
+
+    firstFileOpt.isDefined should equal(true)
+    secondFileOpt.isDefined should equal(true)
+
+    val firstFile = firstFileOpt.get
+    val secondFile = secondFileOpt.get
 
     firstFile.id should equal(id)
-    firstFile.name should equal("Title")
+    firstFile.name.get should equal("Title")
     firstFile.fileId should equal(coRef)
-    firstFile.zref should equal("Zref")
-    firstFile.fileName should equal("Content Title")
+    firstFile.zref.get should equal("Zref")
+    firstFile.fileName.get should equal("Content Title")
+    firstFile.ingestDateTime.get should equal(Instant.parse("2024-07-03T11:39:15.372Z"))
+    firstFile.sourceId.get should equal("SourceID")
+    firstFile.citation.get should equal("Citation")
 
     secondFile.id should equal(id)
-    secondFile.name should equal("Title")
+    secondFile.name.get should equal("Title")
     secondFile.fileId should equal(coRefTwo)
-    secondFile.zref should equal("Zref")
-    secondFile.fileName should equal("Content Title2")
+    secondFile.zref.get should equal("Zref")
+    secondFile.fileName.get should equal("Content Title2")
+    secondFile.ingestDateTime.get should equal(Instant.parse("2024-07-03T11:39:15.372Z"))
+    secondFile.sourceId.get should equal("SourceID")
+    secondFile.citation.get should equal("Citation")
   }
 
   "runBuilder" should "write the correct items to the database for a single content object" in {
@@ -88,10 +102,13 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
     files.length should equal(1)
     val firstFile = files.head
     firstFile.id should equal(id)
-    firstFile.name should equal("Title")
+    firstFile.name.get should equal("Title")
     firstFile.fileId should equal(coRef)
-    firstFile.zref should equal("Zref")
-    firstFile.fileName should equal("Content Title")
+    firstFile.zref.get should equal("Zref")
+    firstFile.fileName.get should equal("Content Title")
+    firstFile.ingestDateTime.get should equal(Instant.parse("2024-07-03T11:39:15.372Z"))
+    firstFile.sourceId.get should equal("SourceID")
+    firstFile.citation.get should equal("Citation")
   }
 
   "runBuilder" should "copy the content file to the new location" in {
@@ -107,17 +124,24 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
     val files = readFiles(id).unsafeRunSync()
     files.length should equal(1)
     val firstFile = files.head
-    Files.readString(Paths.get(firstFile.path)) should equal("test")
+    Files.readString(Paths.get(firstFile.path.get)) should equal("test")
   }
 
   "runBuilder" should "return empty string for missing metadata values" in {
     val id = UUID.randomUUID
     val coId = UUID.randomUUID
     val ioMetadata =
-      <Metadata>
+      <XIP>
         <Identifiers/>
         <InformationObject/>
-      </Metadata>
+        <Metadata>
+          <Content>
+            <Source>
+              <IngestDateTime>2024-07-03T11:39:15.372Z</IngestDateTime>
+            </Source>
+          </Content>
+        </Metadata>
+      </XIP>
 
     val coMetadata =
       <Metadata>
@@ -138,9 +162,9 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
 
     val file = files.head
     file.id should equal(id)
-    file.name.isBlank should equal(true)
-    file.zref.isBlank should equal(true)
-    file.fileName.isBlank should equal(true)
+    file.name.isEmpty should equal(true)
+    file.zref.isEmpty should equal(true)
+    file.fileName.isEmpty should equal(true)
   }
 
   "runBuilder" should "call the correct SQS endpoints" in {

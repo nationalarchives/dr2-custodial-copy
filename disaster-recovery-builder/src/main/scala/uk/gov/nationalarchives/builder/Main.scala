@@ -42,14 +42,13 @@ object Main extends IOApp {
   def runBuilder(sqs: DASQSClient[IO])(using configuration: Configuration): Stream[IO, Unit] = {
     val queueUrl = configuration.config.queueUrl
     Stream
-      .eval {
-        for {
-          messages <- sqs.receiveMessages[Message](queueUrl)
-        } yield messages
-      }
+      .eval(sqs.receiveMessages[Message](queueUrl))
       .evalMap { messages =>
         for {
-          _ <- IO.whenA(messages.nonEmpty)(Builder[IO].run(messages))
+          logger <- Slf4jLogger.create[IO]
+          _ <- IO.whenA(messages.nonEmpty) {
+            logger.info(s"Received ${messages.length} messages from queue $queueUrl") >> Builder[IO].run(messages)
+          }
           _ <- messages.map(message => sqs.deleteMessage(queueUrl, message.receiptHandle)).sequence
         } yield ()
       }
