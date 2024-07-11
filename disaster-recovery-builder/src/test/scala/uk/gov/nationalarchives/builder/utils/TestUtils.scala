@@ -32,17 +32,30 @@ object TestUtils:
   val coRef: UUID = UUID.randomUUID
   val coRefTwo: UUID = UUID.randomUUID
 
-  val completeIoMetadataContent: Elem = <Metadata>
-    <Identifiers>
-      <Identifier>
-        <Type>BornDigitalRef</Type>
-        <Value>Zref</Value>
-      </Identifier>
-    </Identifiers>
+  val completeIoMetadataContent: Elem = <XIP>
+    <Identifier>
+      <Type>BornDigitalRef</Type>
+      <Value>Zref</Value>
+    </Identifier>
+    <Identifier>
+      <Type>SourceID</Type>
+      <Value>SourceID</Value>
+    </Identifier>
+    <Identifier>
+      <Type>NeutralCitation</Type>
+      <Value>Citation</Value>
+    </Identifier>
     <InformationObject>
       <Title>Title</Title>
     </InformationObject>
-  </Metadata>
+    <Metadata>
+      <Content>
+        <Source>
+          <IngestDateTime>2024-07-03T11:39:15.372Z</IngestDateTime>
+        </Source>
+      </Content>
+    </Metadata>
+  </XIP>
   val completeCoMetadataContentElements: List[Elem] = List(
     <Metadata>
       <ContentObject>
@@ -61,7 +74,8 @@ object TestUtils:
   def initialiseRepo(
       id: UUID,
       ioMetadataContent: Elem = completeIoMetadataContent,
-      coMetadataContent: List[Elem] = completeCoMetadataContentElements
+      coMetadataContent: List[Elem] = completeCoMetadataContentElements,
+      addFilesToRepo: Boolean = true
   ): Config = {
     val repoDir = Files.createTempDirectory("repo")
     val workDir = Files.createTempDirectory("work")
@@ -73,19 +87,20 @@ object TestUtils:
 
     Files.write(ioMetadataFile, ioMetadataContent.toString.getBytes)
 
-    repository(repoDir, workDir).updateObject(
-      id.toHeadVersion,
-      new VersionInfo(),
-      { (updater: OcflObjectUpdater) =>
-        updater.addPath(ioMetadataFile, "IO_Metadata.xml", OcflOption.OVERWRITE)
-        coMetadataContent.zipWithIndex.map { (elem, idx) =>
-          val coMetadataFile = Files.createFile(metadataFileDirectory.resolve(s"CO_Metadata$idx.xml"))
-          Files.write(coMetadataFile, elem.toString.getBytes)
-          updater.addPath(coMetadataFile, s"subfolder$idx/CO_Metadata.xml", OcflOption.OVERWRITE)
-          updater.addPath(contentFile, s"subfolder$idx/original/g1/content.file", OcflOption.OVERWRITE)
-        }
-        ()
-      }.asJava
-    )
+    if (addFilesToRepo)
+      repository(repoDir, workDir).updateObject(
+        id.toHeadVersion,
+        new VersionInfo(),
+        { (updater: OcflObjectUpdater) =>
+          updater.addPath(ioMetadataFile, "IO_Metadata.xml", OcflOption.OVERWRITE)
+          coMetadataContent.zipWithIndex.map { (elem, idx) =>
+            val coMetadataFile = Files.createFile(metadataFileDirectory.resolve(s"CO_Metadata$idx.xml"))
+            Files.write(coMetadataFile, elem.toString.getBytes)
+            updater.addPath(coMetadataFile, s"subfolder$idx/CO_Metadata.xml", OcflOption.OVERWRITE)
+            updater.addPath(contentFile, s"subfolder$idx/original/g1/content.file", OcflOption.OVERWRITE)
+          }
+          ()
+        }.asJava
+      )
     Config("test-database", "http://localhost:9001", repoDir.toString, workDir.toString)
   }
