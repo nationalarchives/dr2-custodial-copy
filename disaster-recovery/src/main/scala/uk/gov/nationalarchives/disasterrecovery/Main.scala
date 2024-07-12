@@ -35,7 +35,7 @@ object Main extends IOApp {
       .map(proxy => DASQSClient[IO](proxy))
       .getOrElse(DASQSClient[IO]())
 
-  given Decoder[Option[Message]] = (c: HCursor) =>
+  given Decoder[Option[ReceivedSnsMessage]] = (c: HCursor) =>
     for {
       id <- c.downField("id").as[String]
     } yield {
@@ -43,8 +43,8 @@ object Main extends IOApp {
       val ref = UUID.fromString(typeAndRef.last)
       val entityType = typeAndRef.head
       entityType match {
-        case "io" => Option(InformationObjectMessage(ref, id))
-        case "co" => Option(ContentObjectMessage(ref, id))
+        case "io" => Option(InformationObjectReceivedSnsMessage(ref, id))
+        case "co" => Option(ContentObjectReceivedSnsMessage(ref, id))
         case _    => None
       }
     }
@@ -72,7 +72,7 @@ object Main extends IOApp {
 
   def runDisasterRecovery(sqs: DASQSClient[IO], config: Config, processor: Processor): Stream[IO, Unit] =
     Stream
-      .eval(sqs.receiveMessages[Option[Message]](config.sqsQueueUrl))
+      .eval(sqs.receiveMessages[Option[ReceivedSnsMessage]](config.sqsQueueUrl))
       .evalMap(messages => IO.whenA(messages.nonEmpty)(processor.process(messages)))
 
   private def logError(err: Throwable) = for {

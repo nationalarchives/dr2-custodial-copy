@@ -23,11 +23,15 @@ import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.disasterrecovery.DisasterRecoveryObject.MetadataObject
 import uk.gov.nationalarchives.disasterrecovery.{DisasterRecoveryObject, Message, OcflService, Processor}
 import uk.gov.nationalarchives.disasterrecovery.Main.{Config, IdWithSourceAndDestPaths}
-import uk.gov.nationalarchives.disasterrecovery.Message.{ContentObjectMessage, InformationObjectMessage}
+import uk.gov.nationalarchives.disasterrecovery.Message.{
+  ContentObjectReceivedSnsMessage,
+  InformationObjectReceivedSnsMessage,
+  ReceivedSnsMessage,
+  SendSnsMessage
+}
 import uk.gov.nationalarchives.disasterrecovery.OcflService.MissingAndChangedObjects
 import uk.gov.nationalarchives.disasterrecovery.OcflService.*
 import uk.gov.nationalarchives.*
-import uk.gov.nationalarchives.disasterrecovery.Processor.{CoSnsMessage, IoSnsMessage}
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.{Entity, fromType}
 import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
@@ -209,14 +213,14 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       .build()
   }
 
-  private def mockSqs(messages: List[Message]): DASQSClient[IO] = {
+  private def mockSqs(messages: List[ReceivedSnsMessage]): DASQSClient[IO] = {
     val sqsClient = mock[DASQSClient[IO]]
     val responses = IO {
       messages.zipWithIndex.map { case (message, idx) =>
-        MessageResponse[Option[Message]](s"handle$idx", Option(message))
+        MessageResponse[Option[ReceivedSnsMessage]](s"handle$idx", Option(message))
       }
     }
-    when(sqsClient.receiveMessages[Option[Message]](any[String], any[Int])(using any[Decoder[Option[Message]]]))
+    when(sqsClient.receiveMessages[Option[ReceivedSnsMessage]](any[String], any[Int])(using any[Decoder[Option[ReceivedSnsMessage]]]))
       .thenReturn(responses)
     when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO(DeleteMessageResponse.builder().build))
     sqsClient
@@ -227,8 +231,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val responses = List(PublishBatchResponse.builder().build())
 
     when(
-      snsClient.publish[CoSnsMessage | IoSnsMessage](any[String])(any[List[CoSnsMessage | IoSnsMessage]])(using
-        any[Encoder[CoSnsMessage | IoSnsMessage]]
+      snsClient.publish[SendSnsMessage](any[String])(any[List[SendSnsMessage]])(using
+        any[Encoder[SendSnsMessage]]
       )
     )
       .thenReturn(IO.pure(responses))
@@ -278,13 +282,13 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     lazy val repo: OcflRepository = createTestRepo(repoDir)
 
     private val coIds: Seq[UUID] = List(coId1, coId2, coId3)
-    private val sqsMessages: List[Message] =
+    private val sqsMessages: List[ReceivedSnsMessage] =
       typesOfSqsMessages.zipWithIndex.flatMap { case (entityType, index) =>
         entityType match { // create duplicates in order to test deduplication
-          case InformationObject => (1 to 2).map(_ => InformationObjectMessage(ioId, s"${ioType.toLowerCase}:$ioId"))
+          case InformationObject => (1 to 2).map(_ => InformationObjectReceivedSnsMessage(ioId, s"${ioType.toLowerCase}:$ioId"))
           case ContentObject =>
             val coId = coIds(index)
-            (1 to 2).map(_ => ContentObjectMessage(coId, s"${coType.toLowerCase}:$coId"))
+            (1 to 2).map(_ => ContentObjectReceivedSnsMessage(coId, s"${coType.toLowerCase}:$coId"))
           case unexpectedEntityType => throw new Exception(s"Unexpected EntityType $unexpectedEntityType!")
         }
       }
@@ -395,17 +399,17 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val ioId: UUID = UUID.randomUUID()
     val coId: UUID = UUID.randomUUID()
 
-    lazy val coMessage: ContentObjectMessage = ContentObjectMessage(coId, s"co:$coId")
-    lazy val ioMessage: InformationObjectMessage = InformationObjectMessage(ioId, s"io:$ioId")
+    lazy val coMessage: ContentObjectReceivedSnsMessage = ContentObjectReceivedSnsMessage(coId, s"co:$coId")
+    lazy val ioMessage: InformationObjectReceivedSnsMessage = InformationObjectReceivedSnsMessage(ioId, s"io:$ioId")
     val sqsClient: DASQSClient[IO] = mock[DASQSClient[IO]]
     val entityClient: EntityClient[IO, Fs2Streams[IO]] = mock[EntityClient[IO, Fs2Streams[IO]]]
     val snsClient: DASNSClient[IO] = mock[DASNSClient[IO]]
 
-    val duplicatesIoMessageResponses: List[MessageResponse[Option[Message]]] =
-      (1 to 3).toList.map(_ => MessageResponse[Option[Message]]("receiptHandle1", Option(ioMessage)))
+    val duplicatesIoMessageResponses: List[MessageResponse[Option[ReceivedSnsMessage]]] =
+      (1 to 3).toList.map(_ => MessageResponse[Option[ReceivedSnsMessage]]("receiptHandle1", Option(ioMessage)))
 
-    val duplicatesCoMessageResponses: List[MessageResponse[Option[Message]]] =
-      (1 to 3).toList.map(_ => MessageResponse[Option[Message]]("receiptHandle2", Option(coMessage)))
+    val duplicatesCoMessageResponses: List[MessageResponse[Option[ReceivedSnsMessage]]] =
+      (1 to 3).toList.map(_ => MessageResponse[Option[ReceivedSnsMessage]]("receiptHandle2", Option(coMessage)))
 
     private val potentialParentRef = if parentRefExists then Some(ioId) else None
 
@@ -477,8 +481,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       ArgumentCaptor.forClass(classOf[List[DisasterRecoveryObject]])
 
     private val topicArnCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
-    private val messagesCaptor: ArgumentCaptor[List[CoSnsMessage | IoSnsMessage]] =
-      ArgumentCaptor.forClass(classOf[List[CoSnsMessage | IoSnsMessage]])
+    private val messagesCaptor: ArgumentCaptor[List[SendSnsMessage]] =
+      ArgumentCaptor.forClass(classOf[List[SendSnsMessage]])
     private val receiptHandleCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
 
     private def mockOcflService(
@@ -545,8 +549,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     ).when(entityClient).metadataForEntity(ArgumentMatchers.argThat(new EntityWithSpecificType("CO")))
 
     when(
-      snsClient.publish(ArgumentMatchers.eq("topicArn"))(ArgumentMatchers.any[List[CoSnsMessage | IoSnsMessage]]())(using
-        any[Encoder[CoSnsMessage | IoSnsMessage]]
+      snsClient.publish(ArgumentMatchers.eq("topicArn"))(ArgumentMatchers.any[List[SendSnsMessage]]())(using
+        any[Encoder[SendSnsMessage]]
       )
     )
       .thenReturn(IO.pure(List(PublishBatchResponse.builder.build)))
@@ -590,7 +594,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         xmlRequestsToValidate: List[Elem] = List(ioXmlToValidate),
         createdIdSourceAndDestinationPathAndId: List[List[IdWithSourceAndDestPaths]] = Nil,
         drosToLookup: List[List[String]] = List(List(s"$ioId/IO_Metadata.xml")),
-        snsMessagesToSend: List[CoSnsMessage | IoSnsMessage] = Nil,
+        snsMessagesToSend: List[SendSnsMessage] = Nil,
         receiptHandles: List[String] = List("receiptHandle1", "receiptHandle1", "receiptHandle1")
     ): Assertion = {
 
@@ -615,7 +619,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       val numOfTimesSnsMsgShouldBeSent =
         if (snsMessagesToSend.nonEmpty || createdIdSourceAndDestinationPathAndId.flatten.nonEmpty) 1 else 0
       verify(snsClient, times(numOfTimesSnsMsgShouldBeSent))
-        .publish(topicArnCaptor.capture)(messagesCaptor.capture())(using any[Encoder[CoSnsMessage | IoSnsMessage]])
+        .publish(topicArnCaptor.capture)(messagesCaptor.capture())(using any[Encoder[SendSnsMessage]])
 
       verify(xmlValidator, times(xmlRequestsToValidate.length))
         .xmlStringIsValid(metadataXmlStringToValidate.capture())

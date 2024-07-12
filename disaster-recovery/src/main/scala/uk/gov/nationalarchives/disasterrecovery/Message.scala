@@ -1,12 +1,18 @@
 package uk.gov.nationalarchives.disasterrecovery
 
 import java.util.UUID
+import uk.gov.nationalarchives.dp.client.EntityClient.EntityType
+import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectStatus
+import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectType
 
-sealed trait Message {
-  val ref: UUID
-  val messageText: String
-}
 object Message {
-  case class InformationObjectMessage(ref: UUID, messageText: String) extends Message
-  case class ContentObjectMessage(ref: UUID, messageText: String) extends Message
+  sealed trait ReceivedSnsMessage {
+    val ref: UUID
+    val messageText: String
+  }
+
+  case class InformationObjectReceivedSnsMessage(ref: UUID, messageText: String) extends ReceivedSnsMessage
+  case class ContentObjectReceivedSnsMessage(ref: UUID, messageText: String) extends ReceivedSnsMessage
+
+  case class SendSnsMessage(entityType: EntityType, ioRef: UUID, objectType: ObjectType, status: ObjectStatus, tableItemIdentifier: String | UUID)
 }

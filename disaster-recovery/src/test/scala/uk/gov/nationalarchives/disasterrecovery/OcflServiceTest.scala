@@ -15,7 +15,6 @@ import org.scalatest.prop.TableDrivenPropertyChecks
 import uk.gov.nationalarchives.disasterrecovery.DisasterRecoveryObject.FileObject
 import uk.gov.nationalarchives.disasterrecovery.Main.IdWithSourceAndDestPaths
 import uk.gov.nationalarchives.dp.client.Entities.Entity
-import uk.gov.nationalarchives.disasterrecovery.Processor.DependenciesForCoSnsMsg
 
 import java.io.ByteArrayInputStream
 import java.nio.file.Paths
@@ -56,7 +55,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
 
     val service = new OcflService(ocflRepository)
     val fileObjectThatShouldBeMissing =
-      FileObject(id, name, checksum, url, destinationPath, DependenciesForCoSnsMsg(entity))
+      FileObject(id, name, checksum, url, destinationPath, UUID.randomUUID)
 
     val missingAndChangedObjects =
       service.getMissingAndChangedObjects(List(fileObjectThatShouldBeMissing)).unsafeRunSync()
@@ -76,7 +75,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
 
       val service = new OcflService(ocflRepository)
       val fileObjectThatShouldBeMissing =
-        FileObject(id, name, checksum, url, "nonExistingDestinationPath", DependenciesForCoSnsMsg(entity))
+        FileObject(id, name, checksum, url, "nonExistingDestinationPath", UUID.randomUUID)
 
       val missingAndChangedObjects =
         service.getMissingAndChangedObjects(List(fileObjectThatShouldBeMissing)).unsafeRunSync()
@@ -99,7 +98,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
       val missingAndChangedObjects =
         service
           .getMissingAndChangedObjects(
-            List(FileObject(id, name, checksum, url, destinationPath, DependenciesForCoSnsMsg(entity)))
+            List(FileObject(id, name, checksum, url, destinationPath, UUID.randomUUID))
           )
           .unsafeRunSync()
 
@@ -115,7 +114,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
 
       val service = new OcflService(ocflRepository)
       val fileObjectThatShouldHaveChangedChecksum =
-        FileObject(id, name, "anotherChecksum", url, destinationPath, DependenciesForCoSnsMsg(entity))
+        FileObject(id, name, "anotherChecksum", url, destinationPath, UUID.randomUUID)
 
       val missingAndChangedObjects =
         service.getMissingAndChangedObjects(List(fileObjectThatShouldHaveChangedChecksum)).unsafeRunSync()
@@ -133,7 +132,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
 
     val service = new OcflService(ocflRepository)
     val fileObjectThatShouldHaveChangedChecksum =
-      FileObject(id, name, checksum, url, destinationPath, DependenciesForCoSnsMsg(entity))
+      FileObject(id, name, checksum, url, destinationPath, UUID.randomUUID)
 
     val ex = intercept[Exception] {
       service.getMissingAndChangedObjects(List(fileObjectThatShouldHaveChangedChecksum)).unsafeRunSync()
@@ -153,7 +152,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
 
     val service = new OcflService(ocflRepository)
     val fileObjectThatShouldHaveChangedChecksum =
-      FileObject(id, name, checksum, url, destinationPath, DependenciesForCoSnsMsg(entity))
+      FileObject(id, name, checksum, url, destinationPath, UUID.randomUUID)
 
     val ex = intercept[Exception] {
       service.getMissingAndChangedObjects(List(fileObjectThatShouldHaveChangedChecksum)).unsafeRunSync()

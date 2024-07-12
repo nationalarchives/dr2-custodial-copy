@@ -2,7 +2,6 @@ package uk.gov.nationalarchives.disasterrecovery
 
 import cats.effect.IO
 import fs2.io.file.*
-import uk.gov.nationalarchives.disasterrecovery.Processor.DependenciesForSnsMsg
 import java.util.UUID
 import scala.xml.Elem
 
@@ -12,7 +11,7 @@ sealed trait DisasterRecoveryObject {
   def checksum: String
   def name: String
   def sourceFilePath: IO[Path] = createDirectory.map(cd => Path(s"$cd/$name"))
-  def dependenciesForSnsMsg: DependenciesForSnsMsg
+  def tableItemIdentifier: String | UUID
   private def createDirectory: IO[Path] = {
     val path = Path(s"/tmp/${UUID.randomUUID()}/$id")
     Files[IO].createDirectories(path).map(_ => path)
@@ -25,7 +24,7 @@ object DisasterRecoveryObject {
       checksum: String,
       url: String,
       destinationFilePath: String,
-      dependenciesForSnsMsg: DependenciesForSnsMsg
+      tableItemIdentifier: UUID
   ) extends DisasterRecoveryObject
   case class MetadataObject(
       id: UUID,
@@ -34,6 +33,6 @@ object DisasterRecoveryObject {
       checksum: String,
       metadata: Elem,
       destinationFilePath: String,
-      dependenciesForSnsMsg: DependenciesForSnsMsg
+      tableItemIdentifier: String | UUID
   ) extends DisasterRecoveryObject
 }
