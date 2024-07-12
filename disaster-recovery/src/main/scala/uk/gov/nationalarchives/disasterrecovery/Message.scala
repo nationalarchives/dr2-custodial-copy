@@ -10,9 +10,8 @@ object Message {
     val ref: UUID
     val messageText: String
   }
-
-  case class InformationObjectReceivedSnsMessage(ref: UUID, messageText: String) extends ReceivedSnsMessage
-  case class ContentObjectReceivedSnsMessage(ref: UUID, messageText: String) extends ReceivedSnsMessage
+  case class IoReceivedSnsMessage(ref: UUID, messageText: String) extends ReceivedSnsMessage
+  case class CoReceivedSnsMessage(ref: UUID, messageText: String) extends ReceivedSnsMessage
 
   case class SendSnsMessage(entityType: EntityType, ioRef: UUID, objectType: ObjectType, status: ObjectStatus, tableItemIdentifier: String | UUID)
 }

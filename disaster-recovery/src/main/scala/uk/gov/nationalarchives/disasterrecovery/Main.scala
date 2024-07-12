@@ -43,8 +43,8 @@ object Main extends IOApp {
       val ref = UUID.fromString(typeAndRef.last)
       val entityType = typeAndRef.head
       entityType match {
-        case "io" => Option(InformationObjectReceivedSnsMessage(ref, id))
-        case "co" => Option(ContentObjectReceivedSnsMessage(ref, id))
+        case "io" => Option(IoReceivedSnsMessage(ref, id))
+        case "co" => Option(CoReceivedSnsMessage(ref, id))
         case _    => None
       }
     }

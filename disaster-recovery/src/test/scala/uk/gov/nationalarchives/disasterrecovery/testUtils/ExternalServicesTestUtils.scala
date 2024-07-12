@@ -23,12 +23,7 @@ import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.disasterrecovery.DisasterRecoveryObject.MetadataObject
 import uk.gov.nationalarchives.disasterrecovery.{DisasterRecoveryObject, Message, OcflService, Processor}
 import uk.gov.nationalarchives.disasterrecovery.Main.{Config, IdWithSourceAndDestPaths}
-import uk.gov.nationalarchives.disasterrecovery.Message.{
-  ContentObjectReceivedSnsMessage,
-  InformationObjectReceivedSnsMessage,
-  ReceivedSnsMessage,
-  SendSnsMessage
-}
+import uk.gov.nationalarchives.disasterrecovery.Message.{CoReceivedSnsMessage, IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
 import uk.gov.nationalarchives.disasterrecovery.OcflService.MissingAndChangedObjects
 import uk.gov.nationalarchives.disasterrecovery.OcflService.*
 import uk.gov.nationalarchives.*
@@ -285,10 +280,10 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     private val sqsMessages: List[ReceivedSnsMessage] =
       typesOfSqsMessages.zipWithIndex.flatMap { case (entityType, index) =>
         entityType match { // create duplicates in order to test deduplication
-          case InformationObject => (1 to 2).map(_ => InformationObjectReceivedSnsMessage(ioId, s"${ioType.toLowerCase}:$ioId"))
+          case InformationObject => (1 to 2).map(_ => IoReceivedSnsMessage(ioId, s"${ioType.toLowerCase}:$ioId"))
           case ContentObject =>
             val coId = coIds(index)
-            (1 to 2).map(_ => ContentObjectReceivedSnsMessage(coId, s"${coType.toLowerCase}:$coId"))
+            (1 to 2).map(_ => CoReceivedSnsMessage(coId, s"${coType.toLowerCase}:$coId"))
           case unexpectedEntityType => throw new Exception(s"Unexpected EntityType $unexpectedEntityType!")
         }
       }
@@ -399,8 +394,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val ioId: UUID = UUID.randomUUID()
     val coId: UUID = UUID.randomUUID()
 
-    lazy val coMessage: ContentObjectReceivedSnsMessage = ContentObjectReceivedSnsMessage(coId, s"co:$coId")
-    lazy val ioMessage: InformationObjectReceivedSnsMessage = InformationObjectReceivedSnsMessage(ioId, s"io:$ioId")
+    lazy val coMessage: CoReceivedSnsMessage = CoReceivedSnsMessage(coId, s"co:$coId")
+    lazy val ioMessage: IoReceivedSnsMessage = IoReceivedSnsMessage(ioId, s"io:$ioId")
     val sqsClient: DASQSClient[IO] = mock[DASQSClient[IO]]
     val entityClient: EntityClient[IO, Fs2Streams[IO]] = mock[EntityClient[IO, Fs2Streams[IO]]]
     val snsClient: DASNSClient[IO] = mock[DASNSClient[IO]]

@@ -12,7 +12,7 @@ import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.disasterrecovery.DisasterRecoveryObject.MetadataObject
 import uk.gov.nationalarchives.disasterrecovery.Main.IdWithSourceAndDestPaths
-import uk.gov.nationalarchives.disasterrecovery.Message.{InformationObjectReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
+import uk.gov.nationalarchives.disasterrecovery.Message.{IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
 import uk.gov.nationalarchives.disasterrecovery.OcflService.MissingAndChangedObjects
 import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectStatus.{Created, Updated}
 import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectType.Metadata
@@ -263,11 +263,11 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     val responses: List[MessageResponse[Option[ReceivedSnsMessage]]] = List(
       MessageResponse[Option[ReceivedSnsMessage]](
         "receiptHandle1",
-        Option(InformationObjectReceivedSnsMessage(missingFileId, s"io:$missingFileId"))
+        Option(IoReceivedSnsMessage(missingFileId, s"io:$missingFileId"))
       ),
       MessageResponse[Option[ReceivedSnsMessage]](
         "receiptHandle2",
-        Option(InformationObjectReceivedSnsMessage(changedFileId, s"io:$changedFileId"))
+        Option(IoReceivedSnsMessage(changedFileId, s"io:$changedFileId"))
       )
     )
     utils.processor.process(responses).unsafeRunSync()

@@ -136,7 +136,7 @@ class Processor(
   private def createMetadataFileName(entityTypeShort: String) = s"${entityTypeShort}_Metadata.xml"
 
   private def toDisasterRecoveryObject(message: ReceivedSnsMessage): IO[List[DisasterRecoveryObject]] = message match {
-    case InformationObjectReceivedSnsMessage(ref, _) =>
+    case IoReceivedSnsMessage(ref, _) =>
       for {
         entity <- fromType[IO](InformationObject.entityTypeShort, ref, None, None, deleted = false)
         metadataFileName = createMetadataFileName(InformationObject.entityTypeShort)
@@ -151,7 +151,7 @@ class Processor(
           )
         }
       } yield metadataObject
-    case ContentObjectReceivedSnsMessage(ref, _) =>
+    case CoReceivedSnsMessage(ref, _) =>
       for {
         bitstreamInfoPerCo <- entityClient.getBitstreamInfo(ref)
         entity <- fromType[IO](
