@@ -10,6 +10,7 @@ import pureconfig.module.catseffect.syntax.*
 import uk.gov.nationalarchives.DASQSClient
 import uk.gov.nationalarchives.dp.client.fs2.Fs2Client
 import uk.gov.nationalarchives.disasterrecovery.Message.*
+import uk.gov.nationalarchives.DASNSClient
 
 import java.net.URI
 import java.nio.file
@@ -25,7 +26,8 @@ object Main extends IOApp {
       repoDir: String,
       workDir: String,
       proxyUrl: Option[URI],
-      versionPath: String
+      versionPath: String,
+      topicArn: String
   ) derives ConfigReader
 
   private def sqsClient(config: Config): DASQSClient[IO] =
@@ -33,7 +35,7 @@ object Main extends IOApp {
       .map(proxy => DASQSClient[IO](proxy))
       .getOrElse(DASQSClient[IO]())
 
-  given Decoder[Option[Message]] = (c: HCursor) =>
+  given Decoder[Option[ReceivedSnsMessage]] = (c: HCursor) =>
     for {
       id <- c.downField("id").as[String]
     } yield {
@@ -41,8 +43,8 @@ object Main extends IOApp {
       val ref = UUID.fromString(typeAndRef.last)
       val entityType = typeAndRef.head
       entityType match {
-        case "io" => Option(InformationObjectMessage(ref, id))
-        case "co" => Option(ContentObjectMessage(ref, id))
+        case "io" => Option(IoReceivedSnsMessage(ref, id))
+        case "co" => Option(CoReceivedSnsMessage(ref, id))
         case _    => None
       }
     }
@@ -59,7 +61,8 @@ object Main extends IOApp {
       )
       service <- OcflService(config)
       sqs = sqsClient(config)
-      processor <- Processor(config, sqs, service, client)
+      sns = DASNSClient[IO]()
+      processor <- Processor(config, sqs, service, client, sns)
       _ <- {
         Stream.fixedRateStartImmediately[IO](20.seconds) >>
           runDisasterRecovery(sqs, config, processor)
@@ -69,7 +72,7 @@ object Main extends IOApp {
 
   def runDisasterRecovery(sqs: DASQSClient[IO], config: Config, processor: Processor): Stream[IO, Unit] =
     Stream
-      .eval(sqs.receiveMessages[Option[Message]](config.sqsQueueUrl))
+      .eval(sqs.receiveMessages[Option[ReceivedSnsMessage]](config.sqsQueueUrl))
       .evalMap(messages => IO.whenA(messages.nonEmpty)(processor.process(messages)))
 
   private def logError(err: Throwable) = for {
