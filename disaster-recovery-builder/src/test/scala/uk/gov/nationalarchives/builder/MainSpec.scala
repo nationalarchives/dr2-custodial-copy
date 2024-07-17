@@ -33,7 +33,7 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
   override def beforeEach(): Unit = sqsServer.resetAll()
 
   def body(id: UUID): String = {
-    val md5 = DigestUtil.computeDigestHex(DigestAlgorithm.md5, s"{\"ioRef\":\"$id\"}")
+    val md5 = DigestUtil.computeDigestHex(DigestAlgorithm.fromOcflName("md5"), s"{\"ioRef\":\"$id\"}")
     s"""{"Messages": [{"Body": "{\\"ioRef\\":\\"$id\\"}","MD5OfBody": "$md5","ReceiptHandle": "A"}]}"""
   }
 
