@@ -4,43 +4,49 @@ import cats.effect.IO
 import cats.implicits.*
 import fs2.Stream
 import fs2.io.file.{Files, Flags}
+import io.circe.Encoder
 import org.apache.commons.codec.digest.DigestUtils
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
 import sttp.capabilities.fs2.Fs2Streams
-import uk.gov.nationalarchives.DASQSClient
+import uk.gov.nationalarchives.{DASNSClient, DASQSClient}
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.disasterrecovery.DisasterRecoveryObject.*
 import uk.gov.nationalarchives.disasterrecovery.Main.{Config, IdWithSourceAndDestPaths}
-import uk.gov.nationalarchives.disasterrecovery.Message.*
-import uk.gov.nationalarchives.dp.client.Entities.fromType
+import uk.gov.nationalarchives.disasterrecovery.Message.{SendSnsMessage, *}
+import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectStatus
+import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectStatus.{Created, Updated}
+import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectType.{Bitstream, Metadata}
 import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.*
+import uk.gov.nationalarchives.dp.client.Entities.{Entity, fromType}
 import uk.gov.nationalarchives.dp.client.ValidateXmlAgainstXsd.PreservicaSchema.XipXsdSchemaV7
 
 import java.util.UUID
-import scala.xml.Elem
+import scala.xml.{Elem, Node}
 
 class Processor(
     config: Config,
     sqsClient: DASQSClient[IO],
     ocflService: OcflService,
     entityClient: EntityClient[IO, Fs2Streams[IO]],
-    xmlValidator: ValidateXmlAgainstXsd[IO]
+    xmlValidator: ValidateXmlAgainstXsd[IO],
+    snsClient: DASNSClient[IO]
 ) {
   private val newlineAndIndent = "\n          "
   private def deleteMessages(receiptHandles: List[String]): IO[List[DeleteMessageResponse]] =
     receiptHandles.map(handle => sqsClient.deleteMessage(config.sqsQueueUrl, handle)).sequence
 
-  private def dedupeMessages(messages: List[Message]): List[Message] = messages.distinctBy(_.messageText)
+  private def dedupeMessages(messages: List[ReceivedSnsMessage]): List[ReceivedSnsMessage] = messages.distinctBy(_.messageText)
 
   private def createMetadataObject(
       ioRef: UUID,
       metadata: EntityMetadata,
       fileName: String,
       path: String,
+      tableItemIdentifier: String | UUID,
       repType: Option[String] = None
   ): IO[List[MetadataObject]] =
     for {
@@ -76,7 +82,15 @@ class Processor(
 
       _ <- xmlValidator.xmlStringIsValid(allMetadataAsXmlString)
     } yield List(
-      MetadataObject(ioRef, repType, fileName, DigestUtils.sha256Hex(allMetadataAsXmlString), allMetadataAsXml, path)
+      MetadataObject(
+        ioRef,
+        repType,
+        fileName,
+        DigestUtils.sha256Hex(allMetadataAsXmlString),
+        allMetadataAsXml,
+        path,
+        tableItemIdentifier
+      )
     )
 
   private lazy val allRepresentationTypes: Map[String, RepresentationType] = Map(
@@ -121,17 +135,23 @@ class Processor(
 
   private def createMetadataFileName(entityTypeShort: String) = s"${entityTypeShort}_Metadata.xml"
 
-  private def toDisasterRecoveryObject(message: Message): IO[List[DisasterRecoveryObject]] = message match {
-    case InformationObjectMessage(ref, _) =>
+  private def toDisasterRecoveryObject(message: ReceivedSnsMessage): IO[List[DisasterRecoveryObject]] = message match {
+    case IoReceivedSnsMessage(ref, _) =>
       for {
         entity <- fromType[IO](InformationObject.entityTypeShort, ref, None, None, deleted = false)
         metadataFileName = createMetadataFileName(InformationObject.entityTypeShort)
         metadataObject <- entityClient.metadataForEntity(entity).flatMap { metadata =>
           val destinationFilePath = createDestinationFilePath(entity.ref, fileName = metadataFileName)
-          createMetadataObject(entity.ref, metadata, metadataFileName, destinationFilePath)
+          createMetadataObject(
+            entity.ref,
+            metadata,
+            metadataFileName,
+            destinationFilePath,
+            getSourceIdFromIdentifierNodes(metadata.identifiers)
+          )
         }
       } yield metadataObject
-    case ContentObjectMessage(ref, _) =>
+    case CoReceivedSnsMessage(ref, _) =>
       for {
         bitstreamInfoPerCo <- entityClient.getBitstreamInfo(ref)
         entity <- fromType[IO](
@@ -145,6 +165,8 @@ class Processor(
         parentRef <- IO.fromOption(entity.parent)(new Exception("Cannot get IO reference from CO"))
         urlsOfRepresentations <- entityClient.getUrlsToIoRepresentations(parentRef, None)
         coRepTypes <- urlsOfRepresentations.map(getRepresentationTypeOfCo(parentRef, _, entity.ref)).flatSequence
+        bitstreamIdentifiers = bitstreamInfoPerCo.map(_.name).map(removeFileExtension).toSet
+        _ <- IO.raiseWhen(bitstreamIdentifiers.size != 1)(new Exception(s"Expected 1 bitstream identifiers, found ${bitstreamIdentifiers.size}"))
         _ <- IO.raiseWhen(coRepTypes.length > 1) {
           new Exception(s"${entity.ref} belongs to more than 1 representation type: ${coRepTypes.mkString(", ")}")
         }
@@ -162,6 +184,7 @@ class Processor(
             metadataFragments,
             metadataFileName,
             destinationFilePath,
+            bitstreamIdentifiers.head,
             representationTypeGroup
           )
         }
@@ -174,7 +197,15 @@ class Processor(
           Some(bitStreamInfo.generationVersion),
           bitStreamInfo.name
         )
-        FileObject(parentRef, bitStreamInfo.name, bitStreamInfo.fixity.value, bitStreamInfo.url, destinationFilePath)
+
+        FileObject(
+          parentRef,
+          bitStreamInfo.name,
+          bitStreamInfo.fixity.value,
+          bitStreamInfo.url,
+          destinationFilePath,
+          removeFileExtension(bitStreamInfo.name)
+        )
       } ++ metadata
   }
 
@@ -199,7 +230,40 @@ class Processor(
       } yield IdWithSourceAndDestPaths(mo.id, writePath.toNioPath, mo.destinationFilePath)
   }
 
-  def process(messageResponses: List[MessageResponse[Option[Message]]]): IO[Unit] =
+  private def removeFileExtension(bitstreamName: String) = UUID.fromString {
+    if (bitstreamName.contains(".")) bitstreamName.split('.').dropRight(1).mkString(".") else bitstreamName
+  }
+
+  private def getSourceIdFromIdentifierNodes(identifiers: Seq[Node]) = identifiers.collect {
+    case identifier if (identifier \ "Type").text == "SourceID" => (identifier \ "Value").text
+  }.head
+
+  private def generateSnsMessage(
+      obj: DisasterRecoveryObject,
+      status: ObjectStatus
+  ): SendSnsMessage = {
+    val objectType = obj match {
+      case _: FileObject     => Bitstream
+      case _: MetadataObject => Metadata
+    }
+
+    val entityType = obj.tableItemIdentifier match {
+      case _: String => InformationObject
+      case _: UUID   => ContentObject
+    }
+
+    SendSnsMessage(entityType, obj.id, objectType, status, obj.tableItemIdentifier)
+  }
+
+  given Encoder[SendSnsMessage] = (message: SendSnsMessage) => {
+    Encoder
+      .forProduct5("entityType", "ioRef", "objectType", "status", "tableItemIdentifier")(_ =>
+        (message.entityType.toString, message.ioRef.toString, message.objectType.toString, message.status.toString, message.tableItemIdentifier.toString)
+      )
+      .apply(message)
+  }
+
+  def process(messageResponses: List[MessageResponse[Option[ReceivedSnsMessage]]]): IO[Unit] =
     for {
       logger <- Slf4jLogger.create[IO]
       _ <- logger.info(s"Processing ${messageResponses.length} messages")
@@ -218,6 +282,15 @@ class Processor(
       _ <- logger.info(s"${missingObjectsPaths.length} objects created")
       _ <- ocflService.createObjects(changedObjectsPaths)
       _ <- logger.info(s"${changedObjectsPaths.length} objects updated")
+
+      createdObjsSnsMessages = missingAndChangedObjects.missingObjects.map(generateSnsMessage(_, Created))
+      updatedObjsSnsMessages = missingAndChangedObjects.changedObjects.map(generateSnsMessage(_, Updated))
+
+      snsMessages: List[SendSnsMessage] = createdObjsSnsMessages ++ updatedObjsSnsMessages
+      _ <- IO.whenA(snsMessages.nonEmpty) {
+        snsClient.publish[SendSnsMessage](config.topicArn)(snsMessages).map(_ => ())
+      }
+      _ <- logger.info(s"${snsMessages.length} 'created/updated objects' messages published to SNS")
       _ <- deleteMessages(messageResponses.map(_.receiptHandle))
     } yield ()
 }
@@ -226,8 +299,15 @@ object Processor {
       config: Config,
       sqsClient: DASQSClient[IO],
       ocflService: OcflService,
-      entityClient: EntityClient[IO, Fs2Streams[IO]]
+      entityClient: EntityClient[IO, Fs2Streams[IO]],
+      snsClient: DASNSClient[IO]
   ): IO[Processor] = IO(
-    new Processor(config, sqsClient, ocflService, entityClient, ValidateXmlAgainstXsd[IO](XipXsdSchemaV7))
+    new Processor(config, sqsClient, ocflService, entityClient, ValidateXmlAgainstXsd[IO](XipXsdSchemaV7), snsClient)
   )
+
+  enum ObjectStatus:
+    case Created, Updated
+
+  enum ObjectType:
+    case Bitstream, Metadata
 }

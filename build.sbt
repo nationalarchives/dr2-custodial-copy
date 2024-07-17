@@ -39,6 +39,7 @@ lazy val disasterRecovery = (project in file("disaster-recovery"))
     scalacOptions += "-Wunused:imports",
     libraryDependencies ++= Seq(
       preservicaClient,
+      snsClient,
       sqsClient,
       fs2Core,
       ocfl

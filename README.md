@@ -50,6 +50,28 @@ Messages are deduped before they are processed.
 
 These are ignored as there is nothing in the structural objects we want to store.
 
+### Example of the OCFL Structure
+```
+<IO_Ref>
+├── IO_Metadata.xml
+└── <Representation_Type>
+    ├── <CO_Ref>
+    │   ├── derived
+    │   │   ├── g2
+    │   │   │   └── 58154e7d-6271-488d-bf78-989d937580d5.pdf
+    │   │   └── g3
+    │   │       └── 58154e7d-6271-488d-bf78-989d937580d5.pdf
+    │   ├── CO_Metadata.xml
+    │   └── original
+    │       └── g1
+    │           └── 58154e7d-6271-488d-bf78-989d937580d5.docx
+    └── <CO_Ref>
+        ├── CO_Metadata.xml
+        └── original
+            └── g1
+                └── c0c767b7-0eaf-41cc-b941-cabd60e50532.json
+```
+
 #### Looking up, Creating and Updating files
 
 * Once the list of all `MetadataObject`s and `FileObject`s have been generated
@@ -97,7 +119,7 @@ repository to store the docker image.
 | WORK_DIR               | The directory for the OCFL work directory                                   |
 | HTTPS_PROXY            | An optional proxy. This is needed running in TNA's network but not locally. |
 
-## Front end database builder
+## Frontend database builder
 
 This is a service which listens to an SQS queue.
 This queue receives a message whenever the main disaster-recovery process adds or updates an object in the OCFL
@@ -138,7 +160,7 @@ the environment variables.
 
 It can also be run using `sbt run`
 
-## Front end
+## Frontend
 
 This is a webapp which allows a user to search for a file within the sqlite database.
 If a file is found, the webapp allows the user to download that file by reading it directly from the OCFL repo
