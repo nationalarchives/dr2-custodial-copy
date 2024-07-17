@@ -200,7 +200,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         ()
       }).asJava)
       .ocflConfig(((config: OcflConfig) => {
-        config.setDefaultDigestAlgorithm(DigestAlgorithm.sha256)
+        config.setDefaultDigestAlgorithm(DigestAlgorithm.fromOcflName("sha256"))
         ()
       }).asJava)
       .prettyPrintJson()
