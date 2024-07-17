@@ -56,7 +56,7 @@ class OcflService(ocflRepository: OcflRepository) {
             potentialFile match {
               case Some(ocflFileObject) =>
                 val checksumUnchanged =
-                  Some(ocflFileObject.getFixity.get(DigestAlgorithm.sha256)).contains(obj.checksum)
+                  Some(ocflFileObject.getFixity.get(DigestAlgorithm.fromOcflName("sha256"))).contains(obj.checksum)
                 if checksumUnchanged then objectMap else objectMap + ("changedObjects" -> (obj :: changedObjects))
               case None =>
                 objectMap + ("missingObjects" -> (obj :: missedObjects)) // Information Object exists but file doesn't
@@ -100,7 +100,7 @@ object OcflService {
         ()
       }).asJava)
       .ocflConfig(((config: OcflConfig) => {
-        config.setDefaultDigestAlgorithm(DigestAlgorithm.sha256)
+        config.setDefaultDigestAlgorithm(DigestAlgorithm.fromOcflName("sha256"))
         ()
       }).asJava)
       .prettyPrintJson()

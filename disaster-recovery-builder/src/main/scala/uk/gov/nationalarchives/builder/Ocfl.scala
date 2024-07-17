@@ -22,7 +22,7 @@ trait Ocfl[F[_]](val config: Config):
     val workDir = Paths.get(config.ocflWorkDir)
     val storage: OcflStorage = OcflStorageBuilder.builder().fileSystem(repoDir).build
     val ocflConfig: OcflConfig = new OcflConfig()
-    ocflConfig.setDefaultDigestAlgorithm(DigestAlgorithm.sha256)
+    ocflConfig.setDefaultDigestAlgorithm(DigestAlgorithm.fromOcflName("sha256"))
     new OcflRepositoryBuilder()
       .defaultLayoutConfig(new HashedNTupleLayoutConfig())
       .storage(storage)
