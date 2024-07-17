@@ -6,14 +6,16 @@ import fs2.io.file.Path
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doReturn, when}
-import org.scalatestplus.mockito.MockitoSugar
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
+import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.disasterrecovery.DisasterRecoveryObject.MetadataObject
 import uk.gov.nationalarchives.disasterrecovery.Main.IdWithSourceAndDestPaths
-import uk.gov.nationalarchives.disasterrecovery.Message.InformationObjectMessage
+import uk.gov.nationalarchives.disasterrecovery.Message.{IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
 import uk.gov.nationalarchives.disasterrecovery.OcflService.MissingAndChangedObjects
+import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectStatus.{Created, Updated}
+import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectType.Metadata
 import uk.gov.nationalarchives.dp.client.EntityClient.IoMetadata
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
@@ -34,7 +36,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     )
   }
 
-  "process" should "retrieve the bitstream info for a CO update message" in {
+  "process" should "retrieve the bitstream info for a CO message" in {
     val utils = new ProcessorTestUtils()
     val id = utils.coId
     val parentRef = utils.ioId
@@ -51,33 +53,11 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       createdIdSourceAndDestinationPathAndId = List(Nil, Nil),
       drosToLookup = List(
         List(
-          s"$parentRef/Preservation_1/$id/original/g1/name",
+          s"$parentRef/Preservation_1/$id/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
         )
-      )
-    )
-  }
-
-  "process" should "retrieve the metadata if a content object update is received" in {
-    val utils = new ProcessorTestUtils()
-    val id = utils.coId
-    val parentRef = utils.ioId
-
-    utils.processor.process(utils.duplicatesCoMessageResponses).unsafeRunSync()
-    utils.verifyCallsAndArguments(
-      1,
-      1,
-      1,
-      idsOfEntityToGetMetadataFrom = List(utils.coId),
-      entityTypesToGetMetadataFrom = List(ContentObject),
-      xmlRequestsToValidate = List(utils.coXmlToValidate),
-      createdIdSourceAndDestinationPathAndId = List(Nil, Nil),
-      drosToLookup = List(
-        List(
-          s"$parentRef/Preservation_1/$id/original/g1/name",
-          s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
-        )
-      )
+      ),
+      receiptHandles = List("receiptHandle2", "receiptHandle2", "receiptHandle2")
     )
   }
 
@@ -150,11 +130,11 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       drosToLookup = List(
         List(
           s"$parentRef/IO_Metadata.xml",
-          s"$parentRef/Preservation_1/$id/original/g1/name",
+          s"$parentRef/Preservation_1/$id/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
         )
       ),
-      receiptHandles = (1 to 6).toList.map(_ => "receiptHandle")
+      receiptHandles = List(1, 1, 1, 2, 2, 2).map(n => s"receiptHandle$n")
     )
   }
 
@@ -185,7 +165,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 "changed",
                 "checksum",
                 utils.ioConsolidatedMetadata,
-                "destinationPath"
+                "destinationPath",
+                "SourceIDValue"
               )
             )
           )
@@ -201,6 +182,9 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
         List(
           IdWithSourceAndDestPaths(id, Path(s"$id/changed").toNioPath, "destinationPath")
         ) // 2nd call to 'createObjects' with changedObjectsPaths arg
+      ),
+      snsMessagesToSend = List(
+        SendSnsMessage(InformationObject, id, Metadata, Updated, "SourceIDValue")
       )
     )
   }
@@ -220,7 +204,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 "missing",
                 "checksum",
                 utils.ioConsolidatedMetadata,
-                "destinationPath"
+                "destinationPath",
+                "SourceIDValue"
               )
             ),
             Nil
@@ -233,7 +218,10 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     utils.verifyCallsAndArguments(
       repTypes = Nil,
       repIndexes = Nil,
-      createdIdSourceAndDestinationPathAndId = List(List(IdWithSourceAndDestPaths(id, Path(s"$id/missing").toNioPath, "destinationPath")), List())
+      createdIdSourceAndDestinationPathAndId = List(List(IdWithSourceAndDestPaths(id, Path(s"$id/missing").toNioPath, "destinationPath")), List()),
+      snsMessagesToSend = List(
+        SendSnsMessage(InformationObject, id, Metadata, Created, "SourceIDValue")
+      )
     )
   }
 
@@ -253,7 +241,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 "missing",
                 "checksum",
                 utils.ioConsolidatedMetadata,
-                "destinationPath"
+                "destinationPath",
+                "SourceIDValue"
               )
             ),
             List(
@@ -263,21 +252,22 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 "changed",
                 "checksum",
                 utils.ioConsolidatedMetadata,
-                "destinationPath2"
+                "destinationPath2",
+                "SourceIDValue"
               )
             )
           )
         )
       )
 
-    val responses: List[MessageResponse[Option[Message]]] = List(
-      MessageResponse[Option[Message]](
+    val responses: List[MessageResponse[Option[ReceivedSnsMessage]]] = List(
+      MessageResponse[Option[ReceivedSnsMessage]](
         "receiptHandle1",
-        Option(InformationObjectMessage(missingFileId, s"io:$missingFileId"))
+        Option(IoReceivedSnsMessage(missingFileId, s"io:$missingFileId"))
       ),
-      MessageResponse[Option[Message]](
+      MessageResponse[Option[ReceivedSnsMessage]](
         "receiptHandle2",
-        Option(InformationObjectMessage(changedFileId, s"io:$changedFileId"))
+        Option(IoReceivedSnsMessage(changedFileId, s"io:$changedFileId"))
       )
     )
     utils.processor.process(responses).unsafeRunSync()
@@ -297,6 +287,10 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
           s"$changedFileId/IO_Metadata.xml"
         )
       ),
+      snsMessagesToSend = List(
+        SendSnsMessage(InformationObject, missingFileId, Metadata, Created, "SourceIDValue"),
+        SendSnsMessage(InformationObject, changedFileId, Metadata, Updated, "SourceIDValue")
+      ),
       receiptHandles = List("receiptHandle1", "receiptHandle2")
     )
   }
@@ -311,7 +305,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
           Seq(
             <Representation><InformationObject/><Name/><Type/><ContentObjects/><RepresentationFormats/><RepresentationProperties/></Representation>
           ),
-          Seq(<Identifier><ApiId/><Type/><Value/></Identifier>),
+          Seq(<Identifier><ApiId/><Type>SourceID</Type><Value>SourceId</Value></Identifier>),
           Seq(<Links><Link/></Links>),
           Seq(<Metadata><Content/></Metadata>),
           Seq(
@@ -338,7 +332,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
         <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><InvalidTag/></InformationObject>
           <Representation><InformationObject/><Name/><Type/><ContentObjects/><RepresentationFormats/><RepresentationProperties/></Representation>
-          <Identifier><ApiId/><Type/><Value/></Identifier>
+          <Identifier><ApiId/><Type>SourceID</Type><Value>SourceId</Value></Identifier>
           <Links><Link/></Links>
           <Metadata><Content/></Metadata>
           <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date/><User/></Event><Date/><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity></EventAction>

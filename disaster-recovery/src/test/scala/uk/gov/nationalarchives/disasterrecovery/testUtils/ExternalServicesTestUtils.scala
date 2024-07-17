@@ -3,7 +3,7 @@ package uk.gov.nationalarchives.disasterrecovery.testUtils
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import fs2.Stream
-import io.circe.Decoder
+import io.circe.{Decoder, Encoder}
 import io.ocfl.api.model.DigestAlgorithm
 import io.ocfl.api.{OcflConfig, OcflRepository}
 import io.ocfl.core.OcflRepositoryBuilder
@@ -17,12 +17,13 @@ import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.{Assertion, EitherValues}
 import org.scalatestplus.mockito.MockitoSugar
 import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
+import software.amazon.awssdk.services.sns.model.PublishBatchResponse
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.disasterrecovery.DisasterRecoveryObject.MetadataObject
 import uk.gov.nationalarchives.disasterrecovery.{DisasterRecoveryObject, Message, OcflService, Processor}
 import uk.gov.nationalarchives.disasterrecovery.Main.{Config, IdWithSourceAndDestPaths}
-import uk.gov.nationalarchives.disasterrecovery.Message.{ContentObjectMessage, InformationObjectMessage}
+import uk.gov.nationalarchives.disasterrecovery.Message.{CoReceivedSnsMessage, IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
 import uk.gov.nationalarchives.disasterrecovery.OcflService.MissingAndChangedObjects
 import uk.gov.nationalarchives.disasterrecovery.OcflService.*
 import uk.gov.nationalarchives.*
@@ -42,7 +43,7 @@ import java.util.UUID
 import scala.jdk.CollectionConverters.ListHasAsScala
 import scala.util.{Failure, Success, Try}
 import scala.xml.Utility.trim
-import scala.xml.{Elem, NodeBuffer, XML}
+import scala.xml.{Elem, NodeBuffer, Utility, XML}
 
 object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
   private val ioType = InformationObject.entityTypeShort
@@ -76,6 +77,11 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       s"http://localhost/api/entity/information-objects/$ioId/representations/Preservation/1"
     ) ++ (if addAccessRepUrl then Seq(s"http://localhost/api/entity/information-objects/$ioId/representations/Access/1")
           else Nil)
+    Seq((coId, bitstreamInfo1), (coId2, bitstreamInfo2), (coId3, bitstreamInfo1)).foreach { case (id, bitstreamInfo) =>
+      when(preservicaClient.getBitstreamInfo(ArgumentMatchers.eq(id))).thenReturn(IO(bitstreamInfo))
+    }
+    val combinedBitstreamInfoResponses = bitstreamInfo1 ++ bitstreamInfo2
+
     // For some reason, the regular "when" stubbing doesn't play nicely with "argThat"
     doReturn(
       IO.pure(
@@ -84,7 +90,10 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
           Seq(
             <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
           ),
-          Seq(<Identifier><ApiId/><Type/><Value/><Entity/></Identifier>),
+          Seq(
+            <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>,
+            <Identifier><ApiId/><Type>sourceID</Type><Value>sourceIDValue</Value><Entity/></Identifier>
+          ),
           Seq(<Link><Type/><FromEntity/><ToEntity/></Link>),
           metadataElems,
           Seq(
@@ -99,7 +108,15 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         CoMetadata(
           <ContentObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></ContentObject>,
           Seq(<Generation original="true" active="true"><ContentObject>someContent</ContentObject></Generation>),
-          Seq(<Bitstream><Filename>testName</Filename><FileSize>10</FileSize><Fixities/></Bitstream>),
+          combinedBitstreamInfoResponses.map { bitstreamInfo =>
+            <Bitstream><Filename>{bitstreamInfo.name}</Filename><FileSize>{
+              bitstreamInfo.fileSize
+            }</FileSize><Fixities><Fixity><FixityAlgorithmRef>{
+              bitstreamInfo.fixity.algorithm
+            }</FixityAlgorithmRef><FixityValue>{
+              bitstreamInfo.fixity.value
+            }</FixityValue></Fixity></Fixities></Bitstream>
+          },
           Seq(<Identifier><ApiId/><Type/><Value/><Entity/></Identifier>),
           Seq(<Link><Type/><FromEntity/><ToEntity/></Link>),
           metadataElems,
@@ -128,15 +145,11 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       )
     ).thenReturn(IO(Seq(contentObjectResponse.copy(ref = coId3))))
 
-    Seq((coId, bitstreamInfo1), (coId2, bitstreamInfo2), (coId3, bitstreamInfo1)).foreach { case (id, bitstreamInfo) =>
-      when(preservicaClient.getBitstreamInfo(ArgumentMatchers.eq(id))).thenReturn(IO(bitstreamInfo))
-    }
-
     Seq(coId, coId2).foreach { id =>
       when(preservicaClient.getEntity(id, ContentObject))
         .thenReturn(IO(contentObjectResponse.copy(ref = id)))
     }
-    (bitstreamInfo1 ++ bitstreamInfo2).foreach { bitstreamInfo =>
+    combinedBitstreamInfoResponses.foreach { bitstreamInfo =>
       when(
         preservicaClient
           .streamBitstreamContent[Unit](any[Fs2Streams[IO]])(any[String], any())
@@ -195,17 +208,30 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       .build()
   }
 
-  private def mockSqs(messages: List[Message]): DASQSClient[IO] = {
+  private def mockSqs(messages: List[ReceivedSnsMessage]): DASQSClient[IO] = {
     val sqsClient = mock[DASQSClient[IO]]
     val responses = IO {
       messages.zipWithIndex.map { case (message, idx) =>
-        MessageResponse[Option[Message]](s"handle$idx", Option(message))
+        MessageResponse[Option[ReceivedSnsMessage]](s"handle$idx", Option(message))
       }
     }
-    when(sqsClient.receiveMessages[Option[Message]](any[String], any[Int])(using any[Decoder[Option[Message]]]))
+    when(sqsClient.receiveMessages[Option[ReceivedSnsMessage]](any[String], any[Int])(using any[Decoder[Option[ReceivedSnsMessage]]]))
       .thenReturn(responses)
     when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO(DeleteMessageResponse.builder().build))
     sqsClient
+  }
+
+  private def mockSns(): DASNSClient[IO] = {
+    val snsClient = mock[DASNSClient[IO]]
+    val responses = List(PublishBatchResponse.builder().build())
+
+    when(
+      snsClient.publish[SendSnsMessage](any[String])(any[List[SendSnsMessage]])(using
+        any[Encoder[SendSnsMessage]]
+      )
+    )
+      .thenReturn(IO.pure(responses))
+    snsClient
   }
 
   private def metadataFile(id: UUID, entityType: String, potentialPath: Option[String] = None) =
@@ -220,13 +246,22 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
       ),
       bitstreamInfo1Responses: Seq[BitStreamInfo] = Seq(
-        BitStreamInfo("name1", 1, "", Fixity("SHA256", ""), 1, Original, None, Some(UUID.randomUUID()))
+        BitStreamInfo(
+          "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+          1,
+          "",
+          Fixity("SHA256", ""),
+          1,
+          Original,
+          None,
+          Some(UUID.randomUUID())
+        )
       ),
       bitstreamInfo2Responses: Seq[BitStreamInfo] = Nil,
       addAccessRepUrl: Boolean = false
   ) {
 
-    val config: Config = Config("", "", "", "", "", None, "")
+    val config: Config = Config("", "", "", "", "", None, "", "")
 
     val bitstreamInfoResponsesWithSameName: Seq[BitStreamInfo] = bitstreamInfo1Responses.flatMap { bitstreamInfo1Response =>
       bitstreamInfo2Responses.filter { bitstreamInfo2Response =>
@@ -242,21 +277,23 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     lazy val repo: OcflRepository = createTestRepo(repoDir)
 
     private val coIds: Seq[UUID] = List(coId1, coId2, coId3)
-    private val sqsMessages: List[Message] =
+    private val sqsMessages: List[ReceivedSnsMessage] =
       typesOfSqsMessages.zipWithIndex.flatMap { case (entityType, index) =>
         entityType match { // create duplicates in order to test deduplication
-          case InformationObject => (1 to 2).map(_ => InformationObjectMessage(ioId, s"${ioType.toLowerCase}:$ioId"))
+          case InformationObject => (1 to 2).map(_ => IoReceivedSnsMessage(ioId, s"${ioType.toLowerCase}:$ioId"))
           case ContentObject =>
             val coId = coIds(index)
-            (1 to 2).map(_ => ContentObjectMessage(coId, s"${coType.toLowerCase}:$coId"))
+            (1 to 2).map(_ => CoReceivedSnsMessage(coId, s"${coType.toLowerCase}:$coId"))
           case unexpectedEntityType => throw new Exception(s"Unexpected EntityType $unexpectedEntityType!")
         }
       }
     val sqsClient: DASQSClient[IO] = mockSqs(sqsMessages)
+    val snsClient: DASNSClient[IO] = mockSns()
 
     lazy val expectedIoMetadataFileDestinationPath: String = metadataFile(ioId, ioType)
     lazy val expectedCoMetadataFileDestinationPath: String = metadataFile(ioId, coType, Some(s"Preservation_1/$coId1"))
-    lazy val expectedCoFileDestinationPath: String = s"$ioId/Preservation_1/$coId1/original/g1/name1"
+    lazy val expectedCoFileDestinationPath: String =
+      s"$ioId/Preservation_1/$coId1/original/g1/${bitstreamInfo1Responses.head.name}"
 
     val preservicaClient: EntityClient[IO, Fs2Streams[IO]] = mockPreservicaClient(
       ioId,
@@ -273,17 +310,29 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
-          <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+          <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>
+          <Identifier><ApiId/><Type>sourceID</Type><Value>sourceIDValue</Value><Entity/></Identifier>
           <Link><Type/><FromEntity/><ToEntity/></Link>
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
           <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
         </XIP>
 
+    private val bitstreamNodesInRepo = (bitstreamInfo1Responses ++ bitstreamInfo2Responses).map { bitstreamInfo =>
+      Seq(
+        "\n          ",
+        <Bitstream><Filename>{bitstreamInfo.name}</Filename><FileSize>{
+          bitstreamInfo.fileSize
+        }</FileSize><Fixities><Fixity><FixityAlgorithmRef>{
+          bitstreamInfo.fixity.algorithm
+        }</FixityAlgorithmRef><FixityValue>{bitstreamInfo.fixity.value}</FixityValue></Fixity></Fixities></Bitstream>
+      )
+    }
     private val coMetadataInRepo =
       <XIP xmlns="http://preservica.com/XIP/v7.0">
           <ContentObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></ContentObject>
-          <Generation original="true" active="true"><ContentObject>someContent</ContentObject></Generation>
-          <Bitstream><Filename>testName</Filename><FileSize>10</FileSize><Fixities/></Bitstream>
+          <Generation original="true" active="true"><ContentObject>someContent</ContentObject></Generation>{
+        bitstreamNodesInRepo
+      }
           <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
           <Link><Type/><FromEntity/><ToEntity/></Link>
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
@@ -310,13 +359,15 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       case unexpectedEntityType => throw new Exception(s"Unexpected EntityType $unexpectedEntityType!")
     }
 
-    fileContentToWriteToEachFileInRepo.zip(LazyList.from(1)).foreach { case (data, index) =>
-      addFileToRepo(ioId, repo, data, s"$ioId/name$index", s"$expectedCoFileDestinationPath".dropRight(1) + index)
+    private val bitstreamNames = (bitstreamInfo1Responses ++ bitstreamInfo2Responses).map(_.name)
+
+    fileContentToWriteToEachFileInRepo.zip(bitstreamNames).foreach { case (data, name) =>
+      addFileToRepo(ioId, repo, data, s"$ioId/$name", expectedCoFileDestinationPath)
     }
 
     val ocflService = new OcflService(repo)
     val xmlValidator: ValidateXmlAgainstXsd[IO] = ValidateXmlAgainstXsd[IO](XipXsdSchemaV7)
-    val processor = new Processor(config, sqsClient, ocflService, preservicaClient, xmlValidator)
+    val processor = new Processor(config, sqsClient, ocflService, preservicaClient, xmlValidator, snsClient)
 
     def latestObjectVersion(repo: OcflRepository, id: UUID): Long =
       repo.getObject(id.toHeadVersion).getObjectVersionId.getVersionNum.getVersionNum
@@ -339,31 +390,49 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       changedObjects: List[DisasterRecoveryObject] = Nil,
       throwErrorInMissingAndChangedObjects: Boolean = false
   ) {
-    val config: Config = Config("", "", "queueUrl", "", "", Option(URI.create("https://example.com")), "")
+    val config: Config = Config("", "", "queueUrl", "", "", Option(URI.create("https://example.com")), "", "topicArn")
     val ioId: UUID = UUID.randomUUID()
     val coId: UUID = UUID.randomUUID()
 
-    lazy val coMessage: ContentObjectMessage = ContentObjectMessage(coId, s"co:$coId")
-    lazy val ioMessage: InformationObjectMessage = InformationObjectMessage(ioId, s"io:$ioId")
+    lazy val coMessage: CoReceivedSnsMessage = CoReceivedSnsMessage(coId, s"co:$coId")
+    lazy val ioMessage: IoReceivedSnsMessage = IoReceivedSnsMessage(ioId, s"io:$ioId")
     val sqsClient: DASQSClient[IO] = mock[DASQSClient[IO]]
     val entityClient: EntityClient[IO, Fs2Streams[IO]] = mock[EntityClient[IO, Fs2Streams[IO]]]
+    val snsClient: DASNSClient[IO] = mock[DASNSClient[IO]]
 
-    val duplicatesIoMessageResponses: List[MessageResponse[Option[Message]]] =
-      (1 to 3).toList.map(_ => MessageResponse[Option[Message]]("receiptHandle1", Option(ioMessage)))
+    val duplicatesIoMessageResponses: List[MessageResponse[Option[ReceivedSnsMessage]]] =
+      (1 to 3).toList.map(_ => MessageResponse[Option[ReceivedSnsMessage]]("receiptHandle1", Option(ioMessage)))
 
-    val duplicatesCoMessageResponses: List[MessageResponse[Option[Message]]] =
-      (1 to 3).toList.map(_ => MessageResponse[Option[Message]]("receiptHandle2", Option(coMessage)))
+    val duplicatesCoMessageResponses: List[MessageResponse[Option[ReceivedSnsMessage]]] =
+      (1 to 3).toList.map(_ => MessageResponse[Option[ReceivedSnsMessage]]("receiptHandle2", Option(coMessage)))
 
+    private val potentialParentRef = if parentRefExists then Some(ioId) else None
+
+    val bitstreamFromApi: BitStreamInfo = BitStreamInfo(
+      "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+      1,
+      "url",
+      Fixity("sha256", "checksum"),
+      genVersion,
+      genType,
+      Some("CoTitle"),
+      potentialParentRef
+    )
+    val bitstreamFromEndpoint: Seq[Elem] = Seq(
+      <Bitstream><Filename>{bitstreamFromApi.name}</Filename> <FileSize>{
+        bitstreamFromApi.fileSize
+      }</FileSize><Fixities/></Bitstream>
+    )
     lazy val ioConsolidatedMetadata: Elem =
       <XIP>
         {
-        entityFromApi +: (representationFromApi ++ identifiersFromAPi ++ linksFromApi ++ metadataFromApi ++ eventActionFromApi)
+        entityFromApi +: (representationFromApi ++ ioIdentifiersFromApi ++ linksFromApi ++ metadataFromApi ++ eventActionFromApi)
       }
       </XIP>
     lazy val coConsolidatedMetadata: Elem =
       <XIP>
         {
-        entityFromApi +: (generationFromApi ++ bitstreamFromApi ++ identifiersFromAPi ++ linksFromApi ++ metadataFromApi ++ eventActionFromApi)
+        entityFromApi +: (generationFromApi ++ bitstreamFromEndpoint ++ coIdentifiersFromApi ++ linksFromApi ++ metadataFromApi ++ eventActionFromApi)
       }
       </XIP>
 
@@ -373,7 +442,12 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       )
     private val entityFromApi =
       <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
-    private val identifiersFromAPi = Seq(<Identifier><ApiId/><Type/><Value/><Entity/></Identifier>)
+    private val ioIdentifiersFromApi = Seq(
+      <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>,
+      <Identifier><ApiId/><Type>sourceID</Type><Value>sourceIDValue</Value><Entity/></Identifier>
+    )
+
+    private val coIdentifiersFromApi = Seq(<Identifier><ApiId/><Type/><Value/><Entity/></Identifier>)
     private val representationFromApi =
       Seq(
         <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
@@ -381,19 +455,16 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
 
     private val generationFromApi =
       Seq(<Generation original="true" active="true"><ContentObject/></Generation>)
-    private val bitstreamFromApi = Seq(
-      <Bitstream><Filename>testName</Filename><FileSize>10</FileSize><Fixities/></Bitstream>
-    )
+
     private val linksFromApi = Seq(<Link><Type/><FromEntity/><ToEntity/></Link>)
     private val eventActionFromApi =
       Seq(
         <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
       )
 
-    private val potentialParentRef = if parentRefExists then Some(ioId) else None
-
     private val getBitstreamsCoIdCaptor: ArgumentCaptor[UUID] = ArgumentCaptor.forClass(classOf[UUID])
-    private val entityCaptor: ArgumentCaptor[Entity] = ArgumentCaptor.forClass(classOf[Entity])
+    private val metadataEntityCaptor: ArgumentCaptor[Entity] = ArgumentCaptor.forClass(classOf[Entity])
+    private val identifiersEntityCaptor: ArgumentCaptor[Entity] = ArgumentCaptor.forClass(classOf[Entity])
     private val repTypeCaptor: ArgumentCaptor[RepresentationType] = ArgumentCaptor.forClass(classOf[RepresentationType])
     private val repIndexCaptor: ArgumentCaptor[Int] = ArgumentCaptor.forClass(classOf[Int])
 
@@ -403,6 +474,10 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     private val metadataXmlStringToValidate: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
     private val droLookupCaptor: ArgumentCaptor[List[DisasterRecoveryObject]] =
       ArgumentCaptor.forClass(classOf[List[DisasterRecoveryObject]])
+
+    private val topicArnCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
+    private val messagesCaptor: ArgumentCaptor[List[SendSnsMessage]] =
+      ArgumentCaptor.forClass(classOf[List[SendSnsMessage]])
     private val receiptHandleCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
 
     private def mockOcflService(
@@ -426,18 +501,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     when(entityClient.getBitstreamInfo(coId))
       .thenReturn(
         IO(
-          Seq(
-            BitStreamInfo(
-              "name",
-              1,
-              "url",
-              Fixity("sha256", "checksum"),
-              genVersion,
-              genType,
-              Some("CoTitle"),
-              potentialParentRef
-            )
-          )
+          Seq(bitstreamFromApi)
         )
       )
     potentialParentRef.foreach { parentRef =>
@@ -458,7 +522,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         IoMetadata(
           entityFromApi,
           representationFromApi,
-          identifiersFromAPi,
+          ioIdentifiersFromApi,
           linksFromApi,
           metadataFromApi,
           eventActionFromApi
@@ -470,26 +534,35 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         CoMetadata(
           entityFromApi,
           generationFromApi,
-          bitstreamFromApi,
-          identifiersFromAPi,
+          bitstreamFromEndpoint,
+          coIdentifiersFromApi,
           linksFromApi,
           metadataFromApi,
           eventActionFromApi
         )
       )
     ).when(entityClient).metadataForEntity(ArgumentMatchers.argThat(new EntityWithSpecificType("CO")))
-    when(sqsClient.deleteMessage(queueUrlCaptor.capture, receiptHandleCaptor.capture))
+
+    when(
+      snsClient.publish(ArgumentMatchers.eq("topicArn"))(ArgumentMatchers.any[List[SendSnsMessage]]())(using
+        any[Encoder[SendSnsMessage]]
+      )
+    )
+      .thenReturn(IO.pure(List(PublishBatchResponse.builder.build)))
+
+    when(sqsClient.deleteMessage(ArgumentMatchers.eq("queueUrl"), ArgumentMatchers.startsWith("receiptHandle")))
       .thenReturn(IO.pure(DeleteMessageResponse.builder.build))
 
     val ocflService: OcflService = mockOcflService(missingObjects, changedObjects, throwErrorInMissingAndChangedObjects)
     val xmlValidator: ValidateXmlAgainstXsd[IO] = spy(ValidateXmlAgainstXsd[IO](XipXsdSchemaV7))
 
-    val processor: Processor = new Processor(config, sqsClient, ocflService, entityClient, xmlValidator)
+    val processor: Processor = new Processor(config, sqsClient, ocflService, entityClient, xmlValidator, snsClient)
     val ioXmlToValidate: Elem =
       <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
-          <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
+          <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>
+          <Identifier><ApiId/><Type>sourceID</Type><Value>sourceIDValue</Value><Entity/></Identifier>
           <Link><Type/><FromEntity/><ToEntity/></Link>
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"/></Content></Metadata>
           <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
@@ -498,7 +571,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Generation original="true" active="true"><ContentObject/></Generation>
-          <Bitstream><Filename>testName</Filename><FileSize>10</FileSize><Fixities/></Bitstream>
+          <Bitstream><Filename>90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt</Filename><FileSize>1</FileSize><Fixities/></Bitstream>
           <Identifier><ApiId/><Type/><Value/><Entity/></Identifier>
           <Link><Type/><FromEntity/><ToEntity/></Link>
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"/></Content></Metadata>
@@ -516,7 +589,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         xmlRequestsToValidate: List[Elem] = List(ioXmlToValidate),
         createdIdSourceAndDestinationPathAndId: List[List[IdWithSourceAndDestPaths]] = Nil,
         drosToLookup: List[List[String]] = List(List(s"$ioId/IO_Metadata.xml")),
-        receiptHandles: List[String] = List("receiptHandle", "receiptHandle", "receiptHandle")
+        snsMessagesToSend: List[SendSnsMessage] = Nil,
+        receiptHandles: List[String] = List("receiptHandle1", "receiptHandle1", "receiptHandle1")
     ): Assertion = {
 
       verify(entityClient, times(numOfGetBitstreamInfoCalls)).getBitstreamInfo(getBitstreamsCoIdCaptor.capture)
@@ -527,7 +601,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         repTypeCaptor.capture(),
         repIndexCaptor.capture()
       )
-      verify(entityClient, times(idsOfEntityToGetMetadataFrom.length)).metadataForEntity(entityCaptor.capture)
+      verify(entityClient, times(idsOfEntityToGetMetadataFrom.length)).metadataForEntity(metadataEntityCaptor.capture)
 
       verify(ocflService, times(drosToLookup.length)).getMissingAndChangedObjects(
         droLookupCaptor.capture()
@@ -535,7 +609,12 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       verify(ocflService, times(createdIdSourceAndDestinationPathAndId.length))
         .createObjects(idWithSourceAndDestPathsCaptor.capture())
       verify(sqsClient, times(receiptHandles.length))
-        .deleteMessage(ArgumentMatchers.eq("queueUrl"), ArgumentMatchers.startsWith("receiptHandle"))
+        .deleteMessage(queueUrlCaptor.capture, receiptHandleCaptor.capture)
+
+      val numOfTimesSnsMsgShouldBeSent =
+        if (snsMessagesToSend.nonEmpty || createdIdSourceAndDestinationPathAndId.flatten.nonEmpty) 1 else 0
+      verify(snsClient, times(numOfTimesSnsMsgShouldBeSent))
+        .publish(topicArnCaptor.capture)(messagesCaptor.capture())(using any[Encoder[SendSnsMessage]])
 
       verify(xmlValidator, times(xmlRequestsToValidate.length))
         .xmlStringIsValid(metadataXmlStringToValidate.capture())
@@ -544,7 +623,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         (1 to numOfGetBitstreamInfoCalls).toList.map(_ => coId)
       )
 
-      entityCaptor.getAllValues.asScala.toList
+      metadataEntityCaptor.getAllValues.asScala.toList
         .lazyZip(idsOfEntityToGetMetadataFrom)
         .lazyZip(entityTypesToGetMetadataFrom)
         .foreach { case (capturedEntity, idOfEntity, entityTypeToGetMetadataFrom) =>
@@ -554,6 +633,9 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
 
       repTypeCaptor.getAllValues.asScala.toList should equal(repTypes)
       repIndexCaptor.getAllValues.asScala.toList should equal(repIndexes)
+
+      queueUrlCaptor.getAllValues.asScala.toList should equal(List.fill(receiptHandles.length)("queueUrl"))
+      receiptHandleCaptor.getAllValues.asScala.toList should equal(receiptHandles)
 
       val expectedIdsWithSourceAndDestPath = createdIdSourceAndDestinationPathAndId.flatten
       idWithSourceAndDestPathsCaptor.getAllValues.asScala.toList.flatten.zipWithIndex.foreach { case (capturedIdWithSourceAndDestPath, index) =>
@@ -565,6 +647,11 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       }
       val capturedLookupDestinationPaths = droLookupCaptor.getAllValues.asScala.toList.map(_.map(_.destinationFilePath))
       capturedLookupDestinationPaths should equal(drosToLookup)
+
+      if (numOfTimesSnsMsgShouldBeSent > 0) {
+        topicArnCaptor.getValue should equal("topicArn")
+        messagesCaptor.getAllValues.asScala.toList should equal(List(snsMessagesToSend))
+      } else ()
 
       metadataXmlStringToValidate.getAllValues.asScala.toList.map(s => trim(XML.loadString(s))) should equal(
         xmlRequestsToValidate.map(trim)
