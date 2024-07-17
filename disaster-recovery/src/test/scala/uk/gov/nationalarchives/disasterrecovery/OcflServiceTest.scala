@@ -30,7 +30,8 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
   private val destinationPath = "destinationPath"
   private val entity = mock[Entity]
 
-  val testOcflFileRetriever: OcflFileRetriever = () => new FixityCheckInputStream(new ByteArrayInputStream("".getBytes), DigestAlgorithm.fromOcflName("sha256"), "checksum")
+  val testOcflFileRetriever: OcflFileRetriever = () =>
+    new FixityCheckInputStream(new ByteArrayInputStream("".getBytes), DigestAlgorithm.fromOcflName("sha256"), "checksum")
 
   def mockGetObjectResponse(
       ocflRepository: OcflRepository,
