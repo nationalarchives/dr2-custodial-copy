@@ -19,7 +19,7 @@ object TestUtils:
   def repository(repoDir: Path, workDir: Path): OcflRepository = {
     val storage: OcflStorage = OcflStorageBuilder.builder().fileSystem(repoDir).build
     val ocflConfig: OcflConfig = new OcflConfig()
-    ocflConfig.setDefaultDigestAlgorithm(DigestAlgorithm.sha256)
+    ocflConfig.setDefaultDigestAlgorithm(DigestAlgorithm.fromOcflName("sha256"))
     new OcflRepositoryBuilder()
       .defaultLayoutConfig(new HashedNTupleLayoutConfig())
       .storage(storage)
