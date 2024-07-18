@@ -1,6 +1,8 @@
 package uk.gov.nationalarchives.disasterrecovery
 
 import cats.effect.*
+import cats.effect.std.Semaphore
+import cats.implicits.*
 import fs2.Stream
 import io.circe.{Decoder, HCursor}
 import org.typelevel.log4cats.slf4j.Slf4jLogger
@@ -11,6 +13,7 @@ import uk.gov.nationalarchives.DASQSClient
 import uk.gov.nationalarchives.dp.client.fs2.Fs2Client
 import uk.gov.nationalarchives.disasterrecovery.Message.*
 import uk.gov.nationalarchives.DASNSClient
+import uk.gov.nationalarchives.DASQSClient.MessageResponse
 
 import java.net.URI
 import java.nio.file
@@ -59,21 +62,40 @@ object Main extends IOApp {
         config.preservicaSecretName,
         potentialProxyUrl = config.proxyUrl
       )
-      service <- OcflService(config)
+      semaphore <- Semaphore[IO](1)
+      service <- OcflService(config, semaphore)
       sqs = sqsClient(config)
       sns = DASNSClient[IO]()
       processor <- Processor(config, sqs, service, client, sns)
       _ <- {
         Stream.fixedRateStartImmediately[IO](20.seconds) >>
           runDisasterRecovery(sqs, config, processor)
-            .handleErrorWith(err => Stream.eval(logError(err)))
+            .handleErrorWith(err => Stream.eval(semaphore.release >> logError(err)))
       }.compile.drain
     } yield ExitCode.Success
 
-  def runDisasterRecovery(sqs: DASQSClient[IO], config: Config, processor: Processor): Stream[IO, Unit] =
+  def runDisasterRecovery(sqs: DASQSClient[IO], config: Config, processor: Processor): Stream[IO, List[Outcome[IO, Throwable, Unit]]] =
     Stream
       .eval(sqs.receiveMessages[Option[ReceivedSnsMessage]](config.sqsQueueUrl))
-      .evalMap(messages => IO.whenA(messages.nonEmpty)(processor.process(messages)))
+      .filter(messageResponses => messageResponses.nonEmpty)
+      .evalMap { messageResponses =>
+        for {
+          logger <- Slf4jLogger.create[IO]
+          _ <- logger.info(s"Processing ${messageResponses.length} messages")
+          _ <- logger.info(messageResponses.flatMap(_.message.map(_.messageText)).mkString(","))
+          fibers <- dedupeMessages(messageResponses).parTraverse(processor.process(_).start)
+          fiberResults <- fibers.traverse(_.join)
+          _ <- logger.info(s"${fiberResults.count(_.isSuccess)} messages processed successfully")
+          _ <- logger.info(s"${fiberResults.count(_.isError)} messages failed")
+          _ <- fiberResults traverse {
+            case Outcome.Errored(e) => logError(e) >> IO.unit
+            case _                  => IO.unit
+          }
+        } yield fiberResults
+      }
+
+  private def dedupeMessages(messages: List[MessageResponse[Option[ReceivedSnsMessage]]]): List[MessageResponse[Option[ReceivedSnsMessage]]] =
+    messages.distinctBy(_.message.map(_.messageText))
 
   private def logError(err: Throwable) = for {
     logger <- Slf4jLogger.create[IO]

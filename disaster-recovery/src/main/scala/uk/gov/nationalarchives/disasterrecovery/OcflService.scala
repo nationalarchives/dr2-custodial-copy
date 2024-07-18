@@ -1,6 +1,7 @@
 package uk.gov.nationalarchives.disasterrecovery
 
 import cats.effect.IO
+import cats.effect.std.Semaphore
 import io.ocfl.api.exception.{CorruptObjectException, NotFoundException}
 import io.ocfl.api.model.{DigestAlgorithm, ObjectVersionId, VersionInfo}
 import io.ocfl.api.{OcflConfig, OcflObjectUpdater, OcflOption, OcflRepository}
@@ -15,8 +16,8 @@ import java.util.UUID
 import scala.util.{Failure, Success, Try}
 import scala.jdk.FunctionConverters.*
 
-class OcflService(ocflRepository: OcflRepository) {
-  def createObjects(paths: List[IdWithSourceAndDestPaths]): IO[List[ObjectVersionId]] = IO.blocking {
+class OcflService(ocflRepository: OcflRepository, semaphore: Semaphore[IO]) {
+  def createObjects(paths: List[IdWithSourceAndDestPaths]): IO[Unit] = semaphore.acquire >> IO.blocking {
     paths
       .groupBy(_.id)
       .view
@@ -38,7 +39,7 @@ class OcflService(ocflRepository: OcflRepository) {
         )
       }
       .toList
-  }
+  } >> semaphore.release
 
   def getMissingAndChangedObjects(
       objects: List[DisasterRecoveryObject]
@@ -86,7 +87,7 @@ class OcflService(ocflRepository: OcflRepository) {
 object OcflService {
   extension (uuid: UUID) def toHeadVersion: ObjectVersionId = ObjectVersionId.head(uuid.toString)
 
-  def apply(config: Config): IO[OcflService] = IO {
+  def apply(config: Config, semaphore: Semaphore[IO]): IO[OcflService] = IO {
     val repoDir = Paths.get(config.repoDir)
     val workDir =
       Paths.get(
@@ -106,7 +107,7 @@ object OcflService {
       .prettyPrintJson()
       .workDir(workDir)
       .build()
-    new OcflService(repo)
+    new OcflService(repo, semaphore)
   }
   case class MissingAndChangedObjects(
       missingObjects: List[DisasterRecoveryObject],

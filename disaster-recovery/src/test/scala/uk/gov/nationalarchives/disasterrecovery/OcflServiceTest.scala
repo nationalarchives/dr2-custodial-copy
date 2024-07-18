@@ -1,5 +1,7 @@
 package uk.gov.nationalarchives.disasterrecovery
 
+import cats.effect.IO
+import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
 import io.ocfl.api.exception.{CorruptObjectException, NotFoundException}
 import io.ocfl.api.io.FixityCheckInputStream
@@ -29,6 +31,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
   val checksum = "checksum"
   private val destinationPath = "destinationPath"
   private val entity = mock[Entity]
+  val semaphore: Semaphore[IO] = Semaphore[IO](1).unsafeRunSync()
 
   val testOcflFileRetriever: OcflFileRetriever = () =>
     new FixityCheckInputStream(new ByteArrayInputStream("".getBytes), DigestAlgorithm.fromOcflName("sha256"), "checksum")
@@ -54,7 +57,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     val ocflRepository = mock[OcflRepository]
     when(ocflRepository.getObject(any[ObjectVersionId])).thenThrow(new NotFoundException)
 
-    val service = new OcflService(ocflRepository)
+    val service = new OcflService(ocflRepository, semaphore)
     val fileObjectThatShouldBeMissing =
       FileObject(id, name, checksum, url, destinationPath, UUID.randomUUID)
 
@@ -74,7 +77,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
       val ocflRepository = mock[OcflRepository]
       mockGetObjectResponse(ocflRepository, id, checksum, destinationPath)
 
-      val service = new OcflService(ocflRepository)
+      val service = new OcflService(ocflRepository, semaphore)
       val fileObjectThatShouldBeMissing =
         FileObject(id, name, checksum, url, "nonExistingDestinationPath", UUID.randomUUID)
 
@@ -94,7 +97,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
       val ocflRepository = mock[OcflRepository]
       mockGetObjectResponse(ocflRepository, id, checksum, destinationPath)
 
-      val service = new OcflService(ocflRepository)
+      val service = new OcflService(ocflRepository, semaphore)
 
       val missingAndChangedObjects =
         service
@@ -113,7 +116,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
       val ocflRepository = mock[OcflRepository]
       mockGetObjectResponse(ocflRepository, id, checksum, destinationPath)
 
-      val service = new OcflService(ocflRepository)
+      val service = new OcflService(ocflRepository, semaphore)
       val fileObjectThatShouldHaveChangedChecksum =
         FileObject(id, name, "anotherChecksum", url, destinationPath, UUID.randomUUID)
 
@@ -131,7 +134,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     val ocflRepository = mock[OcflRepository]
     when(ocflRepository.getObject(any[ObjectVersionId])).thenThrow(new RuntimeException("unexpected Exception"))
 
-    val service = new OcflService(ocflRepository)
+    val service = new OcflService(ocflRepository, semaphore)
     val fileObjectThatShouldHaveChangedChecksum =
       FileObject(id, name, checksum, url, destinationPath, UUID.randomUUID)
 
@@ -151,7 +154,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     when(ocflRepository.getObject(any[ObjectVersionId])).thenThrow(new CorruptObjectException())
     doNothing().when(ocflRepository).purgeObject(objectIdCaptor.capture())
 
-    val service = new OcflService(ocflRepository)
+    val service = new OcflService(ocflRepository, semaphore)
     val fileObjectThatShouldHaveChangedChecksum =
       FileObject(id, name, checksum, url, destinationPath, UUID.randomUUID)
 
@@ -177,7 +180,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
         consumer.accept(updater)
         ObjectVersionId.head(id.toString)
       })
-    val service = new OcflService(ocflRepository)
+    val service = new OcflService(ocflRepository, semaphore)
 
     service.createObjects(List(IdWithSourceAndDestPaths(id, Paths.get("test"), destinationPath))).unsafeRunSync()
 

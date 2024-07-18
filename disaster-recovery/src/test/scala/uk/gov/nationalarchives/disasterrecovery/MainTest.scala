@@ -1,6 +1,7 @@
 package uk.gov.nationalarchives.disasterrecovery
 
-import cats.effect.IO
+import cats.effect.{IO, Outcome}
+import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
 import io.ocfl.api.OcflRepository
 import io.ocfl.api.model.ObjectVersionId
@@ -28,11 +29,20 @@ import scala.xml.Utility.trim
 import scala.xml.XML
 
 class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
+
+  private def getError(
+      sqsClient: DASQSClient[IO],
+      config: Config,
+      processor: Processor
+  ): Throwable = runDisasterRecovery(sqsClient, config, processor).head match
+    case Outcome.Errored(e) => e
+    case _                  => throw new Exception("Expected an error but none found")
+
   private def runDisasterRecovery(
       sqsClient: DASQSClient[IO],
       config: Config,
       processor: Processor
-  ): Unit = Main.runDisasterRecovery(sqsClient, config, processor).compile.drain.unsafeRunSync()
+  ): List[Outcome[IO, Throwable, Unit]] = Main.runDisasterRecovery(sqsClient, config, processor).compile.toList.unsafeRunSync().flatten
 
   "runDisasterRecovery" should "write a new version and new IO metadata object, to the correct location in the repository " +
     "if it doesn't already exist" in {
@@ -177,15 +187,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
         utils.xmlValidator,
         utils.snsClient
       )
-    val err: Throwable =
-      Main
-        .runDisasterRecovery(utils.sqsClient, utils.config, processor)
-        .compile
-        .drain
-        .attempt
-        .unsafeRunSync()
-        .left
-        .value
+    val err: Throwable = getError(utils.sqsClient, utils.config, processor)
+
     err.getMessage must equal("Error getting metadata")
   }
 
@@ -204,15 +207,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     )
     val utils = new MainTestUtils(List(ContentObject), 0, bitstreamInfo1Responses = bitstreamInfo)
 
-    val err: Throwable =
-      Main
-        .runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
-        .compile
-        .drain
-        .attempt
-        .unsafeRunSync()
-        .left
-        .value
+    val err: Throwable = getError(utils.sqsClient, utils.config, utils.processor)
     err.getMessage must equal("Cannot get IO reference from CO")
   }
 
@@ -237,15 +232,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     )
     val coId = utils.coId1
 
-    val err: Throwable =
-      Main
-        .runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
-        .compile
-        .drain
-        .attempt
-        .unsafeRunSync()
-        .left
-        .value
+    val err: Throwable = getError(utils.sqsClient, utils.config, utils.processor)
+
     err.getMessage must equal(
       s"$coId belongs to more than 1 representation type: Preservation_1, Access_1"
     )
@@ -380,7 +368,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       repo.getObject(ioId.toHeadVersion).containsFile(path) must be(true)
     }
 
-    utils.latestObjectVersion(repo, ioId) must equal(2)
+    utils.latestObjectVersion(repo, ioId) must equal(4)
   }
 
   "runDisasterRecovery" should "only write one version if there are two identical CO messages" in {
@@ -400,8 +388,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
     val processor =
       new Processor(utils.config, sqsClient, utils.ocflService, preservicaClient, utils.xmlValidator, utils.snsClient)
-    val err: Throwable =
-      Main.runDisasterRecovery(sqsClient, utils.config, processor).compile.drain.attempt.unsafeRunSync().left.value
+
+    val err: Throwable = getError(sqsClient, utils.config, processor)
     err.getMessage must equal("Error getting bitstream info")
   }
 
@@ -515,8 +503,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
     val repo = mock[OcflRepository]
     when(repo.getObject(any[ObjectVersionId])).thenThrow(new RuntimeException("Unexpected Exception"))
-
-    val ocflService = new OcflService(repo)
+    val semaphore: Semaphore[IO] = Semaphore[IO](1).unsafeRunSync()
+    val ocflService = new OcflService(repo, semaphore)
     val processor =
       new Processor(
         utils.config,
@@ -527,9 +515,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
         utils.snsClient
       )
 
-    val ex = intercept[Exception] {
-      runDisasterRecovery(utils.sqsClient, utils.config, processor)
-    }
+    val ex: Throwable = getError(utils.sqsClient, utils.config, processor)
+
     ex.getMessage must equal(
       s"'getObject' returned an unexpected error 'java.lang.RuntimeException: Unexpected Exception' when called with object id $ioId"
     )

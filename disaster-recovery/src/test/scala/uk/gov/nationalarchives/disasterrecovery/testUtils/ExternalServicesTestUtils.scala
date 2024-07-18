@@ -1,6 +1,7 @@
 package uk.gov.nationalarchives.disasterrecovery.testUtils
 
 import cats.effect.IO
+import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
 import fs2.Stream
 import io.circe.{Decoder, Encoder}
@@ -186,7 +187,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     Files.createDirectories(Paths.get(path.toString, id.toString))
     val fullSourceFilePath = Paths.get(path.toString, sourceFilePath)
     Files.write(fullSourceFilePath, bodyAsString.getBytes)
-    new OcflService(repo)
+    val semaphore: Semaphore[IO] = Semaphore[IO](1).unsafeRunSync()
+    new OcflService(repo, semaphore)
       .createObjects(List(IdWithSourceAndDestPaths(id, fullSourceFilePath, destinationPath)))
       .unsafeRunSync()
   }
@@ -364,8 +366,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     fileContentToWriteToEachFileInRepo.zip(bitstreamNames).foreach { case (data, name) =>
       addFileToRepo(ioId, repo, data, s"$ioId/$name", expectedCoFileDestinationPath)
     }
-
-    val ocflService = new OcflService(repo)
+    val semaphore: Semaphore[IO] = Semaphore[IO](1).unsafeRunSync()
+    val ocflService = new OcflService(repo, semaphore)
     val xmlValidator: ValidateXmlAgainstXsd[IO] = ValidateXmlAgainstXsd[IO](XipXsdSchemaV7)
     val processor = new Processor(config, sqsClient, ocflService, preservicaClient, xmlValidator, snsClient)
 
@@ -400,11 +402,11 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val entityClient: EntityClient[IO, Fs2Streams[IO]] = mock[EntityClient[IO, Fs2Streams[IO]]]
     val snsClient: DASNSClient[IO] = mock[DASNSClient[IO]]
 
-    val duplicatesIoMessageResponses: List[MessageResponse[Option[ReceivedSnsMessage]]] =
-      (1 to 3).toList.map(_ => MessageResponse[Option[ReceivedSnsMessage]]("receiptHandle1", Option(ioMessage)))
+    val duplicatesIoMessageResponse: MessageResponse[Option[ReceivedSnsMessage]] =
+      MessageResponse[Option[ReceivedSnsMessage]]("receiptHandle1", Option(ioMessage))
 
-    val duplicatesCoMessageResponses: List[MessageResponse[Option[ReceivedSnsMessage]]] =
-      (1 to 3).toList.map(_ => MessageResponse[Option[ReceivedSnsMessage]]("receiptHandle2", Option(coMessage)))
+    val duplicatesCoMessageResponses: MessageResponse[Option[ReceivedSnsMessage]] =
+      MessageResponse[Option[ReceivedSnsMessage]]("receiptHandle2", Option(coMessage))
 
     private val potentialParentRef = if parentRefExists then Some(ioId) else None
 
@@ -493,7 +495,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       else
         when(ocflService.getMissingAndChangedObjects(any[List[MetadataObject]]))
           .thenReturn(IO.pure(MissingAndChangedObjects(missingObjects, changedObjects)))
-      when(ocflService.createObjects(any[List[IdWithSourceAndDestPaths]])).thenReturn(IO(Nil))
+      when(ocflService.createObjects(any[List[IdWithSourceAndDestPaths]])).thenReturn(IO.unit)
 
       ocflService
     }
@@ -590,7 +592,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         createdIdSourceAndDestinationPathAndId: List[List[IdWithSourceAndDestPaths]] = Nil,
         drosToLookup: List[List[String]] = List(List(s"$ioId/IO_Metadata.xml")),
         snsMessagesToSend: List[SendSnsMessage] = Nil,
-        receiptHandles: List[String] = List("receiptHandle1", "receiptHandle1", "receiptHandle1")
+        receiptHandles: List[String] = List("receiptHandle1")
     ): Assertion = {
 
       verify(entityClient, times(numOfGetBitstreamInfoCalls)).getBitstreamInfo(getBitstreamsCoIdCaptor.capture)
@@ -641,6 +643,9 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       idWithSourceAndDestPathsCaptor.getAllValues.asScala.toList.flatten.zipWithIndex.foreach { case (capturedIdWithSourceAndDestPath, index) =>
         val expectedIdWithSourceAndDestPath = expectedIdsWithSourceAndDestPath(index)
         capturedIdWithSourceAndDestPath.id should equal(expectedIdWithSourceAndDestPath.id)
+        println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAaa")
+        println(capturedIdWithSourceAndDestPath.sourceNioFilePath.toString)
+        println(expectedIdWithSourceAndDestPath.sourceNioFilePath)
         capturedIdWithSourceAndDestPath.sourceNioFilePath.toString
           .endsWith(expectedIdWithSourceAndDestPath.sourceNioFilePath.toString) should equal(true)
         capturedIdWithSourceAndDestPath.destinationPath should equal(expectedIdWithSourceAndDestPath.destinationPath)
