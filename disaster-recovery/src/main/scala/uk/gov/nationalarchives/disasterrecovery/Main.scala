@@ -85,8 +85,8 @@ object Main extends IOApp {
           _ <- logger.info(messageResponses.flatMap(_.message.map(_.messageText)).mkString(","))
           fibers <- dedupeMessages(messageResponses).parTraverse(processor.process(_).start)
           fiberResults <- fibers.traverse(_.join)
-          _ <- logger.info(s"${fiberResults.count(_.isSuccess)} messages processed successfully")
-          _ <- logger.info(s"${fiberResults.count(_.isError)} messages failed")
+          _ <- logger.info(s"${fiberResults.count(_.isSuccess)} messages out of ${fibers.length} unique messages processed successfully")
+          _ <- logger.info(s"${fiberResults.count(_.isError)} messages out of ${fibers.length} unique messages failed")
           _ <- fiberResults traverse {
             case Outcome.Errored(e) => logError(e) >> IO.unit
             case _                  => IO.unit

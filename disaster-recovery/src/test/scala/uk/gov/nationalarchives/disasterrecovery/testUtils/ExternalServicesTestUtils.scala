@@ -643,9 +643,6 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       idWithSourceAndDestPathsCaptor.getAllValues.asScala.toList.flatten.zipWithIndex.foreach { case (capturedIdWithSourceAndDestPath, index) =>
         val expectedIdWithSourceAndDestPath = expectedIdsWithSourceAndDestPath(index)
         capturedIdWithSourceAndDestPath.id should equal(expectedIdWithSourceAndDestPath.id)
-        println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAaa")
-        println(capturedIdWithSourceAndDestPath.sourceNioFilePath.toString)
-        println(expectedIdWithSourceAndDestPath.sourceNioFilePath)
         capturedIdWithSourceAndDestPath.sourceNioFilePath.toString
           .endsWith(expectedIdWithSourceAndDestPath.sourceNioFilePath.toString) should equal(true)
         capturedIdWithSourceAndDestPath.destinationPath should equal(expectedIdWithSourceAndDestPath.destinationPath)

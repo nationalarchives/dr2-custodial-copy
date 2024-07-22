@@ -7,14 +7,16 @@ import io.ocfl.api.OcflRepository
 import io.ocfl.api.model.ObjectVersionId
 import org.apache.commons.codec.digest.DigestUtils
 import org.mockito.ArgumentMatchers.*
-import org.mockito.Mockito.when
+import org.mockito.Mockito.{never, verify, when}
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers.*
 import org.scalatestplus.mockito.MockitoSugar
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DASQSClient
+import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.disasterrecovery.Main.*
+import uk.gov.nationalarchives.disasterrecovery.Message.ReceivedSnsMessage
 import uk.gov.nationalarchives.disasterrecovery.OcflService.*
 import uk.gov.nationalarchives.disasterrecovery.testUtils.ExternalServicesTestUtils.MainTestUtils
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
@@ -190,6 +192,16 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val err: Throwable = getError(utils.sqsClient, utils.config, processor)
 
     err.getMessage must equal("Error getting metadata")
+  }
+
+  "runDisasterRecovery" should "not call the process method if no messages are received" in {
+    val processor = mock[Processor]
+    when(processor.process(any[MessageResponse[Option[ReceivedSnsMessage]]])).thenReturn(IO.unit)
+    val utils = new MainTestUtils(typesOfSqsMessages = Nil, objectVersion = 0)
+
+    runDisasterRecovery(utils.sqsClient, utils.config, processor)
+
+    verify(processor, never()).process(any[MessageResponse[Option[ReceivedSnsMessage]]])
   }
 
   "runDisasterRecovery" should "return an error if a CO has no parent" in {

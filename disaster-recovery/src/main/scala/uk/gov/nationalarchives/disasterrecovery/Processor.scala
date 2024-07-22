@@ -135,7 +135,7 @@ class Processor(
 
   private def createMetadataFileName(entityTypeShort: String) = s"${entityTypeShort}_Metadata.xml"
 
-  private def toDisasterRecoveryObject(message: Option[ReceivedSnsMessage]): IO[List[DisasterRecoveryObject]] = message match {
+  private def toDisasterRecoveryObject(potentialMessage: Option[ReceivedSnsMessage]): IO[List[DisasterRecoveryObject]] = potentialMessage match {
     case Some(IoReceivedSnsMessage(ref, _)) =>
       for {
         entity <- fromType[IO](InformationObject.entityTypeShort, ref, None, None, deleted = false)
@@ -289,7 +289,7 @@ class Processor(
         snsClient.publish[SendSnsMessage](config.topicArn)(snsMessages).map(_ => ())
       }
       _ <- logger.info(s"${snsMessages.length} 'created/updated objects' messages published to SNS")
-      deleteResponse <- deleteMessage(messageResponse.receiptHandle)
+      _ <- deleteMessage(messageResponse.receiptHandle)
     } yield ()
 }
 object Processor {
