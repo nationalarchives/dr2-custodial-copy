@@ -101,6 +101,11 @@ If the disaster recovery process completes successfully, the messages are delete
 If any messages in a batch fail, all messages are left to try again. This avoids having to work out which ones were
 successful which could be error-prone.
 
+#### Parallel processing
+Each message is processed in parallel except for writing to the OCFL repository. 
+The OCFL library will throw an exception if you try to write to the same object at the same time so there is a single semaphore to prevent two fibers writing at the same time.
+All other processes, fetching the data from Preservica and deleting the SQS messages are processed in parallel.
+
 ### Infrastructure
 
 This will be hosted on a machine at Kew rather than in the cloud so the only infrastructure resource needed is the
