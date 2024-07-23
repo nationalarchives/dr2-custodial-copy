@@ -36,8 +36,8 @@ class Processor(
     snsClient: DASNSClient[IO]
 ) {
   private val newlineAndIndent = "\n          "
-  private def deleteMessages(receiptHandles: List[String]): IO[List[DeleteMessageResponse]] =
-    receiptHandles.map(handle => sqsClient.deleteMessage(config.sqsQueueUrl, handle)).sequence
+  private def deleteMessage(receiptHandle: String): IO[DeleteMessageResponse] =
+    sqsClient.deleteMessage(config.sqsQueueUrl, receiptHandle)
 
   private def dedupeMessages(messages: List[ReceivedSnsMessage]): List[ReceivedSnsMessage] = messages.distinctBy(_.messageText)
 
@@ -135,8 +135,8 @@ class Processor(
 
   private def createMetadataFileName(entityTypeShort: String) = s"${entityTypeShort}_Metadata.xml"
 
-  private def toDisasterRecoveryObject(message: ReceivedSnsMessage): IO[List[DisasterRecoveryObject]] = message match {
-    case IoReceivedSnsMessage(ref, _) =>
+  private def toDisasterRecoveryObject(potentialMessage: Option[ReceivedSnsMessage]): IO[List[DisasterRecoveryObject]] = potentialMessage match {
+    case Some(IoReceivedSnsMessage(ref, _)) =>
       for {
         entity <- fromType[IO](InformationObject.entityTypeShort, ref, None, None, deleted = false)
         metadataFileName = createMetadataFileName(InformationObject.entityTypeShort)
@@ -151,7 +151,7 @@ class Processor(
           )
         }
       } yield metadataObject
-    case CoReceivedSnsMessage(ref, _) =>
+    case Some(CoReceivedSnsMessage(ref, _)) =>
       for {
         bitstreamInfoPerCo <- entityClient.getBitstreamInfo(ref)
         entity <- fromType[IO](
@@ -207,6 +207,7 @@ class Processor(
           removeFileExtension(bitStreamInfo.name)
         )
       } ++ metadata
+    case None => IO.pure(Nil)
   }
 
   private def download(disasterRecoveryObject: DisasterRecoveryObject) = disasterRecoveryObject match {
@@ -234,9 +235,11 @@ class Processor(
     if (bitstreamName.contains(".")) bitstreamName.split('.').dropRight(1).mkString(".") else bitstreamName
   }
 
-  private def getSourceIdFromIdentifierNodes(identifiers: Seq[Node]) = identifiers.collect {
-    case identifier if (identifier \ "Type").text == "SourceID" => (identifier \ "Value").text
-  }.head
+  private def getSourceIdFromIdentifierNodes(identifiers: Seq[Node]) = identifiers
+    .collectFirst {
+      case identifier if (identifier \ "Type").text == "SourceID" => (identifier \ "Value").text
+    }
+    .getOrElse("")
 
   private def generateSnsMessage(
       obj: DisasterRecoveryObject,
@@ -263,17 +266,12 @@ class Processor(
       .apply(message)
   }
 
-  def process(messageResponses: List[MessageResponse[Option[ReceivedSnsMessage]]]): IO[Unit] =
+  def process(messageResponse: MessageResponse[Option[ReceivedSnsMessage]]): IO[Unit] =
     for {
       logger <- Slf4jLogger.create[IO]
-      _ <- logger.info(s"Processing ${messageResponses.length} messages")
-      messages = dedupeMessages(messageResponses.flatMap(_.message))
-      _ <- logger.info(s"Size after de-duplication ${messages.length}")
-      _ <- logger.info(messages.map(_.messageText).mkString(","))
-      disasterRecoveryObjects <- messages.map(toDisasterRecoveryObject).sequence
-      flatDisasterRecoveryObjects = disasterRecoveryObjects.flatten
+      disasterRecoveryObjects <- toDisasterRecoveryObject(messageResponse.message)
 
-      missingAndChangedObjects <- ocflService.getMissingAndChangedObjects(flatDisasterRecoveryObjects)
+      missingAndChangedObjects <- ocflService.getMissingAndChangedObjects(disasterRecoveryObjects)
 
       missingObjectsPaths <- missingAndChangedObjects.missingObjects.map(download).sequence
       changedObjectsPaths <- missingAndChangedObjects.changedObjects.map(download).sequence
@@ -291,7 +289,7 @@ class Processor(
         snsClient.publish[SendSnsMessage](config.topicArn)(snsMessages).map(_ => ())
       }
       _ <- logger.info(s"${snsMessages.length} 'created/updated objects' messages published to SNS")
-      _ <- deleteMessages(messageResponses.map(_.receiptHandle))
+      _ <- deleteMessage(messageResponse.receiptHandle)
     } yield ()
 }
 object Processor {

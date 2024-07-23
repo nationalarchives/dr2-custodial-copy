@@ -66,8 +66,9 @@ object Ocfl:
           }
         }
 
-      val ingestDateTime = ioMetadata.map { metadata =>
-        Instant.parse((metadata \ "Metadata" \ "Content" \ "Source" \ "IngestDateTime").text)
+      val ingestDateTime = ioMetadata.flatMap { metadata =>
+        val dateTimeText = (metadata \ "Metadata" \ "Content" \ "Source" \ "IngestDateTime").text
+        if dateTimeText.isBlank then None else Option(Instant.parse(dateTimeText))
       }
 
       files.filter(_.getPath.contains(s"CO_Metadata.xml")).map { coMetadataFile =>
