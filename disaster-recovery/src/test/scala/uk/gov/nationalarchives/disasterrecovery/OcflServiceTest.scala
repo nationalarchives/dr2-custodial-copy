@@ -35,7 +35,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
   val semaphore: Semaphore[IO] = Semaphore[IO](1).unsafeRunSync()
 
   val testOcflFileRetriever: OcflFileRetriever = new OcflFileRetriever:
-    override def retrieveFile(): FixityCheckInputStream = 
+    override def retrieveFile(): FixityCheckInputStream =
       new FixityCheckInputStream(new ByteArrayInputStream("".getBytes), DigestAlgorithm.fromOcflName("sha256"), "checksum")
 
     override def retrieveRange(startPosition: lang.Long, endPosition: lang.Long): InputStream = new ByteArrayInputStream("".getBytes)
