@@ -27,18 +27,18 @@ def setupDirectories(serviceName: String) =
   )
 
 lazy val root = (project in file("."))
-  .aggregate(disasterRecovery, webapp, builder, utils)
+  .aggregate(custodialCopyBackend, webapp, builder, utils)
   .settings(
     publish / skip := true
   )
 
-lazy val disasterRecovery = (project in file("disaster-recovery"))
+lazy val custodialCopyBackend = (project in file("custodial-copy-backend"))
   .enablePlugins(DockerPlugin, BuildInfoPlugin)
   .settings(tagSettings)
   .settings(commonSettings)
   .settings(
-    name := "dr2-disaster-recovery",
-    assembly / assemblyJarName := "disaster-recovery.jar",
+    name := "custodial-copy-backend",
+    assembly / assemblyJarName := "custodial-copy.jar",
     scalacOptions += "-Wunused:imports",
     libraryDependencies ++= Seq(
       preservicaClient,
@@ -52,7 +52,7 @@ lazy val disasterRecovery = (project in file("disaster-recovery"))
 
 lazy val utils = (project in file("utils"))
   .settings(
-    name := "disaster-recovery-utils",
+    name := "custodial-copy-utils",
     scalacOptions += "-Wunused:imports",
     publish / skip := true,
     libraryDependencies ++= Seq(
@@ -69,14 +69,14 @@ lazy val utils = (project in file("utils"))
     )
   )
 
-lazy val builder = (project in file("disaster-recovery-builder"))
+lazy val builder = (project in file("custodial-copy-db-builder"))
   .enablePlugins(DockerPlugin)
   .settings(commonSettings)
   .settings(tagSettings)
   .settings(
-    name := "disaster-recovery-builder",
+    name := "custodial-copy-db-builder",
     scalacOptions += "-Wunused:imports",
-    assembly / assemblyJarName := "disaster-recovery-db-builder.jar",
+    assembly / assemblyJarName := "custodial-copy-db-builder.jar",
     libraryDependencies ++= Seq(
       ocfl,
       fs2,
@@ -85,13 +85,13 @@ lazy val builder = (project in file("disaster-recovery-builder"))
   )
   .dependsOn(utils)
 
-lazy val webapp = (project in file("disaster-recovery-webapp"))
+lazy val webapp = (project in file("custodial-copy-webapp"))
   .enablePlugins(SbtTwirl, DockerPlugin)
   .settings(commonSettings)
   .settings(tagSettings)
   .settings(
-    assembly / assemblyJarName := "disaster-recovery-webapp.jar",
-    name := "disaster-recovery-webapp",
+    assembly / assemblyJarName := "custodial-copy-webapp.jar",
+    name := "custodial-copy-webapp",
     libraryDependencies ++= Seq(
       http4sEmber,
       http4sDsl,
