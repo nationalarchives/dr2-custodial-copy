@@ -15,13 +15,16 @@ def tagDockerImage(imageName: String): Unit = {
 }
 
 def setupDirectories(serviceName: String) =
-  Cmd("RUN", s"""apk update && apk upgrade && apk add openjdk21-jre && \\
+  Cmd(
+    "RUN",
+    s"""apk update && apk upgrade && apk add openjdk21-jre && \\
                |    mkdir -p /poduser/work /poduser/repo /poduser/version /poduser/database && \\
                |    chown -R 1002:1005 /poduser && \\
                |    mkdir /poduser/logs && \\
                |    touch /poduser/logs/$serviceName.log && \\
                |    chown -R nobody:nobody /poduser/logs && \\
-               |    chmod 644 /poduser/logs/$serviceName.log""".stripMargin)
+               |    chmod 644 /poduser/logs/$serviceName.log""".stripMargin
+  )
 
 lazy val root = (project in file("."))
   .aggregate(disasterRecovery, webapp, builder, utils)
@@ -43,7 +46,7 @@ lazy val disasterRecovery = (project in file("disaster-recovery"))
       sqsClient,
       fs2Core,
       ocfl
-    ),
+    )
   )
   .dependsOn(utils)
 
@@ -94,7 +97,8 @@ lazy val webapp = (project in file("disaster-recovery-webapp"))
       http4sDsl,
       ocfl
     )
-  ).dependsOn(utils)
+  )
+  .dependsOn(utils)
 
 lazy val tagSettings = Seq(
   tagImage := tagDockerImage(s"${dockerRepository.value.get}/${(Docker / packageName).value}")
@@ -106,7 +110,7 @@ lazy val commonSettings = Seq(
     scalaCheckPlus % Test,
     scalaTest % Test,
     mockito % Test,
-    wiremock % Test,
+    wiremock % Test
   ),
   scalacOptions ++= Seq("-Werror", "-deprecation", "-feature", "-language:implicitConversions"),
   (Test / fork) := true,
@@ -116,8 +120,8 @@ lazy val commonSettings = Seq(
     "AWS_LAMBDA_FUNCTION_NAME" -> "test"
   ),
   (assembly / assemblyMergeStrategy) := {
-    case PathList(ps@_*) if ps.last == "Log4j2Plugins.dat" => log4j2MergeStrategy
-    case PathList("META-INF", xs@_*) =>
+    case PathList(ps @ _*) if ps.last == "Log4j2Plugins.dat" => log4j2MergeStrategy
+    case PathList("META-INF", xs @ _*) =>
       xs map {
         _.toLowerCase
       } match {
@@ -126,18 +130,18 @@ lazy val commonSettings = Seq(
         case _ => MergeStrategy.discard
       }
     case manifest if manifest.contains("MANIFEST.MF") => MergeStrategy.discard
-    case x => MergeStrategy.last
+    case x                                            => MergeStrategy.last
   },
   Universal / mappings := {
     val universalMappings = (Universal / mappings).value
     val fatJar = (Compile / assembly).value
-    val filtered = universalMappings.filter {
-      case (file, name) => !name.endsWith(".jar")
+    val filtered = universalMappings.filter { case (file, name) =>
+      !name.endsWith(".jar")
     }
     filtered :+ (fatJar -> ("lib/" + fatJar.getName))
   },
   dockerRepository := Some(s"${sys.env.getOrElse("MANAGEMENT_ACCOUNT_NUMBER", "")}.dkr.ecr.eu-west-2.amazonaws.com"),
-  dockerBuildOptions ++= Seq("--no-cache","--pull"),
+  dockerBuildOptions ++= Seq("--no-cache", "--pull"),
   Docker / packageName := s"dr2-${baseDirectory.value.getName}",
   Docker / version := sys.env.getOrElse("DOCKER_TAG", version.value),
   dockerCommands := Seq(
