@@ -18,7 +18,8 @@ import uk.gov.nationalarchives.disasterrecovery.DisasterRecoveryObject.FileObjec
 import uk.gov.nationalarchives.disasterrecovery.Main.IdWithSourceAndDestPaths
 import uk.gov.nationalarchives.dp.client.Entities.Entity
 
-import java.io.ByteArrayInputStream
+import java.io.{ByteArrayInputStream, InputStream}
+import java.lang
 import java.nio.file.Paths
 import java.util.UUID
 import java.util.function.Consumer
@@ -33,8 +34,11 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
   private val entity = mock[Entity]
   val semaphore: Semaphore[IO] = Semaphore[IO](1).unsafeRunSync()
 
-  val testOcflFileRetriever: OcflFileRetriever = () =>
-    new FixityCheckInputStream(new ByteArrayInputStream("".getBytes), DigestAlgorithm.fromOcflName("sha256"), "checksum")
+  val testOcflFileRetriever: OcflFileRetriever = new OcflFileRetriever:
+    override def retrieveFile(): FixityCheckInputStream = 
+      new FixityCheckInputStream(new ByteArrayInputStream("".getBytes), DigestAlgorithm.fromOcflName("sha256"), "checksum")
+
+    override def retrieveRange(startPosition: lang.Long, endPosition: lang.Long): InputStream = new ByteArrayInputStream("".getBytes)
 
   def mockGetObjectResponse(
       ocflRepository: OcflRepository,
