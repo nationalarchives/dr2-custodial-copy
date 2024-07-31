@@ -1,4 +1,4 @@
-package uk.gov.nationalarchives.disasterrecovery.testUtils
+package uk.gov.nationalarchives.custodialcopy.testUtils
 
 import cats.effect.IO
 import cats.effect.std.Semaphore
@@ -21,12 +21,12 @@ import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
 import software.amazon.awssdk.services.sns.model.PublishBatchResponse
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
-import uk.gov.nationalarchives.disasterrecovery.DisasterRecoveryObject.MetadataObject
-import uk.gov.nationalarchives.disasterrecovery.{DisasterRecoveryObject, Message, OcflService, Processor}
-import uk.gov.nationalarchives.disasterrecovery.Main.{Config, IdWithSourceAndDestPaths}
-import uk.gov.nationalarchives.disasterrecovery.Message.{CoReceivedSnsMessage, IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
-import uk.gov.nationalarchives.disasterrecovery.OcflService.MissingAndChangedObjects
-import uk.gov.nationalarchives.disasterrecovery.OcflService.*
+import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.MetadataObject
+import uk.gov.nationalarchives.custodialcopy.{CustodialCopyObject, Message, OcflService, Processor}
+import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
+import uk.gov.nationalarchives.custodialcopy.Message.{CoReceivedSnsMessage, IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
+import uk.gov.nationalarchives.custodialcopy.OcflService.MissingAndChangedObjects
+import uk.gov.nationalarchives.custodialcopy.OcflService.*
 import uk.gov.nationalarchives.*
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.{Entity, fromType}
@@ -388,8 +388,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       genType: GenerationType = Original,
       parentRefExists: Boolean = true,
       urlsToRepresentations: Seq[String] = Seq("http://testurl/representations/Preservation/1"),
-      missingObjects: List[DisasterRecoveryObject] = Nil,
-      changedObjects: List[DisasterRecoveryObject] = Nil,
+      missingObjects: List[CustodialCopyObject] = Nil,
+      changedObjects: List[CustodialCopyObject] = Nil,
       throwErrorInMissingAndChangedObjects: Boolean = false
   ) {
     val config: Config = Config("", "", "queueUrl", "", "", Option(URI.create("https://example.com")), "", "topicArn")
@@ -474,8 +474,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     private val idWithSourceAndDestPathsCaptor: ArgumentCaptor[List[IdWithSourceAndDestPaths]] =
       ArgumentCaptor.forClass(classOf[List[IdWithSourceAndDestPaths]])
     private val metadataXmlStringToValidate: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
-    private val droLookupCaptor: ArgumentCaptor[List[DisasterRecoveryObject]] =
-      ArgumentCaptor.forClass(classOf[List[DisasterRecoveryObject]])
+    private val droLookupCaptor: ArgumentCaptor[List[CustodialCopyObject]] =
+      ArgumentCaptor.forClass(classOf[List[CustodialCopyObject]])
 
     private val topicArnCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
     private val messagesCaptor: ArgumentCaptor[List[SendSnsMessage]] =
@@ -483,8 +483,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     private val receiptHandleCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
 
     private def mockOcflService(
-        missingObjects: List[DisasterRecoveryObject] = Nil,
-        changedObjects: List[DisasterRecoveryObject] = Nil,
+        missingObjects: List[CustodialCopyObject] = Nil,
+        changedObjects: List[CustodialCopyObject] = Nil,
         throwErrorInMissingAndChangedObjects: Boolean = false
     ): OcflService = {
       val ocflService = mock[OcflService]

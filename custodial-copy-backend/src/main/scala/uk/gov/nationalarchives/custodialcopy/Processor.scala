@@ -1,4 +1,4 @@
-package uk.gov.nationalarchives.disasterrecovery
+package uk.gov.nationalarchives.custodialcopy
 
 import cats.effect.IO
 import cats.implicits.*
@@ -11,12 +11,12 @@ import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.{DASNSClient, DASQSClient}
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
-import uk.gov.nationalarchives.disasterrecovery.DisasterRecoveryObject.*
-import uk.gov.nationalarchives.disasterrecovery.Main.{Config, IdWithSourceAndDestPaths}
-import uk.gov.nationalarchives.disasterrecovery.Message.{SendSnsMessage, *}
-import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectStatus
-import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectStatus.{Created, Updated}
-import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectType.{Bitstream, Metadata}
+import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.*
+import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
+import uk.gov.nationalarchives.custodialcopy.Message.*
+import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus
+import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Updated}
+import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Bitstream, Metadata}
 import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
@@ -135,7 +135,7 @@ class Processor(
 
   private def createMetadataFileName(entityTypeShort: String) = s"${entityTypeShort}_Metadata.xml"
 
-  private def toDisasterRecoveryObject(potentialMessage: Option[ReceivedSnsMessage]): IO[List[DisasterRecoveryObject]] = potentialMessage match {
+  private def toCustodialCopyObject(potentialMessage: Option[ReceivedSnsMessage]): IO[List[CustodialCopyObject]] = potentialMessage match {
     case Some(IoReceivedSnsMessage(ref, _)) =>
       for {
         entity <- fromType[IO](InformationObject.entityTypeShort, ref, None, None, deleted = false)
@@ -210,7 +210,7 @@ class Processor(
     case None => IO.pure(Nil)
   }
 
-  private def download(disasterRecoveryObject: DisasterRecoveryObject) = disasterRecoveryObject match {
+  private def download(custodialCopyObject: CustodialCopyObject) = custodialCopyObject match {
     case fo: FileObject =>
       for {
         writePath <- fo.sourceFilePath
@@ -242,7 +242,7 @@ class Processor(
     .getOrElse("")
 
   private def generateSnsMessage(
-      obj: DisasterRecoveryObject,
+      obj: CustodialCopyObject,
       status: ObjectStatus
   ): SendSnsMessage = {
     val objectType = obj match {
@@ -269,9 +269,9 @@ class Processor(
   def process(messageResponse: MessageResponse[Option[ReceivedSnsMessage]]): IO[Unit] =
     for {
       logger <- Slf4jLogger.create[IO]
-      disasterRecoveryObjects <- toDisasterRecoveryObject(messageResponse.message)
+      custodialCopyObjects <- toCustodialCopyObject(messageResponse.message)
 
-      missingAndChangedObjects <- ocflService.getMissingAndChangedObjects(disasterRecoveryObjects)
+      missingAndChangedObjects <- ocflService.getMissingAndChangedObjects(custodialCopyObjects)
 
       missingObjectsPaths <- missingAndChangedObjects.missingObjects.map(download).sequence
       changedObjectsPaths <- missingAndChangedObjects.changedObjects.map(download).sequence

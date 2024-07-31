@@ -22,7 +22,7 @@ jobs:
       - id: next-tag
         uses: nationalarchives/dr2-github-actions/.github/actions/get-next-version@main
         with:
-          repo-name: dr2-disaster-recovery
+          repo-name: dr2-custodial-copy
       - id: build-image
         run: | 
           sbt Docker/publish
@@ -37,5 +37,5 @@ jobs:
         uses: nationalarchives/dr2-github-actions/.github/actions/slack-send@main
         if: failure()
         with:
-          message: ":warning: Build failed for disaster recovery <https://github.com/nationalarchives/dr2-disaster-recovery/actions/runs/${{ github.run_id }}|View the failed workflow>"
+          message: ":warning: Build failed for custodial copy <https://github.com/nationalarchives/dr2-custodial-copy/actions/runs/${{ github.run_id }}|View the failed workflow>"
           slack-url: ${{ secrets.SLACK_WEBHOOK }}
