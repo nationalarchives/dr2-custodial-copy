@@ -6,6 +6,7 @@ import cats.effect.unsafe.implicits.global
 import io.ocfl.api.OcflRepository
 import io.ocfl.api.model.ObjectVersionId
 import org.apache.commons.codec.digest.DigestUtils
+import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.*
 import org.mockito.Mockito.{never, verify, when}
 import org.scalatest.EitherValues
@@ -45,6 +46,55 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       config: Config,
       processor: Processor
   ): List[Outcome[IO, Throwable, Unit]] = Main.runDisasterRecovery(sqsClient, config, processor).compile.toList.unsafeRunSync().flatten
+
+  "runDisasterRecovery" should "(given an IO message with 'deleted' set to 'true') delete all objects underneath it" in {
+    val fixity = Fixity("SHA256", "")
+    val ioId = UUID.randomUUID()
+    val bitStreamInfoList = Seq(
+      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt", 1, "", fixity, 1, Original, None, Some(ioId)),
+      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2", 1, "", fixity, 2, Derived, None, Some(ioId))
+    )
+    val bitStreamInfoList2 = Seq(
+      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt3", 1, "", fixity, 1, Original, None, Some(ioId))
+    )
+
+    val utils = new MainTestUtils(
+      List((ContentObject, false), (ContentObject, false), (InformationObject, true)),
+      typesOfMetadataFilesInRepo = List(InformationObject, ContentObject),
+      objectVersion = 4,
+      fileContentToWriteToEachFileInRepo = List("fileContent1", "fileContent2"),
+      entityDeleted = true,
+      bitstreamInfo1Responses = bitStreamInfoList,
+      bitstreamInfo2Responses = bitStreamInfoList2,
+      addAccessRepUrl = true
+    )
+
+    val repo = utils.repo
+    val ioMetadataDestinationPath = s"$ioId/IO_Metadata.xml"
+    val expectedDestinationFilePathsAlreadyInRepo = List(
+      s"$ioId/Preservation_1/${utils.coId1}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+      s"$ioId/Preservation_1/${utils.coId1}/derived/g2/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2",
+      s"$ioId/Preservation_1/${utils.coId1}/CO_Metadata.xml",
+      ioMetadataDestinationPath
+    )
+
+    expectedDestinationFilePathsAlreadyInRepo.foreach { path =>
+      repo.getObject(ioId.toHeadVersion).containsFile(path) must be(true)
+    }
+    utils.latestObjectVersion(repo, utils.ioId) must equal(4)
+
+    runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
+
+    val expectedDestinationFilePathsRemovedFromRepo = List(
+      s"$ioId/Preservation_1/${utils.coId2}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt3",
+      s"$ioId/Access_1/${utils.coId3}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt"
+    ) ++ expectedDestinationFilePathsAlreadyInRepo
+
+    val ocflObject = repo.getObject(ioId.toHeadVersion)
+
+    repo.getObject(ioId.toHeadVersion).getFiles.toArray.toList must be(Nil)
+    utils.latestObjectVersion(repo, utils.ioId) must equal(7)
+  }
 
   "runDisasterRecovery" should "write a new version and new IO metadata object, to the correct location in the repository " +
     "if it doesn't already exist" in {
@@ -167,7 +217,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
   }
 
   "runDisasterRecovery" should "only write one version if there are two identical IO messages" in {
-    val utils = new MainTestUtils(List(InformationObject, InformationObject), objectVersion = 0)
+    val utils = new MainTestUtils(List((InformationObject, false), (InformationObject, false)), objectVersion = 0)
     val ioId = utils.ioId
     val repo = utils.repo
 
@@ -196,13 +246,64 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
   "runDisasterRecovery" should "not call the process method if no messages are received" in {
     val processor = mock[Processor]
-    when(processor.process(any[MessageResponse[Option[ReceivedSnsMessage]]])).thenReturn(IO.unit)
-    val utils = new MainTestUtils(typesOfSqsMessages = Nil, objectVersion = 0)
+    when(processor.process(any[MessageResponse[Option[ReceivedSnsMessage]]], ArgumentMatchers.eq(false))).thenReturn(IO.unit)
+    val utils = new MainTestUtils(typesOfSqsMsgAndDeletionStatus = Nil, objectVersion = 0)
 
     runDisasterRecovery(utils.sqsClient, utils.config, processor)
 
-    verify(processor, never()).process(any[MessageResponse[Option[ReceivedSnsMessage]]])
+    verify(processor, never()).process(any[MessageResponse[Option[ReceivedSnsMessage]]], any[Boolean])
   }
+
+  "runDisasterRecovery" should "(given a CO message with 'deleted' set to 'true') throw an Exception" in {
+    val fixity = Fixity("SHA256", "")
+
+    val utils = new MainTestUtils(
+      List((ContentObject, true)),
+      typesOfMetadataFilesInRepo = List(InformationObject, ContentObject),
+      objectVersion = 3,
+      fileContentToWriteToEachFileInRepo = List("fileContent1"),
+      entityDeleted = true
+    )
+
+    val repo = utils.repo
+
+    utils.latestObjectVersion(repo, utils.ioId) must equal(3)
+
+    val err: Throwable = getError(utils.sqsClient, utils.config, utils.processor)
+
+    err.getMessage must equal(s"Content Object '${utils.coId1}' has been deleted")
+  }
+
+  "runDisasterRecovery" should "(given a CO and IO message that both have 'deleted' set to 'true') parse the CO message first, " +
+    "throw an Exception, and then parse the IO message" in {
+      val fixity = Fixity("SHA256", "")
+
+      val utils = new MainTestUtils(
+        List((ContentObject, true), (InformationObject, true)),
+        typesOfMetadataFilesInRepo = List(InformationObject, ContentObject),
+        objectVersion = 3,
+        fileContentToWriteToEachFileInRepo = List("fileContent1"),
+        entityDeleted = true
+      )
+
+      val repo = utils.repo
+
+      utils.latestObjectVersion(repo, utils.ioId) must equal(3)
+      val expectedDestinationFilePathsAlreadyInRepo = List(
+        s"${utils.ioId}/Preservation_1/${utils.coId1}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+        s"${utils.ioId}/Preservation_1/${utils.coId1}/CO_Metadata.xml",
+        s"${utils.ioId}/IO_Metadata.xml"
+      )
+
+      expectedDestinationFilePathsAlreadyInRepo.foreach { path =>
+        repo.getObject(utils.ioId.toHeadVersion).containsFile(path) must be(true)
+      }
+
+      val err: Throwable = getError(utils.sqsClient, utils.config, utils.processor)
+
+      err.getMessage must equal(s"Content Object '${utils.coId1}' has been deleted")
+      repo.getObject(utils.ioId.toHeadVersion).getFiles.toArray.toList must be(Nil)
+    }
 
   "runDisasterRecovery" should "return an error if a CO has no parent" in {
     val bitstreamInfo = Seq(
@@ -217,7 +318,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
         None
       )
     )
-    val utils = new MainTestUtils(List(ContentObject), 0, bitstreamInfo1Responses = bitstreamInfo)
+    val utils = new MainTestUtils(List((ContentObject, false)), 0, bitstreamInfo1Responses = bitstreamInfo)
 
     val err: Throwable = getError(utils.sqsClient, utils.config, utils.processor)
     err.getMessage must equal("Cannot get IO reference from CO")
@@ -226,7 +327,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
   "runDisasterRecovery" should "return an error if a CO belongs to more than one Representation type" in {
     val ioId = UUID.randomUUID()
     val utils = new MainTestUtils(
-      List(ContentObject),
+      List((ContentObject, false)),
       0,
       bitstreamInfo2Responses = Seq(
         BitStreamInfo(
@@ -254,7 +355,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
   "runDisasterRecovery" should "write a new version and a bitstream to a file, to the correct location in the repository " +
     "if it doesn't already exist" in {
       val utils = new MainTestUtils(
-        List(ContentObject),
+        List((ContentObject, false)),
         typesOfMetadataFilesInRepo = List(ContentObject)
       )
       val repo = utils.repo
@@ -281,7 +382,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val checksum = DigestUtils.sha256Hex(fileContent)
     val expectedVersionBeforeAndAfter = 2
     val utils = new MainTestUtils(
-      List(ContentObject),
+      List((ContentObject, false)),
       expectedVersionBeforeAndAfter,
       typesOfMetadataFilesInRepo = List(ContentObject),
       fileContentToWriteToEachFileInRepo = List(fileContent),
@@ -311,7 +412,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       val ioId = UUID.randomUUID()
 
       val utils = new MainTestUtils(
-        List(ContentObject),
+        List((ContentObject, false)),
         2,
         typesOfMetadataFilesInRepo = List(ContentObject),
         fileContentToWriteToEachFileInRepo = List(fileContent),
@@ -357,7 +458,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     )
 
     val utils = new MainTestUtils(
-      List(ContentObject, ContentObject, ContentObject),
+      List((ContentObject, false), (ContentObject, false), (ContentObject, false)),
       typesOfMetadataFilesInRepo = List(ContentObject),
       bitstreamInfo1Responses = bitStreamInfoList,
       bitstreamInfo2Responses = bitStreamInfoList2,
@@ -384,7 +485,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
   }
 
   "runDisasterRecovery" should "only write one version if there are two identical CO messages" in {
-    val utils = new MainTestUtils(List(ContentObject), 0)
+    val utils = new MainTestUtils(List((ContentObject, false)), 0)
     val ioId = utils.ioId
     val repo = utils.repo
 
@@ -394,7 +495,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
   "runDisasterRecovery" should "return an error if there is an error fetching the bitstream info" in {
     val preservicaClient = mock[EntityClient[IO, Fs2Streams[IO]]]
-    val utils = new MainTestUtils(List(ContentObject), 0)
+    val utils = new MainTestUtils(List((ContentObject, false)), 0)
     val sqsClient = utils.sqsClient
     when(preservicaClient.getBitstreamInfo(any[UUID])).thenThrow(new RuntimeException("Error getting bitstream info"))
 
@@ -411,7 +512,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       val checksum = DigestUtils.sha256Hex(fileContent)
       val ioId = UUID.randomUUID()
       val utils = new MainTestUtils(
-        List(ContentObject),
+        List((ContentObject, false)),
         1,
         fileContentToWriteToEachFileInRepo = List(fileContent),
         bitstreamInfo1Responses = List(
@@ -459,7 +560,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val checksum = DigestUtils.sha256Hex(fileContent)
     val ioId = UUID.randomUUID()
     val utils = new MainTestUtils(
-      List(InformationObject),
+      List((InformationObject, false)),
       2,
       typesOfMetadataFilesInRepo = List(ContentObject),
       fileContentToWriteToEachFileInRepo = List(fileContent),

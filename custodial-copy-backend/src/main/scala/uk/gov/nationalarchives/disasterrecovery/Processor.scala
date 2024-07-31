@@ -15,8 +15,8 @@ import uk.gov.nationalarchives.disasterrecovery.DisasterRecoveryObject.*
 import uk.gov.nationalarchives.disasterrecovery.Main.{Config, IdWithSourceAndDestPaths}
 import uk.gov.nationalarchives.disasterrecovery.Message.{SendSnsMessage, *}
 import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectStatus
-import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectStatus.{Created, Updated}
-import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectType.{Bitstream, Metadata}
+import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectStatus.{Created, Deleted, Updated}
+import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectType.{Bitstream, Metadata, MetadataAndPotentialBitstreams}
 import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
@@ -136,7 +136,7 @@ class Processor(
   private def createMetadataFileName(entityTypeShort: String) = s"${entityTypeShort}_Metadata.xml"
 
   private def toDisasterRecoveryObject(potentialMessage: Option[ReceivedSnsMessage]): IO[List[DisasterRecoveryObject]] = potentialMessage match {
-    case Some(IoReceivedSnsMessage(ref, _)) =>
+    case Some(IoReceivedSnsMessage(ref, _, _)) =>
       for {
         entity <- fromType[IO](InformationObject.entityTypeShort, ref, None, None, deleted = false)
         metadataFileName = createMetadataFileName(InformationObject.entityTypeShort)
@@ -151,7 +151,7 @@ class Processor(
           )
         }
       } yield metadataObject
-    case Some(CoReceivedSnsMessage(ref, _)) =>
+    case Some(CoReceivedSnsMessage(ref, _, _)) =>
       for {
         bitstreamInfoPerCo <- entityClient.getBitstreamInfo(ref)
         entity <- fromType[IO](
@@ -266,7 +266,7 @@ class Processor(
       .apply(message)
   }
 
-  def process(messageResponse: MessageResponse[Option[ReceivedSnsMessage]]): IO[Unit] =
+  private def processNonDeletedMessages(messageResponse: MessageResponse[Option[ReceivedSnsMessage]]): IO[List[SendSnsMessage]] =
     for {
       logger <- Slf4jLogger.create[IO]
       disasterRecoveryObjects <- toDisasterRecoveryObject(messageResponse.message)
@@ -284,7 +284,24 @@ class Processor(
       createdObjsSnsMessages = missingAndChangedObjects.missingObjects.map(generateSnsMessage(_, Created))
       updatedObjsSnsMessages = missingAndChangedObjects.changedObjects.map(generateSnsMessage(_, Updated))
 
-      snsMessages: List[SendSnsMessage] = createdObjsSnsMessages ++ updatedObjsSnsMessages
+    } yield createdObjsSnsMessages ++ updatedObjsSnsMessages
+
+  private def processDeletedEntities(messageResponse: MessageResponse[Option[ReceivedSnsMessage]]): IO[List[SendSnsMessage]] =
+    messageResponse.message.get match {
+      case IoReceivedSnsMessage(ref, _, _) =>
+        for {
+          filePaths <- ocflService.getAllFilePathsOnAnObject(ref)
+          _ <- ocflService.deleteObjects(ref, filePaths)
+          deletedObjsSnsMessages = List(SendSnsMessage(InformationObject, ref, MetadataAndPotentialBitstreams, Deleted, ""))
+        } yield deletedObjsSnsMessages
+      case CoReceivedSnsMessage(ref, _, _) =>
+        IO.raiseError(new Exception(s"Content Object '$ref' has been deleted"))
+    }
+
+  def process(messageResponse: MessageResponse[Option[ReceivedSnsMessage]], entityDeleted: Boolean): IO[Unit] =
+    for {
+      logger <- Slf4jLogger.create[IO]
+      snsMessages <- if entityDeleted then processDeletedEntities(messageResponse) else processNonDeletedMessages(messageResponse)
       _ <- IO.whenA(snsMessages.nonEmpty) {
         snsClient.publish[SendSnsMessage](config.topicArn)(snsMessages).map(_ => ())
       }
@@ -304,8 +321,8 @@ object Processor {
   )
 
   enum ObjectStatus:
-    case Created, Updated
+    case Created, Updated, Deleted
 
   enum ObjectType:
-    case Bitstream, Metadata
+    case Bitstream, Metadata, MetadataAndPotentialBitstreams
 }

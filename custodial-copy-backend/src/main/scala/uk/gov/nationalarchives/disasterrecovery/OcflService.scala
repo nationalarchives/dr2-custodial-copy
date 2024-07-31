@@ -3,7 +3,7 @@ package uk.gov.nationalarchives.disasterrecovery
 import cats.effect.IO
 import cats.effect.std.Semaphore
 import io.ocfl.api.exception.{CorruptObjectException, NotFoundException}
-import io.ocfl.api.model.{DigestAlgorithm, ObjectVersionId, VersionInfo}
+import io.ocfl.api.model.{DigestAlgorithm, ObjectVersionId, OcflObjectVersionFile, VersionInfo}
 import io.ocfl.api.{OcflConfig, OcflObjectUpdater, OcflOption, OcflRepository}
 import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
@@ -15,6 +15,7 @@ import java.nio.file.Paths
 import java.util.UUID
 import scala.util.{Failure, Success, Try}
 import scala.jdk.FunctionConverters.*
+import scala.jdk.CollectionConverters.*
 
 class OcflService(ocflRepository: OcflRepository, semaphore: Semaphore[IO]) {
   def createObjects(paths: List[IdWithSourceAndDestPaths]): IO[Unit] = semaphore.acquire >> IO.blocking {
@@ -39,6 +40,14 @@ class OcflService(ocflRepository: OcflRepository, semaphore: Semaphore[IO]) {
         )
       }
       .toList
+  } >> semaphore.release
+
+  def deleteObjects(ioId: UUID, destinationFilePaths: List[String]): IO[Unit] = semaphore.acquire >> IO.blocking {
+    ocflRepository.updateObject(
+      ioId.toHeadVersion,
+      new VersionInfo(),
+      { (updater: OcflObjectUpdater) => destinationFilePaths.foreach { path => updater.removeFile(path) } }.asJava
+    )
   } >> semaphore.release
 
   def getMissingAndChangedObjects(
@@ -82,6 +91,28 @@ class OcflService(ocflRepository: OcflRepository, semaphore: Semaphore[IO]) {
       missingAndNonMissingObjects("missingObjects"),
       missingAndNonMissingObjects("changedObjects")
     )
+  }
+
+  def getAllFilePathsOnAnObject(ioId: UUID): IO[List[String]] = IO.blocking {
+    val potentialOcflObject = Try(ocflRepository.getObject(ioId.toHeadVersion))
+
+    potentialOcflObject match {
+      case Success(ocflObject) =>
+        val objectVersionFileInList: List[OcflObjectVersionFile] = ocflObject.getFiles.asScala.toList
+        objectVersionFileInList.map(_.getPath)
+
+      case Failure(_: NotFoundException) => throw new Exception(s"Object id $ioId does not exist")
+      case Failure(coe: CorruptObjectException) =>
+        ocflRepository.purgeObject(ioId.toString)
+        throw new Exception(
+          s"Object $ioId is corrupt. The object has been purged and the error will be rethrown so the process can try again",
+          coe
+        )
+      case Failure(unexpectedError) =>
+        throw new Exception(
+          s"'getObject' returned an unexpected error '$unexpectedError' when called with object id $ioId"
+        )
+    }
   }
 }
 object OcflService {
