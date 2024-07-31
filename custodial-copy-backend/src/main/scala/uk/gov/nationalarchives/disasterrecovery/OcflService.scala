@@ -28,14 +28,13 @@ class OcflService(ocflRepository: OcflRepository, semaphore: Semaphore[IO]) {
           id.toHeadVersion,
           new VersionInfo(),
           { (updater: OcflObjectUpdater) =>
-            paths.map { idWithSourceAndDestPath =>
+            paths.foreach { idWithSourceAndDestPath =>
               updater.addPath(
                 idWithSourceAndDestPath.sourceNioFilePath,
                 idWithSourceAndDestPath.destinationPath,
                 OcflOption.OVERWRITE
               )
             }
-            ()
           }.asJava
         )
       }
