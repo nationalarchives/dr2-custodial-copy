@@ -1,6 +1,6 @@
 import sbt.*
 object Dependencies {
-  private lazy val daAwsClientsVersion = "0.1.74"
+  private lazy val daAwsClientsVersion = "0.1.75"
   private lazy val logbackVersion = "2.23.1"
   private lazy val log4CatsVersion = "2.7.0"
   private lazy val pureConfigVersion = "0.17.7"
@@ -29,5 +29,5 @@ object Dependencies {
   lazy val http4sEmber = "org.http4s" %% "http4s-ember-server" % http4sVersion
   lazy val http4sDsl = "org.http4s" %% "http4s-dsl" % http4sVersion
   lazy val doobieCore = "org.tpolecat" %% "doobie-core" % "1.0.0-RC5"
-  lazy val sqlite = "org.xerial" % "sqlite-jdbc" % "3.46.0.0"
+  lazy val sqlite = "org.xerial" % "sqlite-jdbc" % "3.46.0.1"
 }
