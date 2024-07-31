@@ -6,7 +6,7 @@ import cats.effect.unsafe.implicits.global
 import io.ocfl.api.exception.{CorruptObjectException, NotFoundException}
 import io.ocfl.api.io.FixityCheckInputStream
 import io.ocfl.api.model.*
-import io.ocfl.api.{OcflFileRetriever, OcflObjectUpdater, OcflRepository}
+import io.ocfl.api.{OcflFileRetriever, OcflObjectUpdater, OcflOption, OcflRepository}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.ArgumentCaptor
 import org.scalatestplus.mockito.MockitoSugar
@@ -20,7 +20,7 @@ import uk.gov.nationalarchives.dp.client.Entities.Entity
 
 import java.io.{ByteArrayInputStream, InputStream}
 import java.lang
-import java.nio.file.Paths
+import java.nio.file.{Path, Paths}
 import java.util.UUID
 import java.util.function.Consumer
 import scala.jdk.CollectionConverters.*
@@ -178,18 +178,29 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     val ocflRepository = mock[OcflRepository]
     val objectVersionCaptor: ArgumentCaptor[ObjectVersionId] = ArgumentCaptor.forClass(classOf[ObjectVersionId])
     val updater = mock[OcflObjectUpdater]
+    val sourceNioFilePathToAdd: ArgumentCaptor[Path] = ArgumentCaptor.forClass(classOf[Path])
+    val destinationPathToAdd: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
+    val optionToAdd: ArgumentCaptor[OcflOption] = ArgumentCaptor.forClass(classOf[OcflOption])
 
     when(ocflRepository.updateObject(objectVersionCaptor.capture, any[VersionInfo], any[Consumer[OcflObjectUpdater]]))
-      .thenAnswer(invocation => {
+      .thenAnswer { invocation =>
         val consumer = invocation.getArgument[Consumer[OcflObjectUpdater]](2)
         consumer.accept(updater)
         ObjectVersionId.head(id.toString)
-      })
+      }
     val service = new OcflService(ocflRepository, semaphore)
 
     service.createObjects(List(IdWithSourceAndDestPaths(id, Paths.get("test"), destinationPath))).unsafeRunSync()
 
     UUID.fromString(objectVersionCaptor.getValue.getObjectId) should equal(id)
+    verify(updater, times(1)).addPath(
+      sourceNioFilePathToAdd.capture,
+      destinationPathToAdd.capture,
+      optionToAdd.capture
+    )
+    sourceNioFilePathToAdd.getAllValues.asScala.toList should equal(List(Paths.get("test")))
+    destinationPathToAdd.getAllValues.asScala.toList should equal(List(destinationPath))
+    optionToAdd.getAllValues.asScala.toList should equal(List(OcflOption.OVERWRITE))
   }
 
   "getAllFilePathsOnAnObject" should "throw an exception if the object to be deleted does not exist" in {
@@ -260,11 +271,11 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     val pathsToDelete: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
 
     when(ocflRepository.updateObject(objectVersionCaptor.capture, any[VersionInfo], any[Consumer[OcflObjectUpdater]]))
-      .thenAnswer(invocation => {
+      .thenAnswer { invocation =>
         val consumer = invocation.getArgument[Consumer[OcflObjectUpdater]](2)
         consumer.accept(updater)
         ObjectVersionId.head(id.toString)
-      })
+      }
     val service = new OcflService(ocflRepository, semaphore)
 
     service.deleteObjects(id, List(destinationPath, "destinationPath2")).unsafeRunSync()
