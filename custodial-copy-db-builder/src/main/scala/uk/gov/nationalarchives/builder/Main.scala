@@ -27,7 +27,7 @@ object Main extends IOApp {
 
   private def logError(err: Throwable) = for {
     logger <- Slf4jLogger.create[IO]
-    _ <- logger.error(err)("Error running disaster recovery")
+    _ <- logger.error(err)("Error running custodial copy")
   } yield ()
 
   override def run(args: List[String]): IO[ExitCode] = for {

@@ -1,8 +1,8 @@
-# DR2 Disaster Recovery
+# DR2 Custodial Copy
 
-This repository contains three components which together make up the disaster recovery service.
+This repository contains three components which together make up the custodial copy service.
 
-## Disaster recovery backend
+## Custodial copy backend
 
 This is a service which is intended to run in a long-running Docker container.
 
@@ -97,7 +97,7 @@ These are ignored as there is nothing in the structural objects we want to store
 
 #### Deleting SQS messages
 
-If the disaster recovery process completes successfully, the messages are deleted from the SQS queue.
+If the custodial copy process completes successfully, the messages are deleted from the SQS queue.
 If any messages in a batch fail, all messages are left to try again. This avoids having to work out which ones were
 successful which could be error-prone.
 
@@ -127,7 +127,7 @@ repository to store the docker image.
 ## Frontend database builder
 
 This is a service which listens to an SQS queue.
-This queue receives a message whenever the main disaster-recovery process adds or updates an object in the OCFL
+This queue receives a message whenever the main custodial-copy process adds or updates an object in the OCFL
 repository.
 Given the IO id, the builder service looks up the metadata from the metadata files in the OCFL repo and stores it in a
 sqlite database.

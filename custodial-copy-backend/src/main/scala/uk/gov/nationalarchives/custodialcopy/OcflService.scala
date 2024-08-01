@@ -1,4 +1,4 @@
-package uk.gov.nationalarchives.disasterrecovery
+package uk.gov.nationalarchives.custodialcopy
 
 import cats.effect.IO
 import cats.effect.std.Semaphore
@@ -8,8 +8,8 @@ import io.ocfl.api.{OcflConfig, OcflObjectUpdater, OcflOption, OcflRepository}
 import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.storage.OcflStorageBuilder
-import uk.gov.nationalarchives.disasterrecovery.Main.{Config, IdWithSourceAndDestPaths}
-import uk.gov.nationalarchives.disasterrecovery.OcflService.*
+import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
+import uk.gov.nationalarchives.custodialcopy.OcflService.*
 
 import java.nio.file.Paths
 import java.util.UUID
@@ -42,10 +42,10 @@ class OcflService(ocflRepository: OcflRepository, semaphore: Semaphore[IO]) {
   } >> semaphore.release
 
   def getMissingAndChangedObjects(
-      objects: List[DisasterRecoveryObject]
+      objects: List[CustodialCopyObject]
   ): IO[MissingAndChangedObjects] = IO.blocking {
-    val missingAndNonMissingObjects: Map[String, List[DisasterRecoveryObject]] =
-      objects.foldLeft(Map[String, List[DisasterRecoveryObject]]("missingObjects" -> Nil, "changedObjects" -> Nil)) { case (objectMap, obj) =>
+    val missingAndNonMissingObjects: Map[String, List[CustodialCopyObject]] =
+      objects.foldLeft(Map[String, List[CustodialCopyObject]]("missingObjects" -> Nil, "changedObjects" -> Nil)) { case (objectMap, obj) =>
         val objectId = obj.id
         val potentialOcflObject = Try(ocflRepository.getObject(objectId.toHeadVersion))
         lazy val missedObjects = objectMap("missingObjects")
@@ -110,7 +110,7 @@ object OcflService {
     new OcflService(repo, semaphore)
   }
   case class MissingAndChangedObjects(
-      missingObjects: List[DisasterRecoveryObject],
-      changedObjects: List[DisasterRecoveryObject]
+      missingObjects: List[CustodialCopyObject],
+      changedObjects: List[CustodialCopyObject]
   )
 }

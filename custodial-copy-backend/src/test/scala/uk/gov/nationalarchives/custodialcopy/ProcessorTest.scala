@@ -1,4 +1,4 @@
-package uk.gov.nationalarchives.disasterrecovery
+package uk.gov.nationalarchives.custodialcopy
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -10,16 +10,16 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
-import uk.gov.nationalarchives.disasterrecovery.DisasterRecoveryObject.MetadataObject
-import uk.gov.nationalarchives.disasterrecovery.Main.IdWithSourceAndDestPaths
-import uk.gov.nationalarchives.disasterrecovery.Message.{IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
-import uk.gov.nationalarchives.disasterrecovery.OcflService.MissingAndChangedObjects
-import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectStatus.{Created, Updated}
-import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectType.Metadata
+import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.MetadataObject
+import uk.gov.nationalarchives.custodialcopy.Main.IdWithSourceAndDestPaths
+import uk.gov.nationalarchives.custodialcopy.Message.{IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
+import uk.gov.nationalarchives.custodialcopy.OcflService.MissingAndChangedObjects
+import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Updated}
+import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.Metadata
 import uk.gov.nationalarchives.dp.client.EntityClient.IoMetadata
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
-import uk.gov.nationalarchives.disasterrecovery.testUtils.ExternalServicesTestUtils.*
+import uk.gov.nationalarchives.custodialcopy.testUtils.ExternalServicesTestUtils.*
 
 import java.util.UUID
 import scala.xml.Elem
