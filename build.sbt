@@ -149,6 +149,6 @@ lazy val commonSettings = Seq(
     setupDirectories(name.value),
     Cmd("COPY", s"2/opt/docker/lib/${(assembly / assemblyJarName).value}", s"/opt/${(assembly / assemblyJarName).value}"),
     Cmd("USER", "1002"),
-    ExecCmd("CMD", "java", "-jar", s"/opt/${(assembly / assemblyJarName).value}")
+    ExecCmd("CMD", "java", "-Xmx2g", "-jar", s"/opt/${(assembly / assemblyJarName).value}")
   )
 )
