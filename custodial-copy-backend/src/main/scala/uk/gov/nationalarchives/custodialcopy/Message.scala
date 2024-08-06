@@ -1,9 +1,9 @@
-package uk.gov.nationalarchives.disasterrecovery
+package uk.gov.nationalarchives.custodialcopy
 
 import java.util.UUID
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType
-import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectStatus
-import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectType
+import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus
+import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType
 
 object Message {
   sealed trait ReceivedSnsMessage {

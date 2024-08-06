@@ -1,4 +1,4 @@
-package uk.gov.nationalarchives.disasterrecovery.testUtils
+package uk.gov.nationalarchives.custodialcopy.testUtils
 
 import cats.effect.IO
 import cats.effect.std.Semaphore
@@ -21,12 +21,12 @@ import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
 import software.amazon.awssdk.services.sns.model.PublishBatchResponse
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
-import uk.gov.nationalarchives.disasterrecovery.DisasterRecoveryObject.MetadataObject
-import uk.gov.nationalarchives.disasterrecovery.{DisasterRecoveryObject, Message, OcflService, Processor}
-import uk.gov.nationalarchives.disasterrecovery.Main.{Config, IdWithSourceAndDestPaths}
-import uk.gov.nationalarchives.disasterrecovery.Message.{CoReceivedSnsMessage, IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
-import uk.gov.nationalarchives.disasterrecovery.OcflService.MissingAndChangedObjects
-import uk.gov.nationalarchives.disasterrecovery.OcflService.*
+import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.MetadataObject
+import uk.gov.nationalarchives.custodialcopy.{CustodialCopyObject, Message, OcflService, Processor}
+import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
+import uk.gov.nationalarchives.custodialcopy.Message.{CoReceivedSnsMessage, IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
+import uk.gov.nationalarchives.custodialcopy.OcflService.MissingAndChangedObjects
+import uk.gov.nationalarchives.custodialcopy.OcflService.*
 import uk.gov.nationalarchives.*
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.{Entity, fromType}
@@ -183,7 +183,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       repo: OcflRepository,
       existingMetadata: Elem,
       destinationPath: String
-  ) = {
+  ): Unit = {
     val xmlAsString = existingMetadata.toString()
     addFileToRepo(id, repo, xmlAsString, metadataFile(id, entityType), destinationPath)
   }
@@ -194,7 +194,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       bodyAsString: String,
       sourceFilePath: String,
       destinationPath: String
-  ) = {
+  ): Unit = {
     val path = Files.createTempDirectory(id.toString)
     Files.createDirectories(Paths.get(path.toString, id.toString))
     val fullSourceFilePath = Paths.get(path.toString, sourceFilePath)
@@ -407,8 +407,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       genType: GenerationType = Original,
       parentRefExists: Boolean = true,
       urlsToRepresentations: Seq[String] = Seq("http://testurl/representations/Preservation/1"),
-      missingObjects: List[DisasterRecoveryObject] = Nil,
-      changedObjects: List[DisasterRecoveryObject] = Nil,
+      missingObjects: List[CustodialCopyObject] = Nil,
+      changedObjects: List[CustodialCopyObject] = Nil,
       pathsOfObjectsUnderIo: List[String] = Nil,
       throwErrorInMissingAndChangedObjects: Boolean = false
   ) {
@@ -494,18 +494,19 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     private val idWithSourceAndDestPathsCaptor: ArgumentCaptor[List[IdWithSourceAndDestPaths]] =
       ArgumentCaptor.forClass(classOf[List[IdWithSourceAndDestPaths]])
     private val metadataXmlStringToValidate: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
-    private val droLookupCaptor: ArgumentCaptor[List[DisasterRecoveryObject]] =
-      ArgumentCaptor.forClass(classOf[List[DisasterRecoveryObject]])
+    private val droLookupCaptor: ArgumentCaptor[List[CustodialCopyObject]] =
+      ArgumentCaptor.forClass(classOf[List[CustodialCopyObject]])
     private val ioToDeleteObjectsFromCaptor: ArgumentCaptor[UUID] = ArgumentCaptor.forClass(classOf[UUID])
     private val pathsToDeleteCaptor: ArgumentCaptor[List[String]] = ArgumentCaptor.forClass(classOf[List[String]])
+
     private val topicArnCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
     private val messagesCaptor: ArgumentCaptor[List[SendSnsMessage]] =
       ArgumentCaptor.forClass(classOf[List[SendSnsMessage]])
     private val receiptHandleCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
 
     private def mockOcflService(
-        missingObjects: List[DisasterRecoveryObject] = Nil,
-        changedObjects: List[DisasterRecoveryObject] = Nil,
+        missingObjects: List[CustodialCopyObject] = Nil,
+        changedObjects: List[CustodialCopyObject] = Nil,
         pathsOfObjects: List[String] = Nil,
         throwErrorInMissingAndChangedObjects: Boolean = false
     ): OcflService = {

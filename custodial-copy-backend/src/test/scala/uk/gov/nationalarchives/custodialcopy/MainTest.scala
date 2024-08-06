@@ -1,4 +1,4 @@
-package uk.gov.nationalarchives.disasterrecovery
+package uk.gov.nationalarchives.custodialcopy
 
 import cats.effect.{IO, Outcome}
 import cats.effect.std.Semaphore
@@ -16,10 +16,10 @@ import org.scalatestplus.mockito.MockitoSugar
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DASQSClient
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
-import uk.gov.nationalarchives.disasterrecovery.Main.*
-import uk.gov.nationalarchives.disasterrecovery.Message.ReceivedSnsMessage
-import uk.gov.nationalarchives.disasterrecovery.OcflService.*
-import uk.gov.nationalarchives.disasterrecovery.testUtils.ExternalServicesTestUtils.MainTestUtils
+import uk.gov.nationalarchives.custodialcopy.Main.*
+import uk.gov.nationalarchives.custodialcopy.Message.ReceivedSnsMessage
+import uk.gov.nationalarchives.custodialcopy.OcflService.*
+import uk.gov.nationalarchives.custodialcopy.testUtils.ExternalServicesTestUtils.MainTestUtils
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.Entity
 import uk.gov.nationalarchives.dp.client.EntityClient
@@ -37,17 +37,17 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       sqsClient: DASQSClient[IO],
       config: Config,
       processor: Processor
-  ): Throwable = runDisasterRecovery(sqsClient, config, processor).head match
+  ): Throwable = runCustodialCopy(sqsClient, config, processor).head match
     case Outcome.Errored(e) => e
     case _                  => throw new Exception("Expected an error but none found")
 
-  private def runDisasterRecovery(
+  private def runCustodialCopy(
       sqsClient: DASQSClient[IO],
       config: Config,
       processor: Processor
-  ): List[Outcome[IO, Throwable, Unit]] = Main.runDisasterRecovery(sqsClient, config, processor).compile.toList.unsafeRunSync().flatten
+  ): List[Outcome[IO, Throwable, Unit]] = Main.runCustodialCopy(sqsClient, config, processor).compile.toList.unsafeRunSync().flatten
 
-  "runDisasterRecovery" should "(given an IO message with 'deleted' set to 'true') delete all objects underneath it" in {
+  "runCustodialCopy" should "(given an IO message with 'deleted' set to 'true') delete all objects underneath it" in {
     val fixity = Fixity("SHA256", "")
     val ioId = UUID.randomUUID()
     val bitStreamInfoList = Seq(
@@ -83,7 +83,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     }
     utils.latestObjectVersion(repo, utils.ioId) must equal(4)
 
-    runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
+    runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 
     val expectedDestinationFilePathsRemovedFromRepo = List(
       s"$ioId/Preservation_1/${utils.coId2}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt3",
@@ -96,14 +96,14 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     utils.latestObjectVersion(repo, utils.ioId) must equal(7)
   }
 
-  "runDisasterRecovery" should "write a new version and new IO metadata object, to the correct location in the repository " +
+  "runCustodialCopy" should "write a new version and new IO metadata object, to the correct location in the repository " +
     "if it doesn't already exist" in {
       val utils = new MainTestUtils(objectVersion = 0)
       val ioId = utils.ioId
       val repo = utils.repo
       val expectedIoMetadataFileDestinationPath = utils.expectedIoMetadataFileDestinationPath
 
-      runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
+      runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 
       utils.latestObjectVersion(repo, ioId) must equal(1)
       repo.containsObject(ioId.toString) must be(true)
@@ -127,18 +127,18 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       )
     }
 
-  "runDisasterRecovery" should "not write a new version, nor new IO metadata object if there is an IO message with " +
+  "runCustodialCopy" should "not write a new version, nor new IO metadata object if there is an IO message with " +
     "the same metadata" in {
       val utils = new MainTestUtils(typesOfMetadataFilesInRepo = List(InformationObject))
       val ioId = utils.ioId
       val repo = utils.repo
 
-      runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
+      runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 
       utils.latestObjectVersion(repo, ioId) must equal(1)
     }
 
-  "runDisasterRecovery" should "write a new version and a new IO metadata object if there is an IO message with different metadata" in {
+  "runCustodialCopy" should "write a new version and a new IO metadata object if there is an IO message with different metadata" in {
     val utils = new MainTestUtils(
       typesOfMetadataFilesInRepo = List(InformationObject),
       metadataElemsPreservicaResponse = Seq(
@@ -148,7 +148,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val ioId = utils.ioId
     val repo = utils.repo
 
-    runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
+    runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 
     utils.latestObjectVersion(repo, ioId) must equal(2)
 
@@ -176,7 +176,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     )
   }
 
-  "runDisasterRecovery" should "write multiple metadata fragments to the same file" in {
+  "runCustodialCopy" should "write multiple metadata fragments to the same file" in {
     val utils =
       new MainTestUtils(
         objectVersion = 0,
@@ -188,7 +188,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val ioId = utils.ioId
     val repo = utils.repo
 
-    runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
+    runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
     utils.latestObjectVersion(repo, ioId) must equal(1)
 
     val metadataStoragePath =
@@ -216,16 +216,16 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     )
   }
 
-  "runDisasterRecovery" should "only write one version if there are two identical IO messages" in {
+  "runCustodialCopy" should "only write one version if there are two identical IO messages" in {
     val utils = new MainTestUtils(List((InformationObject, false), (InformationObject, false)), objectVersion = 0)
     val ioId = utils.ioId
     val repo = utils.repo
 
-    runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
+    runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
     utils.latestObjectVersion(repo, ioId) must equal(1)
   }
 
-  "runDisasterRecovery" should "return an error if there is an error fetching the metadata" in {
+  "runCustodialCopy" should "return an error if there is an error fetching the metadata" in {
     val preservicaClient = mock[EntityClient[IO, Fs2Streams[IO]]]
     val utils = new MainTestUtils(objectVersion = 0)
     when(preservicaClient.metadataForEntity(any[Entity])).thenThrow(new RuntimeException("Error getting metadata"))
@@ -244,17 +244,17 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     err.getMessage must equal("Error getting metadata")
   }
 
-  "runDisasterRecovery" should "not call the process method if no messages are received" in {
+  "runCustodialCopy" should "not call the process method if no messages are received" in {
     val processor = mock[Processor]
     when(processor.process(any[MessageResponse[Option[ReceivedSnsMessage]]], ArgumentMatchers.eq(false))).thenReturn(IO.unit)
     val utils = new MainTestUtils(typesOfSqsMsgAndDeletionStatus = Nil, objectVersion = 0)
 
-    runDisasterRecovery(utils.sqsClient, utils.config, processor)
+    runCustodialCopy(utils.sqsClient, utils.config, processor)
 
     verify(processor, never()).process(any[MessageResponse[Option[ReceivedSnsMessage]]], any[Boolean])
   }
 
-  "runDisasterRecovery" should "(given a CO message with 'deleted' set to 'true') throw an Exception" in {
+  "runCustodialCopy" should "(given a CO message with 'deleted' set to 'true') throw an Exception" in {
     val fixity = Fixity("SHA256", "")
 
     val utils = new MainTestUtils(
@@ -274,7 +274,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     err.getMessage must equal(s"Content Object '${utils.coId1}' has been deleted")
   }
 
-  "runDisasterRecovery" should "(given a CO and IO message that both have 'deleted' set to 'true') parse the CO message first, " +
+  "runCustodialCopy" should "(given a CO and IO message that both have 'deleted' set to 'true') parse the CO message first, " +
     "throw an Exception, and then parse the IO message" in {
       val fixity = Fixity("SHA256", "")
 
@@ -305,7 +305,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       repo.getObject(utils.ioId.toHeadVersion).getFiles.toArray.toList must be(Nil)
     }
 
-  "runDisasterRecovery" should "return an error if a CO has no parent" in {
+  "runCustodialCopy" should "return an error if a CO has no parent" in {
     val bitstreamInfo = Seq(
       BitStreamInfo(
         "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
@@ -324,7 +324,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     err.getMessage must equal("Cannot get IO reference from CO")
   }
 
-  "runDisasterRecovery" should "return an error if a CO belongs to more than one Representation type" in {
+  "runCustodialCopy" should "return an error if a CO belongs to more than one Representation type" in {
     val ioId = UUID.randomUUID()
     val utils = new MainTestUtils(
       List((ContentObject, false)),
@@ -352,7 +352,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     )
   }
 
-  "runDisasterRecovery" should "write a new version and a bitstream to a file, to the correct location in the repository " +
+  "runCustodialCopy" should "write a new version and a bitstream to a file, to the correct location in the repository " +
     "if it doesn't already exist" in {
       val utils = new MainTestUtils(
         List((ContentObject, false)),
@@ -363,7 +363,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
       val expectedCoFileDestinationFilePath = utils.expectedCoFileDestinationPath
 
-      runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
+      runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 
       utils.latestObjectVersion(repo, ioId) must equal(2)
       repo.containsObject(ioId.toString) must be(true)
@@ -376,7 +376,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       coContent must equal(s"File content for 90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt")
     }
 
-  "runDisasterRecovery" should "not write a new version, nor a new bitstream if there is an CO message with the same bitstream" in {
+  "runCustodialCopy" should "not write a new version, nor a new bitstream if there is an CO message with the same bitstream" in {
     val ioId = UUID.randomUUID()
     val fileContent = "Test"
     val checksum = DigestUtils.sha256Hex(fileContent)
@@ -401,12 +401,12 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     )
     val repo = utils.repo
 
-    runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
+    runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 
     utils.latestObjectVersion(repo, ioId) must equal(expectedVersionBeforeAndAfter)
   }
 
-  "runDisasterRecovery" should "write a new version and a bitstream to a file, to the correct location in the repository, " +
+  "runCustodialCopy" should "write a new version and a bitstream to a file, to the correct location in the repository, " +
     "if there is a CO message with different metadata" in {
       val fileContent = "Test"
       val ioId = UUID.randomUUID()
@@ -433,7 +433,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       val repo = utils.repo
       val expectedCoFileDestinationFilePath = utils.expectedCoFileDestinationPath
 
-      runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
+      runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 
       utils.latestObjectVersion(repo, ioId) must equal(3)
       repo.containsObject(ioId.toString) must be(true)
@@ -446,7 +446,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       coContent must equal(s"File content for 90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt")
     }
 
-  "runDisasterRecovery" should "write multiple bitstreams to the same version and to the correct location" in {
+  "runCustodialCopy" should "write multiple bitstreams to the same version and to the correct location" in {
     val ioId = UUID.randomUUID()
     val fixity = Fixity("SHA256", "")
     val bitStreamInfoList = Seq(
@@ -469,7 +469,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val coId3 = utils.coId3
     val repo = utils.repo
 
-    runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
+    runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 
     val expectedCoFileDestinationFilePaths = List(
       s"$ioId/Preservation_1/$coId/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
@@ -484,16 +484,16 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     utils.latestObjectVersion(repo, ioId) must equal(4)
   }
 
-  "runDisasterRecovery" should "only write one version if there are two identical CO messages" in {
+  "runCustodialCopy" should "only write one version if there are two identical CO messages" in {
     val utils = new MainTestUtils(List((ContentObject, false)), 0)
     val ioId = utils.ioId
     val repo = utils.repo
 
-    runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
+    runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
     utils.latestObjectVersion(repo, ioId) must equal(1)
   }
 
-  "runDisasterRecovery" should "return an error if there is an error fetching the bitstream info" in {
+  "runCustodialCopy" should "return an error if there is an error fetching the bitstream info" in {
     val preservicaClient = mock[EntityClient[IO, Fs2Streams[IO]]]
     val utils = new MainTestUtils(List((ContentObject, false)), 0)
     val sqsClient = utils.sqsClient
@@ -506,7 +506,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     err.getMessage must equal("Error getting bitstream info")
   }
 
-  "runDisasterRecovery" should "write a new version and new CO metadata object, to the correct location in the repository " +
+  "runCustodialCopy" should "write a new version and new CO metadata object, to the correct location in the repository " +
     "if it doesn't already exist" in {
       val fileContent = "File content for name"
       val checksum = DigestUtils.sha256Hex(fileContent)
@@ -531,7 +531,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       val repo = utils.repo
       val expectedCoMetadataFileDestinationPath = utils.expectedCoMetadataFileDestinationPath
 
-      runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
+      runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 
       utils.latestObjectVersion(repo, ioId) must equal(2)
       repo.containsObject(ioId.toString) must be(true)
@@ -555,7 +555,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       )
     }
 
-  "runDisasterRecovery" should "write a new version and new CO metadata object if there is a CO message with different metadata" in {
+  "runCustodialCopy" should "write a new version and new CO metadata object if there is a CO message with different metadata" in {
     val fileContent = "Test"
     val checksum = DigestUtils.sha256Hex(fileContent)
     val ioId = UUID.randomUUID()
@@ -582,7 +582,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     )
     val repo = utils.repo
 
-    runDisasterRecovery(utils.sqsClient, utils.config, utils.processor)
+    runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 
     utils.latestObjectVersion(repo, ioId) must equal(3)
 
@@ -610,7 +610,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     )
   }
 
-  "runDisasterRecovery" should "throw an error if the OCFL repository returns an unexpected error" in {
+  "runCustodialCopy" should "throw an error if the OCFL repository returns an unexpected error" in {
     val utils = new MainTestUtils(objectVersion = 0)
     val ioId = utils.ioId
 

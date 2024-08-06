@@ -1,4 +1,4 @@
-name: Deploy Disaster Recovery
+name: Deploy Custodial Copy
 permissions:
   id-token: write
   contents: write
@@ -17,7 +17,7 @@ on:
       to-deploy:
         description: 'Version to deploy'
         required: true
-run-name: Deploying Disaster Recovery ${{inputs.to-deploy}} to ${{inputs.environment}}
+run-name: Deploying Custodial Copy ${{inputs.to-deploy}} to ${{inputs.environment}}
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -47,11 +47,11 @@ jobs:
       - name: Send success message
         uses: nationalarchives/tdr-github-actions/.github/actions/slack-send@main
         with:
-          message: "*disaster-recovery-backend*, *disaster-recovery-db-builder*, *disaster-recovery-webapp* :whale: The '${{ github.event.inputs.to-deploy }}' image has been tagged with '${{ github.event.inputs.environment }}' in ECR"
+          message: "*custodial-copy-backend*, *custodial-copy-db-builder*, *custodial-copy-webapp* :whale: The '${{ github.event.inputs.to-deploy }}' image has been tagged with '${{ github.event.inputs.environment }}' in ECR"
           slack-url: ${{ secrets.SLACK_WEBHOOK }}
       - name: Send failure message
         uses: nationalarchives/dr2-github-actions/.github/actions/slack-send@main
         if: failure()
         with:
-          message: ":warning: Build failed for disaster recovery <https://github.com/nationalarchives/dr2-disaster-recovery/actions/runs/${{ github.run_id }}|View the failed workflow>"
+          message: ":warning: Build failed for custodial copy <https://github.com/nationalarchives/dr2-custodial-copy/actions/runs/${{ github.run_id }}|View the failed workflow>"
           slack-url: ${{ secrets.SLACK_WEBHOOK }}

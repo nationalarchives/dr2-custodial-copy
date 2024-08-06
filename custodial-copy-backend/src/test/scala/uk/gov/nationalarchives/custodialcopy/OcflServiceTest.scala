@@ -1,4 +1,4 @@
-package uk.gov.nationalarchives.disasterrecovery
+package uk.gov.nationalarchives.custodialcopy
 
 import cats.effect.IO
 import cats.effect.std.Semaphore
@@ -14,8 +14,8 @@ import org.mockito.Mockito.{doNothing, times, verify, when}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.prop.TableDrivenPropertyChecks
-import uk.gov.nationalarchives.disasterrecovery.DisasterRecoveryObject.FileObject
-import uk.gov.nationalarchives.disasterrecovery.Main.IdWithSourceAndDestPaths
+import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.FileObject
+import uk.gov.nationalarchives.custodialcopy.Main.IdWithSourceAndDestPaths
 import uk.gov.nationalarchives.dp.client.Entities.Entity
 
 import java.io.{ByteArrayInputStream, InputStream}

@@ -1,4 +1,4 @@
-package uk.gov.nationalarchives.disasterrecovery
+package uk.gov.nationalarchives.custodialcopy
 
 import cats.effect.*
 import cats.effect.std.Semaphore
@@ -11,7 +11,7 @@ import pureconfig.generic.derivation.default.*
 import pureconfig.module.catseffect.syntax.*
 import uk.gov.nationalarchives.DASQSClient
 import uk.gov.nationalarchives.dp.client.fs2.Fs2Client
-import uk.gov.nationalarchives.disasterrecovery.Message.*
+import uk.gov.nationalarchives.custodialcopy.Message.*
 import uk.gov.nationalarchives.DASNSClient
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 
@@ -70,12 +70,12 @@ object Main extends IOApp {
       processor <- Processor(config, sqs, service, client, sns)
       _ <- {
         Stream.fixedRateStartImmediately[IO](20.seconds) >>
-          runDisasterRecovery(sqs, config, processor)
+          runCustodialCopy(sqs, config, processor)
             .handleErrorWith(err => Stream.eval(semaphore.release >> logError(err)))
       }.compile.drain
     } yield ExitCode.Success
 
-  def runDisasterRecovery(sqs: DASQSClient[IO], config: Config, processor: Processor): Stream[IO, List[Outcome[IO, Throwable, Unit]]] =
+  def runCustodialCopy(sqs: DASQSClient[IO], config: Config, processor: Processor): Stream[IO, List[Outcome[IO, Throwable, Unit]]] =
     Stream
       .eval(sqs.receiveMessages[Option[ReceivedSnsMessage]](config.sqsQueueUrl))
       .filter(messageResponses => messageResponses.nonEmpty)
@@ -120,6 +120,6 @@ object Main extends IOApp {
 
   private def logError(err: Throwable) = for {
     logger <- Slf4jLogger.create[IO]
-    _ <- logger.error(err)("Error running disaster recovery")
+    _ <- logger.error(err)("Error running custodial copy")
   } yield ()
 }

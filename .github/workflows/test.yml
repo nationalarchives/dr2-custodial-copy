@@ -11,7 +11,7 @@ jobs:
   test:
     uses: nationalarchives/dr2-github-actions/.github/workflows/dr2_test.yml@main
     with:
-      repo-name: dr2-disaster-recovery
+      repo-name: dr2-custodial-copy
       test-command: sbt scalafmtCheckAll test
     secrets:
       SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
