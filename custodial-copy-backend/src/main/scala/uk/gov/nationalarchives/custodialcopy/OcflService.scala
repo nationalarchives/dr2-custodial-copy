@@ -43,10 +43,10 @@ class OcflService(ocflRepository: OcflRepository, semaphore: Semaphore[IO]) {
   def getMissingAndChangedObjects(
       objects: List[CustodialCopyObject]
   ): IO[MissingAndChangedObjects] = objects
-    .foldLeft(IO(List[CustodialCopyObject](), List[CustodialCopyObject]())) { case (missingChangedPairIO, obj) =>
+    .foldLeft(IO(List[CustodialCopyObject](), List[CustodialCopyObject]())) { case (missingAndChangedIO, obj) =>
       val objectId = obj.id
-      missingChangedPairIO.flatMap { missingChangedPair =>
-        val (missedObjects, changedObjects) = missingChangedPair
+      missingAndChangedIO.flatMap { missingAndChanged =>
+        val (missingObjects, changedObjects) = missingAndChanged
         IO.blocking(ocflRepository.getObject(objectId.toHeadVersion))
           .map { ocflObject =>
             val potentialFile = Option(ocflObject.getFile(obj.destinationFilePath))
@@ -54,13 +54,13 @@ class OcflService(ocflRepository: OcflRepository, semaphore: Semaphore[IO]) {
               case Some(ocflFileObject) =>
                 val checksumUnchanged =
                   Some(ocflFileObject.getFixity.get(DigestAlgorithm.fromOcflName("sha256"))).contains(obj.checksum)
-                if checksumUnchanged then missingChangedPair else (missedObjects, obj :: changedObjects)
+                if checksumUnchanged then missingAndChanged else (missingObjects, obj :: changedObjects)
               case None =>
-                (obj :: missedObjects, changedObjects) // Information Object exists but file doesn't
+                (obj :: missingObjects, changedObjects) // Information Object exists but file doesn't
             }
           }
           .handleErrorWith {
-            case _: NotFoundException => IO.pure(obj :: missedObjects, changedObjects)
+            case _: NotFoundException => IO.pure(obj :: missingObjects, changedObjects)
             case coe: CorruptObjectException =>
               IO.blocking(ocflRepository.purgeObject(objectId.toString)) >>
                 IO.raiseError(
