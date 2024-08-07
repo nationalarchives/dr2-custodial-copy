@@ -44,8 +44,7 @@ lazy val custodialCopyBackend = (project in file("custodial-copy-backend"))
       preservicaClient,
       snsClient,
       sqsClient,
-      fs2Core,
-      ocfl
+      fs2Core
     )
   )
   .dependsOn(utils)
@@ -61,12 +60,25 @@ lazy val utils = (project in file("utils"))
       log4jTemplateJson,
       log4CatsSlf4j,
       log4Cats,
+      ocfl,
       pureConfigCatsEffect,
       pureConfig,
       scalaXml,
       doobieCore,
       sqlite
     )
+  )
+
+lazy val reIndexer = (project in file("custodial-copy-re-indexer"))
+  .enablePlugins(UniversalPlugin, JavaAppPackaging)
+  .settings(commonSettings)
+  .dependsOn(utils)
+  .settings(
+    libraryDependencies ++= Seq(
+      declineEffect,
+      fs2Io
+    ),
+    dockerCommands := dockerCommands.value.dropRight(1) :+ ExecCmd("ENTRYPOINT", "java", "-Xmx2g", "-jar", s"/opt/${(assembly / assemblyJarName).value}")
   )
 
 lazy val builder = (project in file("custodial-copy-db-builder"))
@@ -78,8 +90,7 @@ lazy val builder = (project in file("custodial-copy-db-builder"))
     scalacOptions += "-Wunused:imports",
     assembly / assemblyJarName := "custodial-copy-db-builder.jar",
     libraryDependencies ++= Seq(
-      ocfl,
-      fs2,
+      fs2Core,
       sqsClient
     )
   )
@@ -95,7 +106,6 @@ lazy val webapp = (project in file("custodial-copy-webapp"))
     libraryDependencies ++= Seq(
       http4sEmber,
       http4sDsl,
-      ocfl
     )
   )
   .dependsOn(utils)
@@ -141,7 +151,7 @@ lazy val commonSettings = Seq(
     filtered :+ (fatJar -> ("lib/" + fatJar.getName))
   },
   dockerRepository := Some(s"${sys.env.getOrElse("MANAGEMENT_ACCOUNT_NUMBER", "")}.dkr.ecr.eu-west-2.amazonaws.com"),
-  dockerBuildOptions ++= Seq("--no-cache", "--pull"),
+//  dockerBuildOptions ++= Seq("--no-cache", "--pull"),
   Docker / packageName := s"dr2-${baseDirectory.value.getName}",
   Docker / version := sys.env.getOrElse("DOCKER_TAG", version.value),
   dockerCommands := Seq(

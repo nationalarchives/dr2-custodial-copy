@@ -10,6 +10,7 @@ import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.storage.OcflStorageBuilder
 import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
 import uk.gov.nationalarchives.custodialcopy.OcflService.*
+import uk.gov.nationalarchives.utils.Utils.*
 
 import java.nio.file.Paths
 import java.util.UUID
@@ -85,7 +86,6 @@ class OcflService(ocflRepository: OcflRepository, semaphore: Semaphore[IO]) {
   }
 }
 object OcflService {
-  extension (uuid: UUID) def toHeadVersion: ObjectVersionId = ObjectVersionId.head(uuid.toString)
 
   def apply(config: Config, semaphore: Semaphore[IO]): IO[OcflService] = IO {
     val repoDir = Paths.get(config.repoDir)
