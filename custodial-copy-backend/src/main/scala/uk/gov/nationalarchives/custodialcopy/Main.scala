@@ -38,7 +38,7 @@ object Main extends IOApp {
       .map(proxy => DASQSClient[IO](proxy))
       .getOrElse(DASQSClient[IO]())
 
-  given Decoder[Option[ReceivedSnsMessage]] = (c: HCursor) =>
+  given Decoder[ReceivedSnsMessage] = (c: HCursor) =>
     for {
       id <- c.downField("id").as[String]
     } yield {
@@ -46,9 +46,9 @@ object Main extends IOApp {
       val ref = UUID.fromString(typeAndRef.last)
       val entityType = typeAndRef.head
       entityType match {
-        case "io" => Option(IoReceivedSnsMessage(ref, id))
-        case "co" => Option(CoReceivedSnsMessage(ref, id))
-        case _    => None
+        case "io" => IoReceivedSnsMessage(ref)
+        case "co" => CoReceivedSnsMessage(ref)
+        case "so" => SoReceivedSnsMessage(ref)
       }
     }
 
@@ -76,13 +76,13 @@ object Main extends IOApp {
 
   def runCustodialCopy(sqs: DASQSClient[IO], config: Config, processor: Processor): Stream[IO, List[Outcome[IO, Throwable, Unit]]] =
     Stream
-      .eval(sqs.receiveMessages[Option[ReceivedSnsMessage]](config.sqsQueueUrl))
+      .eval(sqs.receiveMessages[ReceivedSnsMessage](config.sqsQueueUrl))
       .filter(messageResponses => messageResponses.nonEmpty)
       .evalMap { messageResponses =>
         for {
           logger <- Slf4jLogger.create[IO]
           _ <- logger.info(s"Processing ${messageResponses.length} messages")
-          _ <- logger.info(messageResponses.flatMap(_.message.map(_.messageText)).mkString(","))
+          _ <- logger.info(messageResponses.map(_.message.ref).mkString(","))
           fibers <- dedupeMessages(messageResponses).parTraverse(processor.process(_).start)
           fiberResults <- fibers.traverse(_.join)
           _ <- logger.info(s"${fiberResults.count(_.isSuccess)} messages out of ${fibers.length} unique messages processed successfully")
@@ -94,8 +94,8 @@ object Main extends IOApp {
         } yield fiberResults
       }
 
-  private def dedupeMessages(messages: List[MessageResponse[Option[ReceivedSnsMessage]]]): List[MessageResponse[Option[ReceivedSnsMessage]]] =
-    messages.distinctBy(_.message.map(_.messageText))
+  private def dedupeMessages(messages: List[MessageResponse[ReceivedSnsMessage]]): List[MessageResponse[ReceivedSnsMessage]] =
+    messages.distinctBy(_.message.ref)
 
   private def logError(err: Throwable) = for {
     logger <- Slf4jLogger.create[IO]
