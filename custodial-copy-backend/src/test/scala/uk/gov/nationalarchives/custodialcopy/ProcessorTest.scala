@@ -45,7 +45,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     )
   }
 
-  "process" should "throw and Exception if a CO message has 'deleted' set to 'true'" in {
+  "process" should "throw an Exception if a CO message has 'deleted' set to 'true'" in {
     val utils = new ProcessorTestUtils()
 
     val ex = intercept[Exception] {

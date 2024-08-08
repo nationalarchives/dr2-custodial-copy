@@ -263,7 +263,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     objectIdCaptor.getValue should equal(id.toString)
   }
 
-  "deleteObjects" should "make the call to delete DR objects in the OCFL repository" in {
+  "deleteObjects" should "make the call to delete CC objects in the OCFL repository" in {
     val id = UUID.randomUUID()
     val ocflRepository = mock[OcflRepository]
     val objectVersionCaptor: ArgumentCaptor[ObjectVersionId] = ArgumentCaptor.forClass(classOf[ObjectVersionId])
