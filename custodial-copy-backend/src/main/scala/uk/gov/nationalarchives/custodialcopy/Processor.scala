@@ -1,4 +1,4 @@
-package uk.gov.nationalarchives.disasterrecovery
+package uk.gov.nationalarchives.custodialcopy
 
 import cats.effect.IO
 import cats.implicits.*
@@ -11,12 +11,12 @@ import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.{DASNSClient, DASQSClient}
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
-import uk.gov.nationalarchives.disasterrecovery.DisasterRecoveryObject.*
-import uk.gov.nationalarchives.disasterrecovery.Main.{Config, IdWithSourceAndDestPaths}
-import uk.gov.nationalarchives.disasterrecovery.Message.{SendSnsMessage, *}
-import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectStatus
-import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectStatus.{Created, Deleted, Updated}
-import uk.gov.nationalarchives.disasterrecovery.Processor.ObjectType.{Bitstream, Metadata, MetadataAndPotentialBitstreams}
+import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.*
+import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
+import uk.gov.nationalarchives.custodialcopy.Message.{SendSnsMessage, *}
+import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus
+import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Updated}
+import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Bitstream, Metadata}
 import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
@@ -38,8 +38,6 @@ class Processor(
   private val newlineAndIndent = "\n          "
   private def deleteMessage(receiptHandle: String): IO[DeleteMessageResponse] =
     sqsClient.deleteMessage(config.sqsQueueUrl, receiptHandle)
-
-  private def dedupeMessages(messages: List[ReceivedSnsMessage]): List[ReceivedSnsMessage] = messages.distinctBy(_.messageText)
 
   private def createMetadataObject(
       ioRef: UUID,
@@ -135,8 +133,8 @@ class Processor(
 
   private def createMetadataFileName(entityTypeShort: String) = s"${entityTypeShort}_Metadata.xml"
 
-  private def toDisasterRecoveryObject(potentialMessage: Option[ReceivedSnsMessage]): IO[List[DisasterRecoveryObject]] = potentialMessage match {
-    case Some(IoReceivedSnsMessage(ref, _, _)) =>
+  private def toCustodialCopyObject(receivedSnsMessage: ReceivedSnsMessage): IO[List[CustodialCopyObject]] = receivedSnsMessage match {
+    case IoReceivedSnsMessage(ref, _, _) =>
       for {
         entity <- fromType[IO](InformationObject.entityTypeShort, ref, None, None, deleted = false)
         metadataFileName = createMetadataFileName(InformationObject.entityTypeShort)
@@ -151,7 +149,7 @@ class Processor(
           )
         }
       } yield metadataObject
-    case Some(CoReceivedSnsMessage(ref, _, _)) =>
+    case CoReceivedSnsMessage(ref, _, _) =>
       for {
         bitstreamInfoPerCo <- entityClient.getBitstreamInfo(ref)
         entity <- fromType[IO](
@@ -207,10 +205,10 @@ class Processor(
           removeFileExtension(bitStreamInfo.name)
         )
       } ++ metadata
-    case None => IO.pure(Nil)
+    case SoReceivedSnsMessage(_) => IO.pure(Nil)
   }
 
-  private def download(disasterRecoveryObject: DisasterRecoveryObject) = disasterRecoveryObject match {
+  private def download(custodialCopyObject: CustodialCopyObject) = custodialCopyObject match {
     case fo: FileObject =>
       for {
         writePath <- fo.sourceFilePath
@@ -242,7 +240,7 @@ class Processor(
     .getOrElse("")
 
   private def generateSnsMessage(
-      obj: DisasterRecoveryObject,
+      obj: CustodialCopyObject,
       status: ObjectStatus
   ): SendSnsMessage = {
     val objectType = obj match {
@@ -266,12 +264,12 @@ class Processor(
       .apply(message)
   }
 
-  private def processNonDeletedMessages(messageResponse: MessageResponse[Option[ReceivedSnsMessage]]): IO[List[SendSnsMessage]] =
+  private def processNonDeletedMessages(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[List[SendSnsMessage]] =
     for {
       logger <- Slf4jLogger.create[IO]
-      disasterRecoveryObjects <- toDisasterRecoveryObject(messageResponse.message)
+      custodialCopyObjects <- toCustodialCopyObject(messageResponse.message)
 
-      missingAndChangedObjects <- ocflService.getMissingAndChangedObjects(disasterRecoveryObjects)
+      missingAndChangedObjects <- ocflService.getMissingAndChangedObjects(custodialCopyObjects)
 
       missingObjectsPaths <- missingAndChangedObjects.missingObjects.map(download).sequence
       changedObjectsPaths <- missingAndChangedObjects.changedObjects.map(download).sequence
@@ -286,7 +284,7 @@ class Processor(
 
     } yield createdObjsSnsMessages ++ updatedObjsSnsMessages
 
-  private def processDeletedEntities(messageResponse: MessageResponse[Option[ReceivedSnsMessage]]): IO[List[SendSnsMessage]] =
+  private def processDeletedEntities(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[List[SendSnsMessage]] =
     messageResponse.message.get match {
       case IoReceivedSnsMessage(ref, _, _) =>
         for {
@@ -298,7 +296,7 @@ class Processor(
         IO.raiseError(new Exception(s"Content Object '$ref' has been deleted"))
     }
 
-  def process(messageResponse: MessageResponse[Option[ReceivedSnsMessage]], entityDeleted: Boolean): IO[Unit] =
+  def process(messageResponse: MessageResponse[ReceivedSnsMessage], entityDeleted: Boolean): IO[Unit] =
     for {
       logger <- Slf4jLogger.create[IO]
       snsMessages <- if entityDeleted then processDeletedEntities(messageResponse) else processNonDeletedMessages(messageResponse)

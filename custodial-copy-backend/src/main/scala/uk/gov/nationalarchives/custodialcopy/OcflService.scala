@@ -1,4 +1,4 @@
-package uk.gov.nationalarchives.disasterrecovery
+package uk.gov.nationalarchives.custodialcopy
 
 import cats.effect.IO
 import cats.effect.std.Semaphore
@@ -8,8 +8,8 @@ import io.ocfl.api.{OcflConfig, OcflObjectUpdater, OcflOption, OcflRepository}
 import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.storage.OcflStorageBuilder
-import uk.gov.nationalarchives.disasterrecovery.Main.{Config, IdWithSourceAndDestPaths}
-import uk.gov.nationalarchives.disasterrecovery.OcflService.*
+import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
+import uk.gov.nationalarchives.custodialcopy.OcflService.*
 
 import java.nio.file.Paths
 import java.util.UUID
@@ -50,47 +50,47 @@ class OcflService(ocflRepository: OcflRepository, semaphore: Semaphore[IO]) {
   } >> semaphore.release
 
   def getMissingAndChangedObjects(
-      objects: List[DisasterRecoveryObject]
-  ): IO[MissingAndChangedObjects] = IO.blocking {
-    val missingAndNonMissingObjects: Map[String, List[DisasterRecoveryObject]] =
-      objects.foldLeft(Map[String, List[DisasterRecoveryObject]]("missingObjects" -> Nil, "changedObjects" -> Nil)) { case (objectMap, obj) =>
-        val objectId = obj.id
-        val potentialOcflObject = Try(ocflRepository.getObject(objectId.toHeadVersion))
-        lazy val missedObjects = objectMap("missingObjects")
-        lazy val changedObjects = objectMap("changedObjects")
-
-        potentialOcflObject match {
-          case Success(ocflObject) =>
+      objects: List[CustodialCopyObject]
+  ): IO[MissingAndChangedObjects] = objects
+    .foldLeft(IO(List[CustodialCopyObject](), List[CustodialCopyObject]())) { case (missingAndChangedIO, obj) =>
+      val objectId = obj.id
+      missingAndChangedIO.flatMap { missingAndChanged =>
+        val (missingObjects, changedObjects) = missingAndChanged
+        IO.blocking(ocflRepository.getObject(objectId.toHeadVersion))
+          .map { ocflObject =>
             val potentialFile = Option(ocflObject.getFile(obj.destinationFilePath))
             potentialFile match {
               case Some(ocflFileObject) =>
                 val checksumUnchanged =
                   Some(ocflFileObject.getFixity.get(DigestAlgorithm.fromOcflName("sha256"))).contains(obj.checksum)
-                if checksumUnchanged then objectMap else objectMap + ("changedObjects" -> (obj :: changedObjects))
+                if checksumUnchanged then missingAndChanged else (missingObjects, obj :: changedObjects)
               case None =>
-                objectMap + ("missingObjects" -> (obj :: missedObjects)) // Information Object exists but file doesn't
+                (obj :: missingObjects, changedObjects) // Information Object exists but file doesn't
             }
-
-          case Failure(_: NotFoundException) =>
-            objectMap + ("missingObjects" -> (obj :: missedObjects)) // Information Object doesn't exist
-          case Failure(coe: CorruptObjectException) =>
-            ocflRepository.purgeObject(objectId.toString)
-            throw new Exception(
-              s"Object $objectId is corrupt. The object has been purged and the error will be rethrown so the process can try again",
-              coe
-            )
-          case Failure(unexpectedError) =>
-            throw new Exception(
-              s"'getObject' returned an unexpected error '$unexpectedError' when called with object id $objectId"
-            )
-        }
+          }
+          .handleErrorWith {
+            case _: NotFoundException => IO.pure(obj :: missingObjects, changedObjects)
+            case coe: CorruptObjectException =>
+              IO.blocking(ocflRepository.purgeObject(objectId.toString)) >>
+                IO.raiseError(
+                  new Exception(
+                    s"Object $objectId is corrupt. The object has been purged and the error will be rethrown so the process can try again",
+                    coe
+                  )
+                )
+            case e: Throwable =>
+              IO.raiseError(
+                new Exception(
+                  s"'getObject' returned an unexpected error '$e' when called with object id $objectId"
+                )
+              )
+          }
       }
-
-    MissingAndChangedObjects(
-      missingAndNonMissingObjects("missingObjects"),
-      missingAndNonMissingObjects("changedObjects")
-    )
-  }
+    }
+    .map { missingAndChangedPair =>
+      val (missingObjects, changedObjects) = missingAndChangedPair
+      MissingAndChangedObjects(missingObjects, changedObjects)
+    }
 
   def getAllFilePathsOnAnObject(ioId: UUID): IO[List[String]] = IO.blocking {
     val potentialOcflObject = Try(ocflRepository.getObject(ioId.toHeadVersion))
@@ -140,7 +140,7 @@ object OcflService {
     new OcflService(repo, semaphore)
   }
   case class MissingAndChangedObjects(
-      missingObjects: List[DisasterRecoveryObject],
-      changedObjects: List[DisasterRecoveryObject]
+      missingObjects: List[CustodialCopyObject],
+      changedObjects: List[CustodialCopyObject]
   )
 }

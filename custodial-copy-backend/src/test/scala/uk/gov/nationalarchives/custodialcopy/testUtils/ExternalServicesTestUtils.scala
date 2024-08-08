@@ -1,4 +1,4 @@
-package uk.gov.nationalarchives.disasterrecovery.testUtils
+package uk.gov.nationalarchives.custodialcopy.testUtils
 
 import cats.effect.IO
 import cats.effect.std.Semaphore
@@ -21,12 +21,12 @@ import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
 import software.amazon.awssdk.services.sns.model.PublishBatchResponse
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
-import uk.gov.nationalarchives.disasterrecovery.DisasterRecoveryObject.MetadataObject
-import uk.gov.nationalarchives.disasterrecovery.{DisasterRecoveryObject, Message, OcflService, Processor}
-import uk.gov.nationalarchives.disasterrecovery.Main.{Config, IdWithSourceAndDestPaths}
-import uk.gov.nationalarchives.disasterrecovery.Message.{CoReceivedSnsMessage, IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
-import uk.gov.nationalarchives.disasterrecovery.OcflService.MissingAndChangedObjects
-import uk.gov.nationalarchives.disasterrecovery.OcflService.*
+import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.MetadataObject
+import uk.gov.nationalarchives.custodialcopy.{CustodialCopyObject, Message, OcflService, Processor}
+import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
+import uk.gov.nationalarchives.custodialcopy.Message.{CoReceivedSnsMessage, IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage, SoReceivedSnsMessage}
+import uk.gov.nationalarchives.custodialcopy.OcflService.MissingAndChangedObjects
+import uk.gov.nationalarchives.custodialcopy.OcflService.*
 import uk.gov.nationalarchives.*
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.{Entity, fromType}
@@ -226,10 +226,10 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val sqsClient = mock[DASQSClient[IO]]
     val responses = IO {
       messages.zipWithIndex.map { case (message, idx) =>
-        MessageResponse[Option[ReceivedSnsMessage]](s"handle$idx", Option(message))
+        MessageResponse[ReceivedSnsMessage](s"handle$idx", message)
       }
     }
-    when(sqsClient.receiveMessages[Option[ReceivedSnsMessage]](any[String], any[Int])(using any[Decoder[Option[ReceivedSnsMessage]]]))
+    when(sqsClient.receiveMessages[ReceivedSnsMessage](any[String], any[Int])(using any[Decoder[ReceivedSnsMessage]]))
       .thenReturn(responses)
     when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO(DeleteMessageResponse.builder().build))
     sqsClient
@@ -295,11 +295,11 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     private val sqsMessages: List[ReceivedSnsMessage] =
       typesOfSqsMsgAndDeletionStatus.zipWithIndex.flatMap { case ((entityType, hasBeenDeleted), index) =>
         entityType match { // create duplicates in order to test deduplication
-          case InformationObject => (1 to 2).map(_ => IoReceivedSnsMessage(ioId, s"${ioType.toLowerCase}:$ioId", hasBeenDeleted))
+          case InformationObject => (1 to 2).map(_ => IoReceivedSnsMessage(ioId, hasBeenDeleted))
           case ContentObject =>
             val coId = coIds(index)
-            (1 to 2).map(_ => CoReceivedSnsMessage(coId, s"${coType.toLowerCase}:$coId", hasBeenDeleted))
-          case unexpectedEntityType => throw new Exception(s"Unexpected EntityType $unexpectedEntityType!")
+            (1 to 2).map(_ => CoReceivedSnsMessage(coId, hasBeenDeleted))
+          case StructuralObject => (1 to 2).map(_ => SoReceivedSnsMessage(UUID.randomUUID), hasBeenDeleted)
         }
       }
     val sqsClient: DASQSClient[IO] = mockSqs(sqsMessages)
@@ -407,8 +407,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       genType: GenerationType = Original,
       parentRefExists: Boolean = true,
       urlsToRepresentations: Seq[String] = Seq("http://testurl/representations/Preservation/1"),
-      missingObjects: List[DisasterRecoveryObject] = Nil,
-      changedObjects: List[DisasterRecoveryObject] = Nil,
+      missingObjects: List[CustodialCopyObject] = Nil,
+      changedObjects: List[CustodialCopyObject] = Nil,
       pathsOfObjectsUnderIo: List[String] = Nil,
       throwErrorInMissingAndChangedObjects: Boolean = false
   ) {
@@ -416,17 +416,17 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val ioId: UUID = UUID.randomUUID()
     val coId: UUID = UUID.randomUUID()
 
-    lazy val coMessage: CoReceivedSnsMessage = CoReceivedSnsMessage(coId, s"co:$coId", false)
-    lazy val ioMessage: IoReceivedSnsMessage = IoReceivedSnsMessage(ioId, s"io:$ioId", false)
+    lazy val coMessage: CoReceivedSnsMessage = CoReceivedSnsMessage(coId, false)
+    lazy val ioMessage: IoReceivedSnsMessage = IoReceivedSnsMessage(ioId, false)
     val sqsClient: DASQSClient[IO] = mock[DASQSClient[IO]]
     val entityClient: EntityClient[IO, Fs2Streams[IO]] = mock[EntityClient[IO, Fs2Streams[IO]]]
     val snsClient: DASNSClient[IO] = mock[DASNSClient[IO]]
 
-    val duplicatesIoMessageResponse: MessageResponse[Option[ReceivedSnsMessage]] =
-      MessageResponse[Option[ReceivedSnsMessage]]("receiptHandle1", Option(ioMessage))
+    val duplicatesIoMessageResponse: MessageResponse[ReceivedSnsMessage] =
+      MessageResponse[ReceivedSnsMessage]("receiptHandle1", ioMessage)
 
-    val duplicatesCoMessageResponses: MessageResponse[Option[ReceivedSnsMessage]] =
-      MessageResponse[Option[ReceivedSnsMessage]]("receiptHandle2", Option(coMessage))
+    val duplicatesCoMessageResponses: MessageResponse[ReceivedSnsMessage] =
+      MessageResponse[ReceivedSnsMessage]("receiptHandle2", coMessage)
 
     private val potentialParentRef = if parentRefExists then Some(ioId) else None
 
@@ -494,8 +494,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     private val idWithSourceAndDestPathsCaptor: ArgumentCaptor[List[IdWithSourceAndDestPaths]] =
       ArgumentCaptor.forClass(classOf[List[IdWithSourceAndDestPaths]])
     private val metadataXmlStringToValidate: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
-    private val droLookupCaptor: ArgumentCaptor[List[DisasterRecoveryObject]] =
-      ArgumentCaptor.forClass(classOf[List[DisasterRecoveryObject]])
+    private val droLookupCaptor: ArgumentCaptor[List[CustodialCopyObject]] =
+      ArgumentCaptor.forClass(classOf[List[CustodialCopyObject]])
     private val ioToDeleteObjectsFromCaptor: ArgumentCaptor[UUID] = ArgumentCaptor.forClass(classOf[UUID])
     private val pathsToDeleteCaptor: ArgumentCaptor[List[String]] = ArgumentCaptor.forClass(classOf[List[String]])
     private val topicArnCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
@@ -504,8 +504,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     private val receiptHandleCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
 
     private def mockOcflService(
-        missingObjects: List[DisasterRecoveryObject] = Nil,
-        changedObjects: List[DisasterRecoveryObject] = Nil,
+        missingObjects: List[CustodialCopyObject] = Nil,
+        changedObjects: List[CustodialCopyObject] = Nil,
         pathsOfObjects: List[String] = Nil,
         throwErrorInMissingAndChangedObjects: Boolean = false
     ): OcflService = {

@@ -1,11 +1,11 @@
-package uk.gov.nationalarchives.disasterrecovery
+package uk.gov.nationalarchives.custodialcopy
 
 import cats.effect.IO
 import fs2.io.file.*
 import java.util.UUID
 import scala.xml.Elem
 
-sealed trait DisasterRecoveryObject {
+sealed trait CustodialCopyObject {
   val destinationFilePath: String
   def id: UUID
   def checksum: String
@@ -17,7 +17,7 @@ sealed trait DisasterRecoveryObject {
     Files[IO].createDirectories(path).map(_ => path)
   }
 }
-object DisasterRecoveryObject {
+object CustodialCopyObject {
   case class FileObject(
       id: UUID,
       name: String,
@@ -25,7 +25,7 @@ object DisasterRecoveryObject {
       url: String,
       destinationFilePath: String,
       tableItemIdentifier: UUID
-  ) extends DisasterRecoveryObject
+  ) extends CustodialCopyObject
   case class MetadataObject(
       id: UUID,
       repTypeGroup: Option[String],
@@ -34,5 +34,5 @@ object DisasterRecoveryObject {
       metadata: Elem,
       destinationFilePath: String,
       tableItemIdentifier: String | UUID
-  ) extends DisasterRecoveryObject
+  ) extends CustodialCopyObject
 }

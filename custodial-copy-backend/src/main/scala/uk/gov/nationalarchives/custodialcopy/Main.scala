@@ -1,4 +1,4 @@
-package uk.gov.nationalarchives.disasterrecovery
+package uk.gov.nationalarchives.custodialcopy
 
 import cats.effect.*
 import cats.effect.std.Semaphore
@@ -11,7 +11,7 @@ import pureconfig.generic.derivation.default.*
 import pureconfig.module.catseffect.syntax.*
 import uk.gov.nationalarchives.DASQSClient
 import uk.gov.nationalarchives.dp.client.fs2.Fs2Client
-import uk.gov.nationalarchives.disasterrecovery.Message.*
+import uk.gov.nationalarchives.custodialcopy.Message.*
 import uk.gov.nationalarchives.DASNSClient
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 
@@ -38,7 +38,7 @@ object Main extends IOApp {
       .map(proxy => DASQSClient[IO](proxy))
       .getOrElse(DASQSClient[IO]())
 
-  given Decoder[Option[ReceivedSnsMessage]] = (c: HCursor) =>
+  given Decoder[ReceivedSnsMessage] = (c: HCursor) =>
     for {
       id <- c.downField("id").as[String]
       deleted <- c.downField("deleted").as[Boolean]
@@ -47,9 +47,9 @@ object Main extends IOApp {
       val ref = UUID.fromString(typeAndRef.last)
       val entityType = typeAndRef.head
       entityType match {
-        case "io" => Option(IoReceivedSnsMessage(ref, id, deleted))
-        case "co" => Option(CoReceivedSnsMessage(ref, id, deleted))
-        case _    => None
+        case "io" => IoReceivedSnsMessage(ref, deleted)
+        case "co" => CoReceivedSnsMessage(ref, deleted)
+        case "so" => SoReceivedSnsMessage(ref, deleted)
       }
     }
 
@@ -70,21 +70,21 @@ object Main extends IOApp {
       processor <- Processor(config, sqs, service, client, sns)
       _ <- {
         Stream.fixedRateStartImmediately[IO](20.seconds) >>
-          runDisasterRecovery(sqs, config, processor)
+          runCustodialCopy(sqs, config, processor)
             .handleErrorWith(err => Stream.eval(semaphore.release >> logError(err)))
       }.compile.drain
     } yield ExitCode.Success
 
-  def runDisasterRecovery(sqs: DASQSClient[IO], config: Config, processor: Processor): Stream[IO, List[Outcome[IO, Throwable, Unit]]] =
+  def runCustodialCopy(sqs: DASQSClient[IO], config: Config, processor: Processor): Stream[IO, List[Outcome[IO, Throwable, Unit]]] =
     Stream
-      .eval(sqs.receiveMessages[Option[ReceivedSnsMessage]](config.sqsQueueUrl))
+      .eval(sqs.receiveMessages[ReceivedSnsMessage](config.sqsQueueUrl))
       .filter(messageResponses => messageResponses.nonEmpty)
       .evalMap { messageResponses =>
         for {
           logger <- Slf4jLogger.create[IO]
           _ <- logger.info(s"Processing ${messageResponses.length} messages")
           _ <- logger.info(messageResponses.flatMap(_.message.map(_.messageText)).mkString(","))
-          dedupedMessages: List[MessageResponse[Option[ReceivedSnsMessage]]] = dedupeMessages(messageResponses)
+          dedupedMessages: List[MessageResponse[ReceivedSnsMessage]] = dedupeMessages(messageResponses)
           deletedAndNonDeletedEntities = dedupedMessages.groupBy { response =>
             val potentialMessage = response.message
             potentialMessage match {
@@ -115,11 +115,11 @@ object Main extends IOApp {
         } yield allFiberResults
       }
 
-  private def dedupeMessages(messages: List[MessageResponse[Option[ReceivedSnsMessage]]]): List[MessageResponse[Option[ReceivedSnsMessage]]] =
-    messages.distinctBy(_.message.map(_.messageText))
+  private def dedupeMessages(messages: List[MessageResponse[ReceivedSnsMessage]]): List[MessageResponse[ReceivedSnsMessage]] =
+    messages.distinctBy(_.message.ref)
 
   private def logError(err: Throwable) = for {
     logger <- Slf4jLogger.create[IO]
-    _ <- logger.error(err)("Error running disaster recovery")
+    _ <- logger.error(err)("Error running custodial copy")
   } yield ()
 }
