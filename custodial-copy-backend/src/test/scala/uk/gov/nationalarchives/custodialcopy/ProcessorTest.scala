@@ -14,8 +14,8 @@ import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.MetadataObject
 import uk.gov.nationalarchives.custodialcopy.Main.IdWithSourceAndDestPaths
 import uk.gov.nationalarchives.custodialcopy.Message.{IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
 import uk.gov.nationalarchives.custodialcopy.OcflService.MissingAndChangedObjects
-import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Updated}
-import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.Metadata
+import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Deleted, Updated}
+import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Metadata, MetadataAndPotentialBitstreams}
 import uk.gov.nationalarchives.dp.client.EntityClient.IoMetadata
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*

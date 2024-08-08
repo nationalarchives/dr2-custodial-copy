@@ -128,7 +128,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     }
 
   "runCustodialCopy" should "delete all SO messages it receives" in {
-    val utils = new MainTestUtils(typesOfSqsMessages = List(StructuralObject, StructuralObject), objectVersion = 0)
+    val utils = new MainTestUtils(typesOfSqsMsgAndDeletionStatus = List((StructuralObject, false), (StructuralObject, false)), objectVersion = 0)
 
     runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 

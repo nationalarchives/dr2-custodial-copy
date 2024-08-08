@@ -99,7 +99,6 @@ class OcflService(ocflRepository: OcflRepository, semaphore: Semaphore[IO]) {
       case Success(ocflObject) =>
         val objectVersionFileInList: List[OcflObjectVersionFile] = ocflObject.getFiles.asScala.toList
         objectVersionFileInList.map(_.getPath)
-
       case Failure(_: NotFoundException) => throw new Exception(s"Object id $ioId does not exist")
       case Failure(coe: CorruptObjectException) =>
         ocflRepository.purgeObject(ioId.toString)

@@ -299,7 +299,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
           case ContentObject =>
             val coId = coIds(index)
             (1 to 2).map(_ => CoReceivedSnsMessage(coId, hasBeenDeleted))
-          case StructuralObject => (1 to 2).map(_ => SoReceivedSnsMessage(UUID.randomUUID), hasBeenDeleted)
+          case StructuralObject => (1 to 2).map(_ => SoReceivedSnsMessage(UUID.randomUUID, hasBeenDeleted))
         }
       }
     val sqsClient: DASQSClient[IO] = mockSqs(sqsMessages)
@@ -415,12 +415,17 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val config: Config = Config("", "", "queueUrl", "", "", Option(URI.create("https://example.com")), "", "topicArn")
     val ioId: UUID = UUID.randomUUID()
     val coId: UUID = UUID.randomUUID()
+    val soId: UUID = UUID.randomUUID()
 
     lazy val coMessage: CoReceivedSnsMessage = CoReceivedSnsMessage(coId, false)
     lazy val ioMessage: IoReceivedSnsMessage = IoReceivedSnsMessage(ioId, false)
+    lazy val soMessage: SoReceivedSnsMessage = SoReceivedSnsMessage(soId, false)
     val sqsClient: DASQSClient[IO] = mock[DASQSClient[IO]]
     val entityClient: EntityClient[IO, Fs2Streams[IO]] = mock[EntityClient[IO, Fs2Streams[IO]]]
     val snsClient: DASNSClient[IO] = mock[DASNSClient[IO]]
+
+    val duplicatesSoMessageResponse: MessageResponse[ReceivedSnsMessage] =
+      MessageResponse[ReceivedSnsMessage]("receiptHandle0", soMessage)
 
     val duplicatesIoMessageResponse: MessageResponse[ReceivedSnsMessage] =
       MessageResponse[ReceivedSnsMessage]("receiptHandle1", ioMessage)

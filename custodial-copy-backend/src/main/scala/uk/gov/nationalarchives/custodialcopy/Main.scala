@@ -83,15 +83,9 @@ object Main extends IOApp {
         for {
           logger <- Slf4jLogger.create[IO]
           _ <- logger.info(s"Processing ${messageResponses.length} messages")
-          _ <- logger.info(messageResponses.flatMap(_.message.map(_.messageText)).mkString(","))
+          _ <- logger.info(messageResponses.map(_.message.ref).mkString(","))
           dedupedMessages: List[MessageResponse[ReceivedSnsMessage]] = dedupeMessages(messageResponses)
-          deletedAndNonDeletedEntities = dedupedMessages.groupBy { response =>
-            val potentialMessage = response.message
-            potentialMessage match {
-              case Some(message) => message.deleted
-              case None          => false
-            }
-          }
+          deletedAndNonDeletedEntities = dedupedMessages.groupBy(response => response.message.deleted)
           entityHasBeenDeleted = true
 
           nonDeletedEntities = deletedAndNonDeletedEntities.getOrElse(!entityHasBeenDeleted, Nil)

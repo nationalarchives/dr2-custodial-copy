@@ -15,8 +15,8 @@ import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.*
 import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
 import uk.gov.nationalarchives.custodialcopy.Message.{SendSnsMessage, *}
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus
-import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Updated}
-import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Bitstream, Metadata}
+import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Deleted, Updated}
+import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Bitstream, Metadata, MetadataAndPotentialBitstreams}
 import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
@@ -134,7 +134,7 @@ class Processor(
   private def createMetadataFileName(entityTypeShort: String) = s"${entityTypeShort}_Metadata.xml"
 
   private def toCustodialCopyObject(receivedSnsMessage: ReceivedSnsMessage): IO[List[CustodialCopyObject]] = receivedSnsMessage match {
-    case IoReceivedSnsMessage(ref, _, _) =>
+    case IoReceivedSnsMessage(ref, _) =>
       for {
         entity <- fromType[IO](InformationObject.entityTypeShort, ref, None, None, deleted = false)
         metadataFileName = createMetadataFileName(InformationObject.entityTypeShort)
@@ -149,7 +149,7 @@ class Processor(
           )
         }
       } yield metadataObject
-    case CoReceivedSnsMessage(ref, _, _) =>
+    case CoReceivedSnsMessage(ref, _) =>
       for {
         bitstreamInfoPerCo <- entityClient.getBitstreamInfo(ref)
         entity <- fromType[IO](
@@ -205,7 +205,7 @@ class Processor(
           removeFileExtension(bitStreamInfo.name)
         )
       } ++ metadata
-    case SoReceivedSnsMessage(_) => IO.pure(Nil)
+    case SoReceivedSnsMessage(_, _) => IO.pure(Nil)
   }
 
   private def download(custodialCopyObject: CustodialCopyObject) = custodialCopyObject match {
@@ -285,15 +285,17 @@ class Processor(
     } yield createdObjsSnsMessages ++ updatedObjsSnsMessages
 
   private def processDeletedEntities(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[List[SendSnsMessage]] =
-    messageResponse.message.get match {
-      case IoReceivedSnsMessage(ref, _, _) =>
+    messageResponse.message match {
+      case IoReceivedSnsMessage(ref, _) =>
         for {
           filePaths <- ocflService.getAllFilePathsOnAnObject(ref)
           _ <- ocflService.deleteObjects(ref, filePaths)
           deletedObjsSnsMessages = List(SendSnsMessage(InformationObject, ref, MetadataAndPotentialBitstreams, Deleted, ""))
         } yield deletedObjsSnsMessages
-      case CoReceivedSnsMessage(ref, _, _) =>
+      case CoReceivedSnsMessage(ref, _) =>
         IO.raiseError(new Exception(s"Content Object '$ref' has been deleted"))
+      case _ =>
+        IO.raiseError(new Exception(s"Structural Objects are not supported"))
     }
 
   def process(messageResponse: MessageResponse[ReceivedSnsMessage], entityDeleted: Boolean): IO[Unit] =
