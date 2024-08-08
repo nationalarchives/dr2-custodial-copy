@@ -295,13 +295,20 @@ class Processor(
       case CoReceivedSnsMessage(ref, _) =>
         IO.raiseError(new Exception(s"Content Object '$ref' has been deleted"))
       case _ =>
-        IO.raiseError(new Exception(s"Structural Objects are not supported"))
+        IO.raiseError(new Exception(s"Entity type is not supported for deletion"))
     }
 
   def process(messageResponse: MessageResponse[ReceivedSnsMessage], entityDeleted: Boolean): IO[Unit] =
     for {
       logger <- Slf4jLogger.create[IO]
-      snsMessages <- if entityDeleted then processDeletedEntities(messageResponse) else processNonDeletedMessages(messageResponse)
+      entityTypeDeletionSupported =
+        messageResponse.message match {
+          case SoReceivedSnsMessage(_, _) => false
+          case _                          => true
+        }
+      snsMessages <-
+        if entityDeleted && entityTypeDeletionSupported then processDeletedEntities(messageResponse)
+        else processNonDeletedMessages(messageResponse)
       _ <- IO.whenA(snsMessages.nonEmpty) {
         snsClient.publish[SendSnsMessage](config.topicArn)(snsMessages).map(_ => ())
       }
