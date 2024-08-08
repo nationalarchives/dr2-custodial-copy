@@ -134,9 +134,9 @@ class Processor(
   private def createMetadataFileName(entityTypeShort: String) = s"${entityTypeShort}_Metadata.xml"
 
   private def toCustodialCopyObject(receivedSnsMessage: ReceivedSnsMessage): IO[List[CustodialCopyObject]] = receivedSnsMessage match {
-    case IoReceivedSnsMessage(ref, _) =>
+    case IoReceivedSnsMessage(ref, deleted) =>
       for {
-        entity <- fromType[IO](InformationObject.entityTypeShort, ref, None, None, deleted = false)
+        entity <- fromType[IO](InformationObject.entityTypeShort, ref, None, None, deleted = deleted)
         metadataFileName = createMetadataFileName(InformationObject.entityTypeShort)
         metadataObject <- entityClient.metadataForEntity(entity).flatMap { metadata =>
           val destinationFilePath = createDestinationFilePath(entity.ref, fileName = metadataFileName)
@@ -149,7 +149,7 @@ class Processor(
           )
         }
       } yield metadataObject
-    case CoReceivedSnsMessage(ref, _) =>
+    case CoReceivedSnsMessage(ref, deleted) =>
       for {
         bitstreamInfoPerCo <- entityClient.getBitstreamInfo(ref)
         entity <- fromType[IO](
@@ -157,7 +157,7 @@ class Processor(
           ref,
           None,
           None,
-          deleted = false,
+          deleted = deleted,
           parent = bitstreamInfoPerCo.headOption.flatMap(_.parentRef)
         )
         parentRef <- IO.fromOption(entity.parent)(new Exception("Cannot get IO reference from CO"))
