@@ -39,8 +39,6 @@ class Processor(
   private def deleteMessage(receiptHandle: String): IO[DeleteMessageResponse] =
     sqsClient.deleteMessage(config.sqsQueueUrl, receiptHandle)
 
-  private def dedupeMessages(messages: List[ReceivedSnsMessage]): List[ReceivedSnsMessage] = messages.distinctBy(_.messageText)
-
   private def createMetadataObject(
       ioRef: UUID,
       metadata: EntityMetadata,
@@ -135,8 +133,8 @@ class Processor(
 
   private def createMetadataFileName(entityTypeShort: String) = s"${entityTypeShort}_Metadata.xml"
 
-  private def toCustodialCopyObject(potentialMessage: Option[ReceivedSnsMessage]): IO[List[CustodialCopyObject]] = potentialMessage match {
-    case Some(IoReceivedSnsMessage(ref, _)) =>
+  private def toCustodialCopyObject(receivedSnsMessage: ReceivedSnsMessage): IO[List[CustodialCopyObject]] = receivedSnsMessage match {
+    case IoReceivedSnsMessage(ref) =>
       for {
         entity <- fromType[IO](InformationObject.entityTypeShort, ref, None, None, deleted = false)
         metadataFileName = createMetadataFileName(InformationObject.entityTypeShort)
@@ -151,7 +149,7 @@ class Processor(
           )
         }
       } yield metadataObject
-    case Some(CoReceivedSnsMessage(ref, _)) =>
+    case CoReceivedSnsMessage(ref) =>
       for {
         bitstreamInfoPerCo <- entityClient.getBitstreamInfo(ref)
         entity <- fromType[IO](
@@ -207,7 +205,7 @@ class Processor(
           removeFileExtension(bitStreamInfo.name)
         )
       } ++ metadata
-    case None => IO.pure(Nil)
+    case SoReceivedSnsMessage(_) => IO.pure(Nil)
   }
 
   private def download(custodialCopyObject: CustodialCopyObject) = custodialCopyObject match {
@@ -266,7 +264,7 @@ class Processor(
       .apply(message)
   }
 
-  def process(messageResponse: MessageResponse[Option[ReceivedSnsMessage]]): IO[Unit] =
+  def process(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[Unit] =
     for {
       logger <- Slf4jLogger.create[IO]
       custodialCopyObjects <- toCustodialCopyObject(messageResponse.message)

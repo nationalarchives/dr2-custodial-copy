@@ -7,7 +7,7 @@ import io.ocfl.api.OcflRepository
 import io.ocfl.api.model.ObjectVersionId
 import org.apache.commons.codec.digest.DigestUtils
 import org.mockito.ArgumentMatchers.*
-import org.mockito.Mockito.{never, verify, when}
+import org.mockito.Mockito.{never, times, verify, when}
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers.*
@@ -76,6 +76,14 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
         </XIP>.toString
       )
     }
+
+  "runCustodialCopy" should "delete all SO messages it receives" in {
+    val utils = new MainTestUtils(typesOfSqsMessages = List(StructuralObject, StructuralObject), objectVersion = 0)
+
+    runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
+
+    verify(utils.sqsClient, times(4)).deleteMessage(any[String], any[String])
+  }
 
   "runCustodialCopy" should "not write a new version, nor new IO metadata object if there is an IO message with " +
     "the same metadata" in {
@@ -196,12 +204,12 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
   "runCustodialCopy" should "not call the process method if no messages are received" in {
     val processor = mock[Processor]
-    when(processor.process(any[MessageResponse[Option[ReceivedSnsMessage]]])).thenReturn(IO.unit)
+    when(processor.process(any[MessageResponse[ReceivedSnsMessage]])).thenReturn(IO.unit)
     val utils = new MainTestUtils(typesOfSqsMessages = Nil, objectVersion = 0)
 
     runCustodialCopy(utils.sqsClient, utils.config, processor)
 
-    verify(processor, never()).process(any[MessageResponse[Option[ReceivedSnsMessage]]])
+    verify(processor, never()).process(any[MessageResponse[ReceivedSnsMessage]])
   }
 
   "runCustodialCopy" should "return an error if a CO has no parent" in {
