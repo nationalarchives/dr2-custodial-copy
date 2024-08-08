@@ -13,7 +13,7 @@ import uk.gov.nationalarchives.{DASNSClient, DASQSClient}
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.*
 import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
-import uk.gov.nationalarchives.custodialcopy.Message.{SendSnsMessage, *}
+import uk.gov.nationalarchives.custodialcopy.Message.*
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Deleted, Updated}
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Bitstream, Metadata, MetadataAndPotentialBitstreams}

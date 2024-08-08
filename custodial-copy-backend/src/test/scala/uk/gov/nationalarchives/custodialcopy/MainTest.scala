@@ -262,7 +262,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     verify(processor, never()).process(any[MessageResponse[ReceivedSnsMessage]], any[Boolean])
   }
 
-  "runDisasterRecovery" should "(given a CO message with 'deleted' set to 'true') throw an Exception" in {
+  "runCustodialCopy" should "(given a CO message with 'deleted' set to 'true') throw an Exception" in {
     val fixity = Fixity("SHA256", "")
 
     val utils = new MainTestUtils(
@@ -282,7 +282,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     err.getMessage must equal(s"Content Object '${utils.coId1}' has been deleted")
   }
 
-  "runDisasterRecovery" should "(given a CO and IO message that both have 'deleted' set to 'true') parse the CO message first, " +
+  "runCustodialCopy" should "(given a CO and IO message that both have 'deleted' set to 'true') parse the CO message first, " +
     "throw an Exception, and then parse the IO message" in {
       val fixity = Fixity("SHA256", "")
 
