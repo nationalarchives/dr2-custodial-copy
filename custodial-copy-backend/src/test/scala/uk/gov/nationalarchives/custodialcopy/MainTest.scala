@@ -313,6 +313,38 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       repo.getObject(utils.ioId.toHeadVersion).getFiles.toArray.toList must be(Nil)
     }
 
+  "runCustodialCopy" should "(given a CO message that has 'deleted' set to 'false' and IO message that has 'deleted' set to 'true') " +
+    "parse the non-deleted (CO) message first" in {
+      val fixity = Fixity("SHA256", "")
+
+      val utils = new MainTestUtils(
+        List((ContentObject, false), (InformationObject, true)),
+        typesOfMetadataFilesInRepo = List(InformationObject, ContentObject),
+        objectVersion = 3,
+        fileContentToWriteToEachFileInRepo = List("fileContent1"),
+        entityDeleted = true
+      )
+
+      val repo = utils.repo
+
+      utils.latestObjectVersion(repo, utils.ioId) must equal(3)
+      val expectedDestinationFilePathsAlreadyInRepo = List(
+        s"${utils.ioId}/Preservation_1/${utils.coId1}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+        s"${utils.ioId}/Preservation_1/${utils.coId1}/CO_Metadata.xml",
+        s"${utils.ioId}/IO_Metadata.xml"
+      )
+
+      expectedDestinationFilePathsAlreadyInRepo.foreach { path =>
+        repo.getObject(utils.ioId.toHeadVersion).containsFile(path) must be(true)
+      }
+
+      runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
+
+      utils.latestObjectVersion(repo, utils.ioId) must equal(5)
+
+      repo.getObject(utils.ioId.toHeadVersion).getFiles.toArray.toList must be(Nil)
+    }
+
   "runCustodialCopy" should "return an error if a CO has no parent" in {
     val bitstreamInfo = Seq(
       BitStreamInfo(
