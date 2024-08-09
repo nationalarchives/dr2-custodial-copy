@@ -282,8 +282,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     err.getMessage must equal(s"Content Object '${utils.coId1}' has been deleted")
   }
 
-  "runCustodialCopy" should "(given a CO and IO message that both have 'deleted' set to 'true') parse the CO message first, " +
-    "throw an Exception, and then parse the IO message" in {
+  "runCustodialCopy" should "(given a CO and IO message that both have 'deleted' set to 'true') the exception message thrown by the CO message " +
+    "doesn't prevent the IO message from being processed" in {
       val fixity = Fixity("SHA256", "")
 
       val utils = new MainTestUtils(
@@ -310,6 +310,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       val err: Throwable = getError(utils.sqsClient, utils.config, utils.processor)
 
       err.getMessage must equal(s"Content Object '${utils.coId1}' has been deleted")
+      utils.latestObjectVersion(repo, utils.ioId) must equal(4)
       repo.getObject(utils.ioId.toHeadVersion).getFiles.toArray.toList must be(Nil)
     }
 
