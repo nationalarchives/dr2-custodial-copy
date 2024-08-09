@@ -13,7 +13,6 @@ import uk.gov.nationalarchives.custodialcopy.OcflService.*
 
 import java.nio.file.Paths
 import java.util.UUID
-import scala.util.{Failure, Success, Try}
 import scala.jdk.FunctionConverters.*
 import scala.jdk.CollectionConverters.*
 
@@ -92,26 +91,26 @@ class OcflService(ocflRepository: OcflRepository, semaphore: Semaphore[IO]) {
       MissingAndChangedObjects(missingObjects, changedObjects)
     }
 
-  def getAllFilePathsOnAnObject(ioId: UUID): IO[List[String]] = IO.blocking {
-    val potentialOcflObject = Try(ocflRepository.getObject(ioId.toHeadVersion))
-
-    potentialOcflObject match {
-      case Success(ocflObject) =>
-        val objectVersionFileInList: List[OcflObjectVersionFile] = ocflObject.getFiles.asScala.toList
-        objectVersionFileInList.map(_.getPath)
-      case Failure(_: NotFoundException) => throw new Exception(s"Object id $ioId does not exist")
-      case Failure(coe: CorruptObjectException) =>
-        ocflRepository.purgeObject(ioId.toString)
-        throw new Exception(
-          s"Object $ioId is corrupt. The object has been purged and the error will be rethrown so the process can try again",
-          coe
-        )
-      case Failure(unexpectedError) =>
-        throw new Exception(
-          s"'getObject' returned an unexpected error '$unexpectedError' when called with object id $ioId"
-        )
-    }
-  }
+  def getAllFilePathsOnAnObject(ioId: UUID): IO[List[String]] =
+    IO.blocking(ocflRepository.getObject(ioId.toHeadVersion))
+      .map(_.getFiles.asScala.toList.map(_.getPath))
+      .handleErrorWith {
+        case nfe: NotFoundException => IO.raiseError(new Exception(s"Object id $ioId does not exist"))
+        case coe: CorruptObjectException =>
+          IO.blocking(ocflRepository.purgeObject(ioId.toString)) >>
+            IO.raiseError(
+              new Exception(
+                s"Object $ioId is corrupt. The object has been purged and the error will be rethrown so the process can try again",
+                coe
+              )
+            )
+        case e: Throwable =>
+          IO.raiseError(
+            new Exception(
+              s"'getObject' returned an unexpected error '$e' when called with object id $ioId"
+            )
+          )
+      }
 }
 object OcflService {
   extension (uuid: UUID) def toHeadVersion: ObjectVersionId = ObjectVersionId.head(uuid.toString)
