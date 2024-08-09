@@ -279,7 +279,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
     val err: Throwable = getError(utils.sqsClient, utils.config, utils.processor)
 
-    err.getMessage must equal(s"Content Object '${utils.coId1}' has been deleted")
+    err.getMessage must equal(s"A Content Object '${utils.coId1}' has been deleted in Preservica")
   }
 
   "runCustodialCopy" should "(given a CO and IO message that both have 'deleted' set to 'true') the exception message thrown by the CO message " +
@@ -309,7 +309,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
       val err: Throwable = getError(utils.sqsClient, utils.config, utils.processor)
 
-      err.getMessage must equal(s"Content Object '${utils.coId1}' has been deleted")
+      err.getMessage must equal(s"A Content Object '${utils.coId1}' has been deleted in Preservica")
       utils.latestObjectVersion(repo, utils.ioId) must equal(4)
       repo.getObject(utils.ioId.toHeadVersion).getFiles.toArray.toList must be(Nil)
     }

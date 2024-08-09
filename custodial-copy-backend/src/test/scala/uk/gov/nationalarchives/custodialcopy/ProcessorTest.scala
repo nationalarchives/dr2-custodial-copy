@@ -52,7 +52,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       utils.processor.process(utils.duplicatesCoMessageResponses, true).unsafeRunSync()
     }
 
-    ex.getMessage should equal(s"Content Object '${utils.coId}' has been deleted")
+    ex.getMessage should equal(s"A Content Object '${utils.coId}' has been deleted in Preservica")
     utils.verifyCallsAndArguments(
       repTypes = Nil,
       repIndexes = Nil,

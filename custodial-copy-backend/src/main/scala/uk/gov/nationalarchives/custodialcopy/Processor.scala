@@ -293,7 +293,7 @@ class Processor(
           deletedObjsSnsMessages = List(SendSnsMessage(InformationObject, ref, MetadataAndPotentialBitstreams, Deleted, ""))
         } yield deletedObjsSnsMessages
       case CoReceivedSnsMessage(ref, _) =>
-        IO.raiseError(new Exception(s"Content Object '$ref' has been deleted"))
+        IO.raiseError(new Exception(s"A Content Object '$ref' has been deleted in Preservica"))
       case _ =>
         IO.raiseError(new Exception(s"Entity type is not supported for deletion"))
     }
