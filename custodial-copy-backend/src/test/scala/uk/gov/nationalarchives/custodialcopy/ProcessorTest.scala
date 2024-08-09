@@ -270,9 +270,9 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
         )
       )
 
-    val response: MessageResponse[Option[ReceivedSnsMessage]] = MessageResponse[Option[ReceivedSnsMessage]](
+    val response: MessageResponse[ReceivedSnsMessage] = MessageResponse[ReceivedSnsMessage](
       "receiptHandle2",
-      Option(IoReceivedSnsMessage(changedFileId, s"io:$changedFileId"))
+      IoReceivedSnsMessage(changedFileId)
     )
 
     utils.processor.process(response).unsafeRunSync()
@@ -323,10 +323,10 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
         )
       )
 
-    val response: MessageResponse[Option[ReceivedSnsMessage]] =
-      MessageResponse[Option[ReceivedSnsMessage]](
+    val response: MessageResponse[ReceivedSnsMessage] =
+      MessageResponse[ReceivedSnsMessage](
         "receiptHandle1",
-        Option(IoReceivedSnsMessage(missingFileId, s"io:$missingFileId"))
+        IoReceivedSnsMessage(missingFileId)
       )
     utils.processor.process(response).unsafeRunSync()
 
