@@ -84,16 +84,13 @@ object Main extends IOApp {
           logger <- Slf4jLogger.create[IO]
           _ <- logger.info(s"Processing ${messageResponses.length} messages")
           _ <- logger.info(messageResponses.map(_.message.ref).mkString(","))
-          dedupedMessages: List[MessageResponse[ReceivedSnsMessage]] = dedupeMessages(messageResponses)
-          deletedAndNonDeletedEntities = dedupedMessages.groupBy(response => response.message.deleted)
-          entityHasBeenDeleted = true
 
-          nonDeletedEntities = deletedAndNonDeletedEntities.getOrElse(!entityHasBeenDeleted, Nil)
-          fibersForNonDeletedEntities <- nonDeletedEntities.parTraverse(processor.process(_, !entityHasBeenDeleted).start)
+          (deletedEntities, nonDeletedEntities) = dedupeMessages(messageResponses).partition(_.message.deleted)
+
+          fibersForNonDeletedEntities <- nonDeletedEntities.parTraverse(processor.process(_, false).start)
           ndeFiberResults <- fibersForNonDeletedEntities.traverse(_.join)
 
-          deletedEntities = deletedAndNonDeletedEntities.getOrElse(entityHasBeenDeleted, Nil)
-          fibersForDeletedEntities <- deletedEntities.parTraverse(processor.process(_, entityHasBeenDeleted).start)
+          fibersForDeletedEntities <- deletedEntities.parTraverse(processor.process(_, true).start)
           deFiberResults <- fibersForDeletedEntities.traverse(_.join)
 
           allFibers = fibersForNonDeletedEntities ++ fibersForDeletedEntities
