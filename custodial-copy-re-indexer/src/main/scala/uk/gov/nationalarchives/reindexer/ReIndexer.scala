@@ -3,7 +3,7 @@ package uk.gov.nationalarchives.reindexer
 import cats.effect.{ExitCode, IO, Ref, Sync}
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
-import uk.gov.nationalarchives.reindexer.Configuration.{FileType, ReIndexUpdate}
+import uk.gov.nationalarchives.reindexer.Configuration.{EntityType, ReIndexUpdate}
 import cats.implicits.*
 import uk.gov.nationalarchives.reindexer.Arguments.ReIndexArgs
 import fs2.Chunk
@@ -30,9 +30,7 @@ object ReIndexer:
       for {
         ref <- Ref[F].of(0)
         _ <- Database[F].getIds
-          .evalMap[F, List[ReIndexUpdate]](id => {
-            ocfl.readValue(id, reindexArgs.fileType, reindexArgs.xpath)
-          })
+          .evalMap[F, List[ReIndexUpdate]](id => ocfl.readValue(id, reindexArgs.fileType, reindexArgs.xpath))
           .chunkN(chunkSize)
           .map(_.flatMap(Chunk.from))
           .evalMap(Database[F].write(reindexArgs.columnName))

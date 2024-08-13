@@ -33,7 +33,7 @@ object Configuration:
 
   case class IoUpdate(id: UUID, value: String) extends ReIndexUpdate
 
-  enum FileType:
+  enum EntityType:
     def getReindexUpdate(xpathExpression: XPathExpression, document: Document): ReIndexUpdate = {
       val value = xpathExpression.evaluate(document)
 
@@ -44,8 +44,8 @@ object Configuration:
       )
 
       this match
-        case FileType.IO => IoUpdate(ref("InformationObject"), value)
-        case FileType.CO => CoUpdate(ref("ContentObject"), value)
+        case EntityType.IO => IoUpdate(ref("InformationObject"), value)
+        case EntityType.CO => CoUpdate(ref("ContentObject"), value)
     }
 
     case IO, CO

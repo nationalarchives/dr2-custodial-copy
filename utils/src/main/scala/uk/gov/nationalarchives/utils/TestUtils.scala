@@ -149,13 +149,12 @@ object TestUtils:
         new VersionInfo(),
         { (updater: OcflObjectUpdater) =>
           updater.addPath(ioMetadataFile, s"IO$metadataFileSuffix.xml", OcflOption.OVERWRITE)
-          coMetadataContent.zipWithIndex.map { (elem, idx) =>
+          coMetadataContent.zipWithIndex.foreach { (elem, idx) =>
             val coMetadataFile = Files.createFile(metadataFileDirectory.resolve(s"$metadataFileSuffix$idx.xml"))
             Files.write(coMetadataFile, elem.toString.getBytes)
             updater.addPath(coMetadataFile, s"subfolder$idx/CO$metadataFileSuffix.xml", OcflOption.OVERWRITE)
             updater.addPath(contentFile, s"subfolder$idx/original/g1/content.file", OcflOption.OVERWRITE)
           }
-          ()
         }.asJava
       )
     (repoDir.toString, workDir.toString)

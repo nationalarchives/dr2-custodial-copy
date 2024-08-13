@@ -2,7 +2,7 @@ package uk.gov.nationalarchives.reindexer
 
 import cats.effect.IO
 import org.scalatest.flatspec.AnyFlatSpec
-import uk.gov.nationalarchives.reindexer.Configuration.FileType
+import uk.gov.nationalarchives.reindexer.Configuration.EntityType
 import uk.gov.nationalarchives.utils.TestUtils.*
 import cats.effect.unsafe.implicits.global
 import org.scalatest.EitherValues
@@ -16,7 +16,7 @@ class OcflSpec extends AnyFlatSpec with EitherValues:
   val ioXpath: XPathExpression = XPathFactory.newInstance.newXPath.compile("//Identifier[Type='BornDigitalRef']/Value")
   val coXpath: XPathExpression = XPathFactory.newInstance.newXPath.compile("//ContentObject/Title")
 
-  private def getError(id: UUID, fileType: FileType)(using Configuration) =
+  private def getError(id: UUID, fileType: EntityType)(using Configuration) =
     Ocfl[IO].readValue(id, fileType, ioXpath).attempt.map(_.left.value).unsafeRunSync().getMessage
 
   "readValue" should "read the correct IO value" in {
@@ -25,7 +25,7 @@ class OcflSpec extends AnyFlatSpec with EitherValues:
     given Configuration = new Configuration:
       override def config: Configuration.Config = Configuration.Config("test-database", repoDir, workDir)
 
-    val res = Ocfl[IO].readValue(id, FileType.IO, ioXpath).unsafeRunSync().head
+    val res = Ocfl[IO].readValue(id, EntityType.IO, ioXpath).unsafeRunSync().head
 
     res.id should equal(ioRef)
     res.value should equal("Zref")
@@ -38,7 +38,7 @@ class OcflSpec extends AnyFlatSpec with EitherValues:
     given Configuration = new Configuration:
       override def config: Configuration.Config = Configuration.Config("test-database", repoDir, workDir)
 
-    val res = Ocfl[IO].readValue(id, FileType.CO, coXpath).unsafeRunSync()
+    val res = Ocfl[IO].readValue(id, EntityType.CO, coXpath).unsafeRunSync()
 
     res.size should equal(2)
 
@@ -58,7 +58,7 @@ class OcflSpec extends AnyFlatSpec with EitherValues:
     given Configuration = new Configuration:
       override def config: Configuration.Config = Configuration.Config("test-database", repoDir, workDir)
 
-    val errorMessage = getError(invalidId, FileType.IO)
+    val errorMessage = getError(invalidId, EntityType.IO)
 
     errorMessage should equal(expectedErrorMessage)
   }
@@ -72,7 +72,7 @@ class OcflSpec extends AnyFlatSpec with EitherValues:
     given Configuration = new Configuration:
       override def config: Configuration.Config = Configuration.Config("test-database", repoDir, workDir)
 
-    val errorMessage = getError(id, FileType.IO)
+    val errorMessage = getError(id, EntityType.IO)
 
     errorMessage should equal(expectedErrorMessage)
   }
