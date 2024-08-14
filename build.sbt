@@ -72,6 +72,7 @@ lazy val utils = (project in file("utils"))
 lazy val reIndexer = (project in file("custodial-copy-re-indexer"))
   .enablePlugins(UniversalPlugin, JavaAppPackaging)
   .settings(commonSettings)
+  .settings(tagSettings)
   .dependsOn(utils)
   .settings(
     libraryDependencies ++= Seq(
