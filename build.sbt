@@ -4,7 +4,7 @@ import uk.gov.nationalarchives.sbt.Log4j2MergePlugin.log4j2MergeStrategy
 import scala.sys.process._
 
 ThisBuild / organization := "uk.gov.nationalarchives"
-ThisBuild / scalaVersion := "3.4.2"
+ThisBuild / scalaVersion := "3.4.3"
 
 lazy val tagImage = taskKey[Unit]("Sets a GitHub actions output for the latest tag")
 
@@ -76,7 +76,7 @@ lazy val reIndexer = (project in file("custodial-copy-re-indexer"))
   .dependsOn(utils)
   .settings(
     libraryDependencies ++= Seq(
-      declineEffect,
+      declineEffect
     ),
     dockerCommands := dockerCommands.value.dropRight(1) :+ ExecCmd("ENTRYPOINT", "java", "-Xmx2g", "-jar", s"/opt/${(assembly / assemblyJarName).value}")
   )
@@ -105,7 +105,7 @@ lazy val webapp = (project in file("custodial-copy-webapp"))
     name := "custodial-copy-webapp",
     libraryDependencies ++= Seq(
       http4sEmber,
-      http4sDsl,
+      http4sDsl
     )
   )
   .dependsOn(utils)
