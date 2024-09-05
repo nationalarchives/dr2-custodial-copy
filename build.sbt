@@ -4,7 +4,7 @@ import uk.gov.nationalarchives.sbt.Log4j2MergePlugin.log4j2MergeStrategy
 import scala.sys.process._
 
 ThisBuild / organization := "uk.gov.nationalarchives"
-ThisBuild / scalaVersion := "3.4.2"
+ThisBuild / scalaVersion := "3.4.3"
 
 lazy val tagImage = taskKey[Unit]("Sets a GitHub actions output for the latest tag")
 
@@ -27,7 +27,7 @@ def setupDirectories(serviceName: String) =
   )
 
 lazy val root = (project in file("."))
-  .aggregate(custodialCopyBackend, webapp, builder, utils)
+  .aggregate(custodialCopyBackend, webapp, builder, reIndexer, utils)
   .settings(
     publish / skip := true
   )
@@ -44,8 +44,7 @@ lazy val custodialCopyBackend = (project in file("custodial-copy-backend"))
       preservicaClient,
       snsClient,
       sqsClient,
-      fs2Core,
-      ocfl
+      fs2Core
     )
   )
   .dependsOn(utils)
@@ -61,12 +60,25 @@ lazy val utils = (project in file("utils"))
       log4jTemplateJson,
       log4CatsSlf4j,
       log4Cats,
+      ocfl,
       pureConfigCatsEffect,
       pureConfig,
       scalaXml,
       doobieCore,
       sqlite
     )
+  )
+
+lazy val reIndexer = (project in file("custodial-copy-re-indexer"))
+  .enablePlugins(UniversalPlugin, JavaAppPackaging)
+  .settings(commonSettings)
+  .settings(tagSettings)
+  .dependsOn(utils)
+  .settings(
+    libraryDependencies ++= Seq(
+      declineEffect
+    ),
+    dockerCommands := dockerCommands.value.dropRight(1) :+ ExecCmd("ENTRYPOINT", "java", "-Xmx2g", "-jar", s"/opt/${(assembly / assemblyJarName).value}")
   )
 
 lazy val builder = (project in file("custodial-copy-db-builder"))
@@ -78,8 +90,7 @@ lazy val builder = (project in file("custodial-copy-db-builder"))
     scalacOptions += "-Wunused:imports",
     assembly / assemblyJarName := "custodial-copy-db-builder.jar",
     libraryDependencies ++= Seq(
-      ocfl,
-      fs2,
+      fs2Core,
       sqsClient
     )
   )
@@ -94,8 +105,7 @@ lazy val webapp = (project in file("custodial-copy-webapp"))
     name := "custodial-copy-webapp",
     libraryDependencies ++= Seq(
       http4sEmber,
-      http4sDsl,
-      ocfl
+      http4sDsl
     )
   )
   .dependsOn(utils)
