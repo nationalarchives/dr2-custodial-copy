@@ -1,13 +1,13 @@
 import sbt.*
 object Dependencies {
-  private lazy val daAwsClientsVersion = "0.1.76"
-  private lazy val logbackVersion = "2.23.1"
+  private lazy val daAwsClientsVersion = "0.1.81"
+  private lazy val logbackVersion = "2.24.0"
   private lazy val log4CatsVersion = "2.7.0"
   private lazy val pureConfigVersion = "0.17.7"
   private lazy val scalaTestVersion = "3.2.18"
   private lazy val http4sVersion = "1.0.0-M41"
 
-  lazy val fs2Core = "co.fs2" %% "fs2-core" % "3.10.2"
+  lazy val fs2Core = "co.fs2" %% "fs2-core" % "3.11.0"
   lazy val log4Cats = "org.typelevel" %% "log4cats-core" % log4CatsVersion
   lazy val declineEffect = "com.monovore" %% "decline-effect" % "2.4.1"
   lazy val log4CatsSlf4j = "org.typelevel" %% "log4cats-slf4j" % log4CatsVersion
@@ -29,5 +29,5 @@ object Dependencies {
   lazy val http4sEmber = "org.http4s" %% "http4s-ember-server" % http4sVersion
   lazy val http4sDsl = "org.http4s" %% "http4s-dsl" % http4sVersion
   lazy val doobieCore = "org.tpolecat" %% "doobie-core" % "1.0.0-RC5"
-  lazy val sqlite = "org.xerial" % "sqlite-jdbc" % "3.46.0.1"
+  lazy val sqlite = "org.xerial" % "sqlite-jdbc" % "3.46.1.0"
 }

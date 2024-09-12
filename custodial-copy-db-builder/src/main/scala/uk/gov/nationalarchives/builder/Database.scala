@@ -3,7 +3,6 @@ package uk.gov.nationalarchives.builder
 import cats.effect.Async
 import cats.implicits.*
 import doobie.Update
-import doobie.free.connection
 import doobie.free.connection.ConnectionIO
 import doobie.implicits.*
 import doobie.util.Put
