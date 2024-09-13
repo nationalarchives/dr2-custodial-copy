@@ -1,7 +1,6 @@
 package uk.gov.nationalarchives.builder
 
 import cats.effect.kernel.Async
-import cats.implicits.*
 import io.ocfl.api.OcflRepository
 import io.ocfl.api.model.{ObjectVersionId, OcflObjectVersionFile}
 import uk.gov.nationalarchives.builder.Main.Config

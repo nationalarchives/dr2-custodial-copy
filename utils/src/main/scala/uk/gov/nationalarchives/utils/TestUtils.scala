@@ -6,7 +6,7 @@ import cats.syntax.all.*
 import doobie.implicits.*
 import doobie.util.Put
 import doobie.util.transactor.Transactor.Aux
-import doobie.{Fragment, Get, Transactor}
+import doobie.{Fragment, Transactor}
 import io.ocfl.api.model.{ObjectVersionId, VersionInfo}
 import io.ocfl.api.{OcflObjectUpdater, OcflOption}
 import uk.gov.nationalarchives.utils.Utils.{OcflFile, createOcflRepository, given}
