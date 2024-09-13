@@ -226,7 +226,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 id,
                 Some("Preservation_1"),
                 "changed",
-                "checksum",
+                List(Checksum("sha256", "checksum")),
                 utils.ioConsolidatedMetadata,
                 "destinationPath",
                 "SourceIDValue"
@@ -265,7 +265,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 id,
                 Some("Preservation_1"),
                 "missing",
-                "checksum",
+                List(Checksum("sha256", "checksum")),
                 utils.ioConsolidatedMetadata,
                 "destinationPath",
                 "SourceIDValue"
@@ -302,7 +302,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 changedFileId,
                 Some("Preservation_1"),
                 "changed",
-                "checksum",
+                List(Checksum("sha256", "checksum")),
                 utils.ioConsolidatedMetadata,
                 "destinationPath2",
                 "SourceIDValue"
@@ -354,7 +354,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
                 missingFileId,
                 Some("Preservation_1"),
                 "missing",
-                "checksum",
+                List(Checksum("sha256", "checksum")),
                 utils.ioConsolidatedMetadata,
                 "destinationPath",
                 "SourceIDValue"

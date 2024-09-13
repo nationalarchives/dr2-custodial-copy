@@ -48,7 +48,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
   ): List[Outcome[IO, Throwable, Unit]] = Main.runCustodialCopy(sqsClient, config, processor).compile.toList.unsafeRunSync().flatten
 
   "runCustodialCopy" should "(given an IO message with 'deleted' set to 'true') delete all objects underneath it" in {
-    val fixity = Fixity("SHA256", "")
+    val fixity = List(Fixity("SHA256", ""))
     val ioId = UUID.randomUUID()
     val bitStreamInfoList = Seq(
       BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt", 1, "", fixity, 1, Original, None, Some(ioId)),
@@ -352,7 +352,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
         "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
         1,
         "",
-        Fixity("SHA256", ""),
+        List(Fixity("SHA256", "")),
         1,
         Original,
         None,
@@ -375,7 +375,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
           "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           1,
           "",
-          Fixity("SHA256", ""),
+          List(Fixity("SHA256", "")),
           1,
           Original,
           None,
@@ -432,7 +432,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
           "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           1,
           "",
-          Fixity("SHA256", checksum),
+          List(Fixity("SHA256", checksum)),
           1,
           Original,
           None,
@@ -462,7 +462,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
             "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
             1,
             "",
-            Fixity("SHA256", "DifferentContent"),
+            List(Fixity("SHA256", "DifferentContent")),
             1,
             Original,
             None,
@@ -489,7 +489,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
   "runCustodialCopy" should "write multiple bitstreams to the same version and to the correct location" in {
     val ioId = UUID.randomUUID()
-    val fixity = Fixity("SHA256", "")
+    val fixity = List(Fixity("SHA256", ""))
     val bitStreamInfoList = Seq(
       BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt", 1, "", fixity, 1, Original, None, Some(ioId)),
       BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2", 1, "", fixity, 2, Derived, None, Some(ioId))
@@ -561,7 +561,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
             "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
             1,
             "",
-            Fixity("SHA256", checksum),
+            List(Fixity("SHA256", checksum)),
             1,
             Original,
             None,
@@ -613,7 +613,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
           "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           1,
           "",
-          Fixity("SHA256", checksum),
+          List(Fixity("SHA256", checksum)),
           1,
           Original,
           None,

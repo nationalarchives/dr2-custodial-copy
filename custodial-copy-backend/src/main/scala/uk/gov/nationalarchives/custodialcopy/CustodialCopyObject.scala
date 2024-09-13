@@ -8,7 +8,7 @@ import scala.xml.Elem
 sealed trait CustodialCopyObject {
   val destinationFilePath: String
   def id: UUID
-  def checksum: String
+  def checksums: List[Checksum]
   def name: String
   def sourceFilePath: IO[Path] = createDirectory.map(cd => Path(s"$cd/$name"))
   def tableItemIdentifier: String | UUID
@@ -21,7 +21,7 @@ object CustodialCopyObject {
   case class FileObject(
       id: UUID,
       name: String,
-      checksum: String,
+      checksums: List[Checksum],
       url: String,
       destinationFilePath: String,
       tableItemIdentifier: UUID
@@ -30,9 +30,11 @@ object CustodialCopyObject {
       id: UUID,
       repTypeGroup: Option[String],
       name: String,
-      checksum: String,
+      checksums: List[Checksum],
       metadata: Elem,
       destinationFilePath: String,
       tableItemIdentifier: String | UUID
   ) extends CustodialCopyObject
 }
+
+case class Checksum(algorithm: String, fingerprint: String)
