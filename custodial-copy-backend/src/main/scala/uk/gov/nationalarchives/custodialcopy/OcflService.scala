@@ -61,8 +61,7 @@ class OcflService(ocflRepository: OcflRepository, semaphore: Semaphore[IO]) {
             val potentialFile = Option(ocflObject.getFile(obj.destinationFilePath))
             potentialFile match {
               case Some(ocflFileObject) =>
-                val checksumUnchanged =
-                  Some(ocflFileObject.getFixity.get(DigestAlgorithm.fromOcflName("sha256"))).contains(obj.checksum)
+                val checksumUnchanged = isChecksumUnchanged(ocflFileObject.getFixity.asScala.toMap, obj.checksums)
                 if checksumUnchanged then missingAndChanged else (missingObjects, obj :: changedObjects)
               case None =>
                 (obj :: missingObjects, changedObjects) // Information Object exists but file doesn't
@@ -91,6 +90,11 @@ class OcflService(ocflRepository: OcflRepository, semaphore: Semaphore[IO]) {
       val (missingObjects, changedObjects) = missingAndChangedPair
       MissingAndChangedObjects(missingObjects, changedObjects)
     }
+
+  private def isChecksumUnchanged(fixitiesMap: Map[DigestAlgorithm, String], checksums: List[Checksum]): Boolean = {
+    if (fixitiesMap.size != checksums.size) false
+    else checksums.forall(eachChecksum => fixitiesMap.get(DigestAlgorithm.fromOcflName(eachChecksum.algorithm.toLowerCase)).contains(eachChecksum.fingerprint))
+  }
 
   def getAllFilePathsOnAnObject(ioId: UUID): IO[List[String]] =
     IO.blocking(ocflRepository.getObject(ioId.toHeadVersion))

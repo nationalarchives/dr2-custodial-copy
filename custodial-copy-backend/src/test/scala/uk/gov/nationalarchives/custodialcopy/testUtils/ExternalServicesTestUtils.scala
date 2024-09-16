@@ -125,11 +125,11 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
           combinedBitstreamInfoResponses.map { bitstreamInfo =>
             <Bitstream><Filename>{bitstreamInfo.name}</Filename><FileSize>{
               bitstreamInfo.fileSize
-            }</FileSize><Fixities><Fixity><FixityAlgorithmRef>{
-              bitstreamInfo.fixity.algorithm
-            }</FixityAlgorithmRef><FixityValue>{
-              bitstreamInfo.fixity.value
-            }</FixityValue></Fixity></Fixities></Bitstream>
+            }</FileSize><Fixities>{
+              bitstreamInfo.fixities.map(eachFixity =>
+                <Fixity><FixityAlgorithmRef>{eachFixity.algorithm.toUpperCase}</FixityAlgorithmRef><FixityValue>{eachFixity.value}</FixityValue></Fixity>
+              )
+            }</Fixities></Bitstream>
           },
           Seq(<Identifier><ApiId/><Type/><Value/><Entity/></Identifier>),
           Seq(<Link><Type/><FromEntity/><ToEntity/></Link>),
@@ -265,7 +265,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
           "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           1,
           "",
-          Fixity("SHA256", ""),
+          List(Fixity("SHA256", "")),
           1,
           Original,
           None,
@@ -340,9 +340,11 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         "\n          ",
         <Bitstream><Filename>{bitstreamInfo.name}</Filename><FileSize>{
           bitstreamInfo.fileSize
-        }</FileSize><Fixities><Fixity><FixityAlgorithmRef>{
-          bitstreamInfo.fixity.algorithm
-        }</FixityAlgorithmRef><FixityValue>{bitstreamInfo.fixity.value}</FixityValue></Fixity></Fixities></Bitstream>
+        }</FileSize><Fixities>{
+          bitstreamInfo.fixities.map(eachFixity =>
+            <Fixity><FixityAlgorithmRef>{eachFixity.algorithm.toUpperCase}</FixityAlgorithmRef><FixityValue>{eachFixity.value}</FixityValue></Fixity>
+          )
+        }</Fixities></Bitstream>
       )
     }
     private val coMetadataInRepo =
@@ -439,7 +441,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
       1,
       "url",
-      Fixity("sha256", "checksum"),
+      List(Fixity("sha256", "checksum")),
       genVersion,
       genType,
       Some("CoTitle"),

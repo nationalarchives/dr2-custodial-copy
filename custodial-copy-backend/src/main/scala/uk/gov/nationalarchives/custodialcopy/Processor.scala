@@ -84,7 +84,7 @@ class Processor(
         ioRef,
         repType,
         fileName,
-        DigestUtils.sha256Hex(allMetadataAsXmlString),
+        List(Checksum("SHA256", DigestUtils.sha256Hex(allMetadataAsXmlString))),
         allMetadataAsXml,
         path,
         tableItemIdentifier
@@ -199,7 +199,7 @@ class Processor(
         FileObject(
           parentRef,
           bitStreamInfo.name,
-          bitStreamInfo.fixity.value,
+          bitStreamInfo.fixities.map(eachFixity => Checksum(eachFixity.algorithm, eachFixity.value)),
           bitStreamInfo.url,
           destinationFilePath,
           removeFileExtension(bitStreamInfo.name)
