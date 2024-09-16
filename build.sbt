@@ -19,11 +19,11 @@ def setupDirectories(serviceName: String) =
     "RUN",
     s"""apk update && apk upgrade && apk add openjdk21-jre && \\
                |    mkdir -p /poduser/work /poduser/repo /poduser/version /poduser/database && \\
-               |    chown -R 1002:1005 /poduser && \\
                |    mkdir /poduser/logs && \\
                |    touch /poduser/logs/$serviceName.log && \\
-               |    chown -R nobody:nobody /poduser/logs && \\
-               |    chmod 644 /poduser/logs/$serviceName.log""".stripMargin
+               |    chmod 644 /poduser/logs/$serviceName.log && \\
+               |    chown -R 1002:1005 /poduser
+               |    """.stripMargin
   )
 
 lazy val root = (project in file("."))
