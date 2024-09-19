@@ -69,7 +69,7 @@ object Main extends IOApp {
       sns = DASNSClient[IO]()
       processor <- Processor(config, sqs, service, client, sns)
       _ <- {
-        Stream.fixedRateStartImmediately[IO](20.seconds) >>
+        Stream.fixedRateStartImmediately[IO](10.seconds) >>
           runCustodialCopy(sqs, config, processor)
             .handleErrorWith(err => Stream.eval(semaphore.release >> logError(err)))
       }.compile.drain
