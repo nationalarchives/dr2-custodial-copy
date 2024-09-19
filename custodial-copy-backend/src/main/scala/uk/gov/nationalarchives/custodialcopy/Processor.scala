@@ -9,8 +9,8 @@ import org.apache.commons.codec.digest.DigestUtils
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
 import sttp.capabilities.fs2.Fs2Streams
-import uk.gov.nationalarchives.{DASNSClient, DASQSClient}
-import uk.gov.nationalarchives.DASQSClient.MessageResponse
+import uk.gov.nationalarchives.{DASNSClient, DASQSStreamClient}
+import uk.gov.nationalarchives.DASQSStreamClient.StreamMessageResponse
 import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.*
 import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
 import uk.gov.nationalarchives.custodialcopy.Message.*
@@ -29,15 +29,13 @@ import scala.xml.{Elem, Node}
 
 class Processor(
     config: Config,
-    sqsClient: DASQSClient[IO],
+    sqsClient: DASQSStreamClient[IO],
     ocflService: OcflService,
     entityClient: EntityClient[IO, Fs2Streams[IO]],
     xmlValidator: ValidateXmlAgainstXsd[IO],
     snsClient: DASNSClient[IO]
 ) {
   private val newlineAndIndent = "\n          "
-  private def deleteMessage(receiptHandle: String): IO[DeleteMessageResponse] =
-    sqsClient.deleteMessage(config.sqsQueueUrl, receiptHandle)
 
   private def createMetadataObject(
       ioRef: UUID,
@@ -264,10 +262,10 @@ class Processor(
       .apply(message)
   }
 
-  private def processNonDeletedMessages(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[List[SendSnsMessage]] =
+  private def processNonDeletedMessages(streamMessageResponse: StreamMessageResponse[ReceivedSnsMessage]): IO[List[SendSnsMessage]] =
     for {
       logger <- Slf4jLogger.create[IO]
-      custodialCopyObjects <- toCustodialCopyObject(messageResponse.message)
+      custodialCopyObjects <- toCustodialCopyObject(streamMessageResponse.message)
 
       missingAndChangedObjects <- ocflService.getMissingAndChangedObjects(custodialCopyObjects)
 
@@ -284,8 +282,8 @@ class Processor(
 
     } yield createdObjsSnsMessages ++ updatedObjsSnsMessages
 
-  private def processDeletedEntities(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[List[SendSnsMessage]] =
-    messageResponse.message match {
+  private def processDeletedEntities(streamMessageResponse: StreamMessageResponse[ReceivedSnsMessage]): IO[List[SendSnsMessage]] =
+    streamMessageResponse.message match {
       case IoReceivedSnsMessage(ref, _) =>
         for {
           filePaths <- ocflService.getAllFilePathsOnAnObject(ref)
@@ -298,28 +296,27 @@ class Processor(
         IO.raiseError(new Exception(s"Entity type is not supported for deletion"))
     }
 
-  def process(messageResponse: MessageResponse[ReceivedSnsMessage], entityDeleted: Boolean): IO[Unit] =
+  def process(streamMessageResponse: StreamMessageResponse[ReceivedSnsMessage], entityDeleted: Boolean): IO[Unit] =
     for {
       logger <- Slf4jLogger.create[IO]
       entityTypeDeletionSupported =
-        messageResponse.message match {
+        streamMessageResponse.message match {
           case SoReceivedSnsMessage(_, _) => false
           case _                          => true
         }
       snsMessages <-
-        if entityDeleted && entityTypeDeletionSupported then processDeletedEntities(messageResponse)
-        else processNonDeletedMessages(messageResponse)
+        if entityDeleted && entityTypeDeletionSupported then processDeletedEntities(streamMessageResponse)
+        else processNonDeletedMessages(streamMessageResponse)
       _ <- IO.whenA(snsMessages.nonEmpty) {
         snsClient.publish[SendSnsMessage](config.topicArn)(snsMessages).map(_ => ())
       }
       _ <- logger.info(s"${snsMessages.length} 'created/updated objects' messages published to SNS")
-      _ <- deleteMessage(messageResponse.receiptHandle)
-    } yield ()
+    } yield streamMessageResponse.sqsTextMessage.acknowledge()
 }
 object Processor {
   def apply(
       config: Config,
-      sqsClient: DASQSClient[IO],
+      sqsClient: DASQSStreamClient[IO],
       ocflService: OcflService,
       entityClient: EntityClient[IO, Fs2Streams[IO]],
       snsClient: DASNSClient[IO]

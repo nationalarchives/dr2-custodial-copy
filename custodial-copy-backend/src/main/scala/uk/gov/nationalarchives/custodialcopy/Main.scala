@@ -4,21 +4,19 @@ import cats.effect.*
 import cats.effect.std.Semaphore
 import cats.implicits.*
 import fs2.Stream
-import io.circe.{Decoder, HCursor}
+import io.circe.{Decoder, Encoder, HCursor, Json, JsonObject}
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import pureconfig.*
 import pureconfig.generic.derivation.default.*
 import pureconfig.module.catseffect.syntax.*
-import uk.gov.nationalarchives.DASQSClient
-import uk.gov.nationalarchives.dp.client.fs2.Fs2Client
+import uk.gov.nationalarchives.{DASNSClient, DASQSStreamClient}
+import uk.gov.nationalarchives.DASQSStreamClient.StreamMessageResponse
 import uk.gov.nationalarchives.custodialcopy.Message.*
-import uk.gov.nationalarchives.DASNSClient
-import uk.gov.nationalarchives.DASQSClient.MessageResponse
+import uk.gov.nationalarchives.dp.client.fs2.Fs2Client
 
 import java.net.URI
 import java.nio.file
 import java.util.UUID
-import scala.concurrent.duration.DurationInt
 
 object Main extends IOApp {
 
@@ -33,10 +31,10 @@ object Main extends IOApp {
       topicArn: String
   ) derives ConfigReader
 
-  private def sqsClient(config: Config): DASQSClient[IO] =
+  private def sqsClient(config: Config): DASQSStreamClient[IO] =
     config.proxyUrl
-      .map(proxy => DASQSClient[IO](proxy))
-      .getOrElse(DASQSClient[IO]())
+      .map(proxy => DASQSStreamClient[IO](proxy))
+      .getOrElse(DASQSStreamClient[IO]())
 
   given Decoder[ReceivedSnsMessage] = (c: HCursor) =>
     for {
@@ -68,45 +66,44 @@ object Main extends IOApp {
       sqs = sqsClient(config)
       sns = DASNSClient[IO]()
       processor <- Processor(config, sqs, service, client, sns)
-      _ <- {
-        Stream.fixedRateStartImmediately[IO](10.seconds) >>
-          runCustodialCopy(sqs, config, processor)
-            .handleErrorWith(err => Stream.eval(semaphore.release >> logError(err)))
-      }.compile.drain
+      _ <- runCustodialCopy(sqs, config, processor)
+        .handleErrorWith(err => semaphore.release >> logError(err))
     } yield ExitCode.Success
 
-  def runCustodialCopy(sqs: DASQSClient[IO], config: Config, processor: Processor): Stream[IO, List[Outcome[IO, Throwable, Unit]]] =
-    Stream
-      .eval(sqs.receiveMessages[ReceivedSnsMessage](config.sqsQueueUrl))
-      .filter(messageResponses => messageResponses.nonEmpty)
-      .evalMap { messageResponses =>
-        for {
-          logger <- Slf4jLogger.create[IO]
-          _ <- logger.info(s"Processing ${messageResponses.length} messages")
-          _ <- logger.info(messageResponses.map(_.message.ref).mkString(","))
+  def runCustodialCopy(sqs: DASQSStreamClient[IO], config: Config, processor: Processor): IO[List[Outcome[IO, Throwable, Unit]]] = {
+    sqs.receiveMessageStream[ReceivedSnsMessage]("intg-dr2-custodial-copy").use { queue =>
+      Stream.fromQueueUnterminated[IO, StreamMessageResponse[ReceivedSnsMessage]](queue)
+        .chunkMin(10)
+        .evalMap { messageResponseChunks =>
+          val messageResponses = messageResponseChunks.toList
+          for {
+            logger <- Slf4jLogger.create[IO]
+            _ <- logger.info(s"Processing ${messageResponses.length} messages")
+            _ <- logger.info(messageResponses.map(_.message.ref).mkString(","))
 
-          (deletedEntities, nonDeletedEntities) = dedupeMessages(messageResponses).partition(_.message.deleted)
+            (deletedEntities, nonDeletedEntities) = dedupeMessages(messageResponses).partition(_.message.deleted)
 
-          fibersForNonDeletedEntities <- nonDeletedEntities.parTraverse(processor.process(_, false).start)
-          ndeFiberResults <- fibersForNonDeletedEntities.traverse(_.join)
+            fibersForNonDeletedEntities <- nonDeletedEntities.parTraverse(processor.process(_, false).start)
+            ndeFiberResults <- fibersForNonDeletedEntities.traverse(_.join)
 
-          fibersForDeletedEntities <- deletedEntities.parTraverse(processor.process(_, true).start)
-          deFiberResults <- fibersForDeletedEntities.traverse(_.join)
+            fibersForDeletedEntities <- deletedEntities.parTraverse(processor.process(_, true).start)
+            deFiberResults <- fibersForDeletedEntities.traverse(_.join)
 
-          allFibers = fibersForNonDeletedEntities ++ fibersForDeletedEntities
-          allFiberResults = ndeFiberResults ++ deFiberResults
+            allFibers = fibersForNonDeletedEntities ++ fibersForDeletedEntities
+            allFiberResults = ndeFiberResults ++ deFiberResults
 
-          _ <- logger.info(s"${allFiberResults.count(_.isSuccess)} messages out of ${allFibers.length} unique messages processed successfully")
-          _ <- logger.info(s"${allFiberResults.count(_.isError)} messages out of ${allFibers.length} unique messages failed")
+            _ <- logger.info(s"${allFiberResults.count(_.isSuccess)} messages out of ${allFibers.length} unique messages processed successfully")
+            _ <- logger.info(s"${allFiberResults.count(_.isError)} messages out of ${allFibers.length} unique messages failed")
+            _ <- allFiberResults traverse {
+              case Outcome.Errored(e) => logError(e) >> IO.unit
+              case _ => IO.unit
+            }
+          } yield allFiberResults
+        }.compile.toList.map(_.flatten)
+    }
+  }
 
-          _ <- allFiberResults traverse {
-            case Outcome.Errored(e) => logError(e) >> IO.unit
-            case _                  => IO.unit
-          }
-        } yield allFiberResults
-      }
-
-  private def dedupeMessages(messages: List[MessageResponse[ReceivedSnsMessage]]): List[MessageResponse[ReceivedSnsMessage]] =
+  private def dedupeMessages(messages: List[StreamMessageResponse[ReceivedSnsMessage]]): List[StreamMessageResponse[ReceivedSnsMessage]] =
     messages.distinctBy(_.message.ref)
 
   private def logError(err: Throwable) = for {

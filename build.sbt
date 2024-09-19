@@ -39,9 +39,10 @@ lazy val custodialCopyBackend = (project in file("custodial-copy-backend"))
   .settings(
     name := "custodial-copy-backend",
     assembly / assemblyJarName := "custodial-copy.jar",
-    scalacOptions += "-Wunused:imports",
+//    scalacOptions += "-Wunused:imports",
     libraryDependencies ++= Seq(
       preservicaClient,
+      snsClient,
       snsClient,
       sqsClient,
       fs2Core
