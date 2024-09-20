@@ -1,8 +1,10 @@
 package uk.gov.nationalarchives.custodialcopy.testUtils
 
-import cats.effect.IO
-import cats.effect.std.Semaphore
+import cats.effect.{IO, Resource}
+import cats.effect.std.{Queue, Semaphore}
 import cats.effect.unsafe.implicits.global
+import cats.syntax.all.*
+import com.amazon.sqs.javamessaging.message.SQSTextMessage
 import fs2.Stream
 import io.circe.{Decoder, Encoder}
 import io.ocfl.api.model.DigestAlgorithm
@@ -11,7 +13,7 @@ import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.storage.OcflStorageBuilder
 import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.{doReturn, spy, times, verify, when}
+import org.mockito.Mockito.{doNothing, doReturn, spy, times, verify, when}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.{ArgumentCaptor, ArgumentMatcher, ArgumentMatchers, Mockito}
 import org.scalatest.matchers.should.Matchers.*
@@ -20,7 +22,7 @@ import org.scalatestplus.mockito.MockitoSugar
 import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
 import software.amazon.awssdk.services.sns.model.PublishBatchResponse
 import sttp.capabilities.fs2.Fs2Streams
-import uk.gov.nationalarchives.DASQSClient.MessageResponse
+import uk.gov.nationalarchives.DASQSStreamClient.StreamMessageResponse
 import uk.gov.nationalarchives.utils.TestUtils.*
 import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.MetadataObject
 import uk.gov.nationalarchives.custodialcopy.{CustodialCopyObject, Message, OcflService, Processor}
@@ -222,16 +224,19 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       .build()
   }
 
-  private def mockSqs(messages: List[ReceivedSnsMessage]): DASQSClient[IO] = {
-    val sqsClient = mock[DASQSClient[IO]]
-    val responses = IO {
-      messages.zipWithIndex.map { case (message, idx) =>
-        MessageResponse[ReceivedSnsMessage](s"handle$idx", message)
-      }
-    }
-    when(sqsClient.receiveMessages[ReceivedSnsMessage](any[String], any[Int])(using any[Decoder[ReceivedSnsMessage]]))
+  private def mockSqs(messages: List[ReceivedSnsMessage], sqsTextMessage: SQSTextMessage): DASQSStreamClient[IO] = {
+    val sqsClient = mock[DASQSStreamClient[IO]]
+
+    val responses = Queue.unbounded[IO, StreamMessageResponse[ReceivedSnsMessage]]().map { queue =>
+      Resource.make[IO, Queue[IO, StreamMessageResponse[ReceivedSnsMessage]]] {
+        messages.zipWithIndex.traverse { case (message, idx) =>
+          queue.offer(StreamMessageResponse[ReceivedSnsMessage](new SQSTextMessage(), message))
+        }.map(_ => queue)
+      }(_ => IO.unit)
+    }.unsafeRunSync()
+
+    when(sqsClient.receiveMessageStream[ReceivedSnsMessage](any[String])(using any[Decoder[ReceivedSnsMessage]]))
       .thenReturn(responses)
-    when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO(DeleteMessageResponse.builder().build))
     sqsClient
   }
 
@@ -302,7 +307,10 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
           case StructuralObject => (1 to 2).map(_ => SoReceivedSnsMessage(UUID.randomUUID, hasBeenDeleted))
         }
       }
-    val sqsClient: DASQSClient[IO] = mockSqs(sqsMessages)
+
+    val mockSqsTextMessage = mock[SQSTextMessage]
+    doNothing().when(mockSqsTextMessage).acknowledge()
+    val sqsClient: DASQSStreamClient[IO] = mockSqs(sqsMessages, mockSqsTextMessage)
     val snsClient: DASNSClient[IO] = mockSns()
 
     lazy val expectedIoMetadataFileDestinationPath: String = metadataFile(ioId, ioType)
@@ -422,18 +430,23 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     lazy val coMessage: CoReceivedSnsMessage = CoReceivedSnsMessage(coId, false)
     lazy val ioMessage: IoReceivedSnsMessage = IoReceivedSnsMessage(ioId, false)
     lazy val soMessage: SoReceivedSnsMessage = SoReceivedSnsMessage(soId, false)
-    val sqsClient: DASQSClient[IO] = mock[DASQSClient[IO]]
+    val mockSqsTextMessage: SQSTextMessage = mock[SQSTextMessage]
+    doNothing().when(mockSqsTextMessage).acknowledge()
+
+    val sqsClient: DASQSStreamClient[IO] = mock[DASQSStreamClient[IO]]
     val entityClient: EntityClient[IO, Fs2Streams[IO]] = mock[EntityClient[IO, Fs2Streams[IO]]]
     val snsClient: DASNSClient[IO] = mock[DASNSClient[IO]]
 
-    val duplicatesSoMessageResponse: MessageResponse[ReceivedSnsMessage] =
-      MessageResponse[ReceivedSnsMessage]("receiptHandle0", soMessage)
+    val receiptHandle = new SQSTextMessage()
 
-    val duplicatesIoMessageResponse: MessageResponse[ReceivedSnsMessage] =
-      MessageResponse[ReceivedSnsMessage]("receiptHandle1", ioMessage)
+    val duplicatesSoMessageResponse: StreamMessageResponse[ReceivedSnsMessage] =
+      StreamMessageResponse[ReceivedSnsMessage](receiptHandle, soMessage)
 
-    val duplicatesCoMessageResponses: MessageResponse[ReceivedSnsMessage] =
-      MessageResponse[ReceivedSnsMessage]("receiptHandle2", coMessage)
+    val duplicatesIoMessageResponse: StreamMessageResponse[ReceivedSnsMessage] =
+      StreamMessageResponse[ReceivedSnsMessage](receiptHandle, ioMessage)
+
+    val duplicatesCoMessageResponses: StreamMessageResponse[ReceivedSnsMessage] =
+      StreamMessageResponse[ReceivedSnsMessage](receiptHandle, coMessage)
 
     private val potentialParentRef = if parentRefExists then Some(ioId) else None
 
@@ -583,9 +596,6 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     )
       .thenReturn(IO.pure(List(PublishBatchResponse.builder.build)))
 
-    when(sqsClient.deleteMessage(ArgumentMatchers.eq("queueUrl"), ArgumentMatchers.startsWith("receiptHandle")))
-      .thenReturn(IO.pure(DeleteMessageResponse.builder.build))
-
     val ocflService: OcflService = mockOcflService(missingObjects, changedObjects, pathsOfObjectsUnderIo, throwErrorInMissingAndChangedObjects)
     val xmlValidator: ValidateXmlAgainstXsd[IO] = spy(ValidateXmlAgainstXsd[IO](XipXsdSchemaV7))
 
@@ -646,8 +656,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       val numOfTimesToDeleteObjects = if destinationPathsToDelete.nonEmpty then 1 else 0
       verify(ocflService, times(numOfTimesToDeleteObjects))
         .deleteObjects(ioToDeleteObjectsFromCaptor.capture(), pathsToDeleteCaptor.capture())
-      verify(sqsClient, times(receiptHandles.length))
-        .deleteMessage(queueUrlCaptor.capture, receiptHandleCaptor.capture)
+
+      verify(mockSqsTextMessage, times(receiptHandles.length)).acknowledge()
 
       val numOfTimesSnsMsgShouldBeSent =
         if (snsMessagesToSend.nonEmpty || createdIdSourceAndDestinationPathAndId.flatten.nonEmpty) 1 else 0

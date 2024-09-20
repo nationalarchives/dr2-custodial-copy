@@ -14,8 +14,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers.*
 import org.scalatestplus.mockito.MockitoSugar
 import sttp.capabilities.fs2.Fs2Streams
-import uk.gov.nationalarchives.DASQSClient
-import uk.gov.nationalarchives.DASQSClient.MessageResponse
+import uk.gov.nationalarchives.DASQSStreamClient
+import uk.gov.nationalarchives.DASQSStreamClient.StreamMessageResponse
 import uk.gov.nationalarchives.custodialcopy.Main.*
 import uk.gov.nationalarchives.custodialcopy.Message.ReceivedSnsMessage
 import uk.gov.nationalarchives.utils.TestUtils.*
@@ -34,7 +34,7 @@ import scala.xml.XML
 class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
   private def getError(
-      sqsClient: DASQSClient[IO],
+      sqsClient: DASQSStreamClient[IO],
       config: Config,
       processor: Processor
   ): Throwable = runCustodialCopy(sqsClient, config, processor).head match
@@ -42,10 +42,10 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     case _                  => throw new Exception("Expected an error but none found")
 
   private def runCustodialCopy(
-      sqsClient: DASQSClient[IO],
+      sqsClient: DASQSStreamClient[IO],
       config: Config,
       processor: Processor
-  ): List[Outcome[IO, Throwable, Unit]] = Main.runCustodialCopy(sqsClient, config, processor).compile.toList.unsafeRunSync().flatten
+  ): List[Outcome[IO, Throwable, Unit]] = Main.runCustodialCopy(sqsClient, config, processor).unsafeRunSync()
 
   "runCustodialCopy" should "(given an IO message with 'deleted' set to 'true') delete all objects underneath it" in {
     val fixity = List(Fixity("SHA256", ""))
@@ -131,8 +131,9 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val utils = new MainTestUtils(typesOfSqsMsgAndDeletionStatus = List((StructuralObject, false), (StructuralObject, false)), objectVersion = 0)
 
     runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
-
-    verify(utils.sqsClient, times(4)).deleteMessage(any[String], any[String])
+    
+    
+    verify(utils.mockSqsTextMessage, times(4)).acknowledge()
   }
 
   "runCustodialCopy" should "not write a new version, nor new IO metadata object if there is an IO message with " +
@@ -254,12 +255,12 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
   "runCustodialCopy" should "not call the process method if no messages are received" in {
     val processor = mock[Processor]
-    when(processor.process(any[MessageResponse[ReceivedSnsMessage]], ArgumentMatchers.eq(false))).thenReturn(IO.unit)
+    when(processor.process(any[StreamMessageResponse[ReceivedSnsMessage]], ArgumentMatchers.eq(false))).thenReturn(IO.unit)
     val utils = new MainTestUtils(typesOfSqsMsgAndDeletionStatus = Nil, objectVersion = 0)
 
     runCustodialCopy(utils.sqsClient, utils.config, processor)
 
-    verify(processor, never()).process(any[MessageResponse[ReceivedSnsMessage]], any[Boolean])
+    verify(processor, never()).process(any[StreamMessageResponse[ReceivedSnsMessage]], any[Boolean])
   }
 
   "runCustodialCopy" should "(given a CO message with 'deleted' set to 'true') throw an Exception" in {

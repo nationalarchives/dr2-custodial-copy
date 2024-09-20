@@ -10,6 +10,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
+import uk.gov.nationalarchives.DASQSStreamClient.StreamMessageResponse
 import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.MetadataObject
 import uk.gov.nationalarchives.custodialcopy.Main.IdWithSourceAndDestPaths
 import uk.gov.nationalarchives.custodialcopy.Message.{IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
@@ -312,8 +313,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
         )
       )
 
-    val response: MessageResponse[ReceivedSnsMessage] = MessageResponse[ReceivedSnsMessage](
-      "receiptHandle2",
+    val response: StreamMessageResponse[ReceivedSnsMessage] = StreamMessageResponse[ReceivedSnsMessage](
+      utils.mockSqsTextMessage,
       IoReceivedSnsMessage(changedFileId, false)
     )
 
@@ -365,9 +366,9 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
         )
       )
 
-    val response: MessageResponse[ReceivedSnsMessage] =
-      MessageResponse[ReceivedSnsMessage](
-        "receiptHandle1",
+    val response: StreamMessageResponse[ReceivedSnsMessage] =
+      StreamMessageResponse[ReceivedSnsMessage](
+        utils.mockSqsTextMessage,
         IoReceivedSnsMessage(missingFileId, false)
       )
     utils.processor.process(response, false).unsafeRunSync()
