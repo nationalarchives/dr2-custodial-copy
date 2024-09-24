@@ -5,7 +5,6 @@ import cats.implicits.*
 import doobie.Update
 import doobie.free.connection.ConnectionIO
 import doobie.implicits.*
-import doobie.util.Put
 import doobie.util.log.LogHandler
 import doobie.util.transactor.Transactor
 import doobie.util.transactor.Transactor.Aux
