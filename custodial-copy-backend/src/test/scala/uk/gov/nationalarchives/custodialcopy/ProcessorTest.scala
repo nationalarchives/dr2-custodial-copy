@@ -62,7 +62,6 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       createdIdSourceAndDestinationPathAndId = Nil,
       drosToLookup = Nil,
       snsMessagesToSend = Nil,
-      receiptHandles = Nil,
       destinationPathsToDelete = Nil
     )
   }
@@ -98,8 +97,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
           s"$parentRef/Preservation_1/$id/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
         )
-      ),
-      receiptHandles = List("receiptHandle2")
+      )
     )
   }
 
@@ -119,8 +117,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       entityTypesToGetMetadataFrom = Nil,
       xmlRequestsToValidate = Nil,
       createdIdSourceAndDestinationPathAndId = Nil,
-      drosToLookup = Nil,
-      receiptHandles = Nil
+      drosToLookup = Nil
     )
   }
 
@@ -150,8 +147,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       idsOfEntityToGetMetadataFrom = Nil,
       entityTypesToGetMetadataFrom = Nil,
       xmlRequestsToValidate = Nil,
-      drosToLookup = Nil,
-      receiptHandles = Nil
+      drosToLookup = Nil
     )
   }
 
@@ -172,8 +168,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       repIndexes = Nil,
       drosToLookup = List(
         List(s"$parentRef/IO_Metadata.xml")
-      ),
-      receiptHandles = List(1).map(n => s"receiptHandle$n")
+      )
     )
   }
 
@@ -196,8 +191,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
           s"$parentRef/Preservation_1/$id/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
         )
-      ),
-      receiptHandles = List(2).map(n => s"receiptHandle$n")
+      )
     )
   }
 
@@ -314,6 +308,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
 
     val response: MessageResponse[ReceivedSnsMessage] = MessageResponse[ReceivedSnsMessage](
       "receiptHandle2",
+      Option(changedFileId.toString),
       IoReceivedSnsMessage(changedFileId, false)
     )
 
@@ -335,8 +330,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       ),
       snsMessagesToSend = List(
         SendSnsMessage(InformationObject, changedFileId, Metadata, Updated, "SourceIDValue")
-      ),
-      receiptHandles = List("receiptHandle2")
+      )
     )
   }
 
@@ -368,6 +362,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     val response: MessageResponse[ReceivedSnsMessage] =
       MessageResponse[ReceivedSnsMessage](
         "receiptHandle1",
+        Option(missingFileId.toString),
         IoReceivedSnsMessage(missingFileId, false)
       )
     utils.processor.process(response, false).unsafeRunSync()
@@ -388,8 +383,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       ),
       snsMessagesToSend = List(
         SendSnsMessage(InformationObject, missingFileId, Metadata, Created, "SourceIDValue")
-      ),
-      receiptHandles = List("receiptHandle1")
+      )
     )
   }
 
@@ -436,8 +430,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
           <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date/><User/></Event><Date/><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity></EventAction>
         </XIP>
       ),
-      drosToLookup = Nil,
-      receiptHandles = Nil
+      drosToLookup = Nil
     )
   }
 
@@ -450,8 +443,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
 
     utils.verifyCallsAndArguments(
       repTypes = Nil,
-      repIndexes = Nil,
-      receiptHandles = Nil
+      repIndexes = Nil
     )
   }
 }

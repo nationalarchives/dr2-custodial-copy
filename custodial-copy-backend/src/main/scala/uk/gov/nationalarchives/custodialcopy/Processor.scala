@@ -36,7 +36,8 @@ class Processor(
     snsClient: DASNSClient[IO]
 ) {
   private val newlineAndIndent = "\n          "
-  private def deleteMessage(receiptHandle: String): IO[DeleteMessageResponse] =
+
+  def deleteMessage(receiptHandle: String): IO[DeleteMessageResponse] =
     sqsClient.deleteMessage(config.sqsQueueUrl, receiptHandle)
 
   private def createMetadataObject(
@@ -69,7 +70,9 @@ class Processor(
           ++ metadata.identifiers.flatMap(identifier => Seq(newlineAndIndent, identifier))
           ++ metadata.links.flatMap(link => Seq(newlineAndIndent, link))
           ++ metadata.metadataNodes.flatMap(metadataNode => Seq(newlineAndIndent, metadataNode))
-          ++ metadata.eventActions.flatMap(eventAction => Seq(newlineAndIndent, eventAction))
+          ++ metadata.eventActions
+            .filterNot(_.attribute("commandType").map(_.toString).contains("command_download"))
+            .flatMap(eventAction => Seq(newlineAndIndent, eventAction))
 
       allMetadataAsXml =
         <XIP xmlns="http://preservica.com/XIP/v7.0">
@@ -298,7 +301,7 @@ class Processor(
         IO.raiseError(new Exception(s"Entity type is not supported for deletion"))
     }
 
-  def process(messageResponse: MessageResponse[ReceivedSnsMessage], entityDeleted: Boolean): IO[Unit] =
+  def process(messageResponse: MessageResponse[ReceivedSnsMessage], entityDeleted: Boolean): IO[UUID] =
     for {
       logger <- Slf4jLogger.create[IO]
       entityTypeDeletionSupported =
@@ -313,8 +316,9 @@ class Processor(
         snsClient.publish[SendSnsMessage](config.topicArn)(snsMessages).map(_ => ())
       }
       _ <- logger.info(s"${snsMessages.length} 'created/updated objects' messages published to SNS")
-      _ <- deleteMessage(messageResponse.receiptHandle)
-    } yield ()
+    } yield messageResponse.message.ref
+
+  def commit(id: UUID): IO[Unit] = ocflService.commit(id).void
 }
 object Processor {
   def apply(

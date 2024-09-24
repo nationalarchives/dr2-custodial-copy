@@ -3,6 +3,7 @@ package uk.gov.nationalarchives.custodialcopy
 import cats.effect.*
 import cats.effect.std.Semaphore
 import cats.implicits.*
+import cats.syntax.all.*
 import fs2.Stream
 import io.circe.{Decoder, HCursor}
 import org.typelevel.log4cats.slf4j.Slf4jLogger
@@ -75,36 +76,59 @@ object Main extends IOApp {
       }.compile.drain
     } yield ExitCode.Success
 
-  def runCustodialCopy(sqs: DASQSClient[IO], config: Config, processor: Processor): Stream[IO, List[Outcome[IO, Throwable, Unit]]] =
+  def runCustodialCopy(sqs: DASQSClient[IO], config: Config, processor: Processor): Stream[IO, List[Outcome[IO, Throwable, UUID]]] =
     Stream
       .eval(sqs.receiveMessages[ReceivedSnsMessage](config.sqsQueueUrl))
       .filter(messageResponses => messageResponses.nonEmpty)
       .evalMap { messageResponses =>
-        for {
-          logger <- Slf4jLogger.create[IO]
-          _ <- logger.info(s"Processing ${messageResponses.length} messages")
-          _ <- logger.info(messageResponses.map(_.message.ref).mkString(","))
-
-          (deletedEntities, nonDeletedEntities) = dedupeMessages(messageResponses).partition(_.message.deleted)
-
-          fibersForNonDeletedEntities <- nonDeletedEntities.parTraverse(processor.process(_, false).start)
-          ndeFiberResults <- fibersForNonDeletedEntities.traverse(_.join)
-
-          fibersForDeletedEntities <- deletedEntities.parTraverse(processor.process(_, true).start)
-          deFiberResults <- fibersForDeletedEntities.traverse(_.join)
-
-          allFibers = fibersForNonDeletedEntities ++ fibersForDeletedEntities
-          allFiberResults = ndeFiberResults ++ deFiberResults
-
-          _ <- logger.info(s"${allFiberResults.count(_.isSuccess)} messages out of ${allFibers.length} unique messages processed successfully")
-          _ <- logger.info(s"${allFiberResults.count(_.isError)} messages out of ${allFibers.length} unique messages failed")
-
-          _ <- allFiberResults traverse {
-            case Outcome.Errored(e) => logError(e) >> IO.unit
-            case _                  => IO.unit
+        messageResponses
+          .groupBy(_.messageGroupId)
+          .toList
+          .traverse { case (potentialMessageGroupId, responses) =>
+            potentialMessageGroupId match
+              case Some(groupId) =>
+                processMessages(processor, responses, groupId)
+              case None => IO.raiseError(new Exception("Message Group ID is missing"))
           }
-        } yield allFiberResults
+          .map(_.flatten)
+
       }
+
+  private def processMessages(processor: Processor, responses: List[MessageResponse[ReceivedSnsMessage]], groupId: String) = {
+    for {
+      logger <- Slf4jLogger.create[IO]
+      _ <- logger.info(s"Processing ${responses.length} messages")
+      _ <- logger.info(responses.map(_.message.ref).mkString(","))
+      dedupedMessages = dedupeMessages(responses)
+      (deletedEntities, nonDeletedEntities) = dedupedMessages.partition(_.message.deleted)
+
+      fibersForNonDeletedEntities <- nonDeletedEntities.parTraverse(processor.process(_, false).start)
+      ndeFiberResults <- fibersForNonDeletedEntities.traverse(_.join)
+
+      fibersForDeletedEntities <- deletedEntities.parTraverse(processor.process(_, true).start)
+      deFiberResults <- fibersForDeletedEntities.traverse(_.join)
+
+      allFibers = fibersForNonDeletedEntities ++ fibersForDeletedEntities
+      allFiberResults = ndeFiberResults ++ deFiberResults
+
+      _ <- processor.commit(UUID.fromString(groupId)).voidError
+      _ <- logger.info(s"${allFiberResults.count(_.isSuccess)} messages out of ${allFibers.length} unique messages processed successfully")
+      _ <- logger.info(s"${allFiberResults.count(_.isError)} messages out of ${allFibers.length} unique messages failed")
+
+      _ <- allFiberResults traverse {
+        case Outcome.Errored(e) => logError(e) >> IO.unit
+        case Outcome.Succeeded(refIO) =>
+          refIO.flatMap { ref =>
+            responses
+              .filter(_.message.ref == ref)
+              .map(_.receiptHandle)
+              .parTraverse(processor.deleteMessage)
+              .void
+          }
+        case _ => IO.unit
+      }
+    } yield allFiberResults
+  }
 
   private def dedupeMessages(messages: List[MessageResponse[ReceivedSnsMessage]]): List[MessageResponse[ReceivedSnsMessage]] =
     messages.distinctBy(_.message.ref)
