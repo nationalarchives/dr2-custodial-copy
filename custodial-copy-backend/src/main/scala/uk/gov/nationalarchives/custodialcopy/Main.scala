@@ -111,7 +111,7 @@ object Main extends IOApp {
       allFibers = fibersForNonDeletedEntities ++ fibersForDeletedEntities
       allFiberResults = ndeFiberResults ++ deFiberResults
 
-      _ <- processor.commit(UUID.fromString(groupId)).voidError
+      _ <- processor.commit(UUID.fromString(groupId))
       _ <- logger.info(s"${allFiberResults.count(_.isSuccess)} messages out of ${allFibers.length} unique messages processed successfully")
       _ <- logger.info(s"${allFiberResults.count(_.isError)} messages out of ${allFibers.length} unique messages failed")
 
