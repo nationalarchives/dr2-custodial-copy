@@ -3,7 +3,7 @@ package uk.gov.nationalarchives.custodialcopy
 import cats.effect.IO
 import cats.effect.std.Semaphore
 import io.ocfl.api.exception.{CorruptObjectException, NotFoundException}
-import io.ocfl.api.model.{DigestAlgorithm, ObjectVersionId, VersionInfo}
+import io.ocfl.api.model.{DigestAlgorithm, VersionInfo}
 import io.ocfl.api.{MutableOcflRepository, OcflConfig, OcflObjectUpdater, OcflOption}
 import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
@@ -14,14 +14,17 @@ import uk.gov.nationalarchives.utils.Utils.*
 
 import java.nio.file.Paths
 import java.util.UUID
-import scala.jdk.FunctionConverters.*
 import scala.jdk.CollectionConverters.*
+import scala.jdk.FunctionConverters.*
 
 class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO]) {
 
-  def commit(id: UUID): IO[ObjectVersionId] = IO.blocking {
-    ocflRepository.commitStagedChanges(id.toString, ocflRepository.getObject(id.toHeadVersion).getVersionInfo)
-  }
+  def commit(id: UUID): IO[Unit] =
+    IO.whenA(ocflRepository.hasStagedChanges(id.toString)) {
+      IO.blocking {
+        ocflRepository.commitStagedChanges(id.toString, ocflRepository.getObject(id.toHeadVersion).getVersionInfo)
+      }.void
+    }
 
   def createObjects(paths: List[IdWithSourceAndDestPaths]): IO[Unit] = semaphore.acquire >> IO.blocking {
     paths
