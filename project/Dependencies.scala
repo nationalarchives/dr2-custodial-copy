@@ -29,5 +29,5 @@ object Dependencies {
   lazy val http4sEmber = "org.http4s" %% "http4s-ember-server" % http4sVersion
   lazy val http4sDsl = "org.http4s" %% "http4s-dsl" % http4sVersion
   lazy val doobieCore = "org.tpolecat" %% "doobie-core" % "1.0.0-RC6"
-  lazy val sqlite = "org.xerial" % "sqlite-jdbc" % "3.46.1.0"
+  lazy val sqlite = "org.xerial" % "sqlite-jdbc" % "3.46.1.3"
 }
