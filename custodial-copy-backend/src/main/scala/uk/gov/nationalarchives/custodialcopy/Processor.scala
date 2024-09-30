@@ -318,7 +318,7 @@ class Processor(
       _ <- logger.info(s"${snsMessages.length} 'created/updated objects' messages published to SNS")
     } yield messageResponse.message.ref
 
-  def commit(id: UUID): IO[Unit] = ocflService.commit(id)
+  def commitStagedChanges(id: UUID): IO[Unit] = ocflService.commitStagedChanges(id)
 }
 object Processor {
   def apply(

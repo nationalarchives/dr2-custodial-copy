@@ -5,7 +5,7 @@ import cats.effect.unsafe.implicits.global
 import fs2.io.file.Path
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.{doReturn, when}
+import org.mockito.Mockito.{doReturn, times, verify, when}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatestplus.mockito.MockitoSugar
@@ -445,5 +445,23 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       repTypes = Nil,
       repIndexes = Nil
     )
+  }
+
+  "process" should "return the ref of the message passed to it" in {
+    val utils = new ProcessorTestUtils()
+
+    val idResponse = utils.processor.process(utils.duplicatesIoMessageResponse, false).unsafeRunSync()
+
+    idResponse should equal(utils.ioId)
+  }
+
+  "commit" should "call commit in the ocfl service" in {
+    val utils = new ProcessorTestUtils(throwErrorInMissingAndChangedObjects = true)
+    val id = UUID.randomUUID()
+    utils.processor.commitStagedChanges(id).unsafeRunSync()
+
+    utils.commitIdCaptor.getValue should equal(id)
+
+    verify(utils.ocflService, times(1)).commitStagedChanges(utils.commitIdCaptor.capture)
   }
 }

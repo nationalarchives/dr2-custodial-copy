@@ -510,6 +510,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     private val messagesCaptor: ArgumentCaptor[List[SendSnsMessage]] =
       ArgumentCaptor.forClass(classOf[List[SendSnsMessage]])
     private val receiptHandleCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
+    val commitIdCaptor: ArgumentCaptor[UUID] = ArgumentCaptor.forClass(classOf[UUID])
 
     private def mockOcflService(
         missingObjects: List[CustodialCopyObject] = Nil,
@@ -528,7 +529,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       when(ocflService.createObjects(any[List[IdWithSourceAndDestPaths]])).thenReturn(IO.unit)
       when(ocflService.getAllFilePathsOnAnObject(any[UUID])).thenReturn(IO.pure(pathsOfObjects))
       when(ocflService.deleteObjects(any[UUID], any[List[String]])).thenReturn(IO.unit)
-
+      when(ocflService.commitStagedChanges(commitIdCaptor.capture)).thenReturn(IO.unit)
       ocflService
     }
 

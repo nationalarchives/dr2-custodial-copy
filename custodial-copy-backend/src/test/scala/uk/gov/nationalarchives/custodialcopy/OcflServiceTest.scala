@@ -6,9 +6,9 @@ import cats.effect.unsafe.implicits.global
 import io.ocfl.api.exception.{CorruptObjectException, NotFoundException}
 import io.ocfl.api.io.FixityCheckInputStream
 import io.ocfl.api.model.*
-import io.ocfl.api.{OcflFileRetriever, OcflObjectUpdater, OcflOption, MutableOcflRepository}
+import io.ocfl.api.{MutableOcflRepository, OcflFileRetriever, OcflObjectUpdater, OcflOption}
 import org.mockito.ArgumentMatchers.any
-import org.mockito.ArgumentCaptor
+import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.scalatestplus.mockito.MockitoSugar
 import org.mockito.Mockito.{doNothing, times, verify, when}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -284,5 +284,47 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     verify(updater, times(2)).removeFile(pathsToDelete.capture)
 
     pathsToDelete.getAllValues.asScala.toList should equal(List(destinationPath, "destinationPath2"))
+  }
+
+  "commitStagedChanges" should "make a call to the repository commit if there are staged changes" in {
+    val id = UUID.randomUUID
+    val ocflRepository = mock[MutableOcflRepository]
+    val commitIdCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
+    val versionInfoCaptor: ArgumentCaptor[VersionInfo] = ArgumentCaptor.forClass(classOf[VersionInfo])
+    val versionInfoReturnValue = new VersionInfo()
+    versionInfoReturnValue.setUser("user", "address")
+    versionInfoReturnValue.setMessage("message")
+    val versionDetails = new VersionDetails()
+    val v1 = VersionNum.V1
+    versionDetails.setObjectVersionId(ObjectVersionId.version(id.toString, v1))
+    versionDetails.setVersionInfo(versionInfoReturnValue)
+    val objectVersion = new OcflObjectVersion(versionDetails, java.util.Map.of())
+
+    when(ocflRepository.getObject(ArgumentMatchers.eq(ObjectVersionId.head(id.toString)))).thenReturn(objectVersion)
+
+    when(ocflRepository.commitStagedChanges(commitIdCaptor.capture, versionInfoCaptor.capture())).thenReturn(ObjectVersionId.version(id.toString, 1))
+
+    when(ocflRepository.hasStagedChanges(id.toString)).thenReturn(true)
+
+    val service = new OcflService(ocflRepository, semaphore)
+
+    service.commitStagedChanges(id).unsafeRunSync()
+
+    commitIdCaptor.getValue should equal(id.toString)
+    val capturedVersionInfo = versionInfoCaptor.getValue
+    capturedVersionInfo.getUser.getName should equal("user")
+    capturedVersionInfo.getUser.getAddress should equal("address")
+    capturedVersionInfo.getMessage should equal("message")
+  }
+
+  "commitStagedChanges" should "not commit to the repository if there are no staged changes" in {
+    val id = UUID.randomUUID
+    val ocflRepository = mock[MutableOcflRepository]
+    when(ocflRepository.hasStagedChanges(id.toString)).thenReturn(false)
+
+    new OcflService(ocflRepository, semaphore).commitStagedChanges(id).unsafeRunSync()
+
+    verify(ocflRepository, times(0)).getObject(any[ObjectVersionId])
+    verify(ocflRepository, times(0)).commitStagedChanges(any[String], any[VersionInfo])
   }
 }

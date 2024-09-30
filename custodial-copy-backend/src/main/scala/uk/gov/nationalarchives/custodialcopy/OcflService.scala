@@ -19,7 +19,7 @@ import scala.jdk.FunctionConverters.*
 
 class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO]) {
 
-  def commit(id: UUID): IO[Unit] =
+  def commitStagedChanges(id: UUID): IO[Unit] =
     IO.whenA(ocflRepository.hasStagedChanges(id.toString)) {
       IO.blocking {
         ocflRepository.commitStagedChanges(id.toString, ocflRepository.getObject(id.toHeadVersion).getVersionInfo)
