@@ -49,7 +49,7 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
     .endpointOverride(URI.create("http://localhost:9001"))
     .httpClient(httpClient)
     .build()
-  val daSQSClient = new DASQSClient[IO](sqsClient)
+  val daSQSClient: DASQSClient[IO] = DASQSClient[IO](sqsClient)
 
   "runBuilder" should "write the correct items to the database for multiple content objects" in {
     val id = UUID.randomUUID
@@ -181,7 +181,9 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
 
     val serveEvents = sqsServer.getAllServeEvents.asScala.toList
 
-    serveEvents.last.getRequest.getBodyAsString should equal("""{"QueueUrl":"http://localhost:9001","MaxNumberOfMessages":10}""")
+    serveEvents.last.getRequest.getBodyAsString should equal(
+      """{"QueueUrl":"http://localhost:9001","MessageSystemAttributeNames":["MessageGroupId"],"MaxNumberOfMessages":10}"""
+    )
     serveEvents.head.getRequest.getBodyAsString should equal("""{"QueueUrl":"http://localhost:9001","ReceiptHandle":"A"}""")
   }
 
