@@ -1,20 +1,20 @@
 package uk.gov.nationalarchives.custodialcopy
 
 import cats.effect.*
+import cats.effect.kernel.Outcome.*
 import cats.effect.std.Semaphore
 import cats.implicits.*
 import cats.syntax.all.*
 import fs2.Stream
-import io.circe.{Decoder, HCursor}
+import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
+import io.circe.{Decoder, Encoder, HCursor}
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import pureconfig.*
 import pureconfig.generic.derivation.default.*
 import pureconfig.module.catseffect.syntax.*
-import uk.gov.nationalarchives.DASQSClient
-import uk.gov.nationalarchives.dp.client.fs2.Fs2Client
 import uk.gov.nationalarchives.custodialcopy.Message.*
-import uk.gov.nationalarchives.DASNSClient
-import uk.gov.nationalarchives.DASQSClient.MessageResponse
+import uk.gov.nationalarchives.dp.client.fs2.Fs2Client
+import uk.gov.nationalarchives.{DADynamoDBClient, DASNSClient, DASQSClient}
 
 import java.net.URI
 import java.nio.file
@@ -31,7 +31,9 @@ object Main extends IOApp {
       workDir: String,
       proxyUrl: Option[URI],
       versionPath: String,
-      topicArn: String
+      topicArn: String,
+      lockTableName: String,
+      lockTableGsiName: String
   ) derives ConfigReader
 
   private def sqsClient(config: Config): DASQSClient[IO] =
@@ -39,7 +41,17 @@ object Main extends IOApp {
       .map(proxy => DASQSClient[IO](proxy))
       .getOrElse(DASQSClient[IO]())
 
-  given Decoder[ReceivedSnsMessage] = (c: HCursor) =>
+  private def dynamoService(config: Config): DynamoService =
+    val dynamoDbClient = config.proxyUrl
+      .map(proxy => DADynamoDBClient[IO](proxy))
+      .getOrElse(DADynamoDBClient [IO]())
+    DynamoService(dynamoDbClient, config)
+
+  given Encoder[SqsMessage] = deriveEncoder[SqsMessage]
+
+  given Decoder[SqsMessage] = deriveDecoder[SqsMessage]
+
+  given Decoder[LockTableMessage] = (c: HCursor) =>
     for {
       id <- c.downField("id").as[String]
       deleted <- c.downField("deleted").as[Boolean]
@@ -48,9 +60,9 @@ object Main extends IOApp {
       val ref = UUID.fromString(typeAndRef.last)
       val entityType = typeAndRef.head
       entityType match {
-        case "io" => IoReceivedSnsMessage(ref, deleted)
-        case "co" => CoReceivedSnsMessage(ref, deleted)
-        case "so" => SoReceivedSnsMessage(ref, deleted)
+        case "io" => IoLockTableMessage(ref, deleted)
+        case "co" => CoLockTableMessage(ref, deleted)
+        case "so" => SoLockTableMessage(ref, deleted)
       }
     }
 
@@ -66,41 +78,54 @@ object Main extends IOApp {
       )
       semaphore <- Semaphore[IO](1)
       service <- OcflService(config, semaphore)
+      dynamo = dynamoService(config)
       sqs = sqsClient(config)
       sns = DASNSClient[IO]()
-      processor <- Processor(config, sqs, service, client, sns)
+      processor <- Processor(config, service, client, sns)
       _ <- {
         Stream.fixedRateStartImmediately[IO](10.seconds) >>
-          runCustodialCopy(sqs, config, processor)
+          runCustodialCopy(sqs, dynamo, config, processor)
             .handleErrorWith(err => Stream.eval(semaphore.release >> logError(err)))
       }.compile.drain
     } yield ExitCode.Success
 
-  def runCustodialCopy(sqs: DASQSClient[IO], config: Config, processor: Processor): Stream[IO, List[Outcome[IO, Throwable, UUID]]] =
+  def runCustodialCopy(sqs: DASQSClient[IO], dynamoService: DynamoService, config: Config, processor: Processor): Stream[IO, List[Outcome[IO, Throwable, UUID]]] =
+    def sendWithRetryIncremented(inputSqsMessage: SqsMessage): IO[Unit] =
+      sqs.sendMessage(config.sqsQueueUrl)(inputSqsMessage.copy(retryCount = inputSqsMessage.retryCount + 1)).void
+
     Stream
-      .eval(sqs.receiveMessages[ReceivedSnsMessage](config.sqsQueueUrl))
+      .eval(sqs.receiveMessages[SqsMessage](config.sqsQueueUrl))
       .filter(messageResponses => messageResponses.nonEmpty)
       .evalMap { messageResponses =>
         messageResponses
-          .groupBy(_.messageGroupId)
-          .toList
-          .traverse { case (potentialMessageGroupId, responses) =>
-            potentialMessageGroupId match
-              case Some(groupId) =>
-                processMessages(processor, responses, groupId)
-              case None => IO.raiseError(new Exception("Message Group ID is missing"))
+          .traverse { response =>
+            for {
+              items <- dynamoService.retrieveItems(response.message.groupId)
+              allFiberResults <- items.groupBy(_.assetId).map {
+                case (assetId, lockTableItems) => processMessages(processor, lockTableItems.map(_.message), assetId.toString)
+              }.toList.sequence.map(_.flatten)
+              successfulIds <- allFiberResults.collect {
+                case Succeeded(ioId) => ioId
+              }.sequence
+              _ <- dynamoService.deleteItems(successfulIds)
+              allFiberErrors = allFiberResults.filter(_.isError)
+              _ <- if allFiberErrors.nonEmpty && response.message.retryCount >= 3 then
+                    IO.raiseError(new Exception(s"Message for groupId ${response.message.groupId} has been retried 3 times and there are still ${allFiberErrors.size} failures"))
+                  else if allFiberErrors.nonEmpty && response.message.retryCount < 3 then
+                    sqs.deleteMessage(config.sqsQueueUrl, response.receiptHandle).void >> sendWithRetryIncremented(response.message)
+                  else sqs.deleteMessage(config.sqsQueueUrl, response.receiptHandle).void
+            } yield allFiberResults
           }
-          .map(_.flatten)
+      }.map(_.flatten)
 
-      }
-
-  private def processMessages(processor: Processor, responses: List[MessageResponse[ReceivedSnsMessage]], groupId: String) = {
+  private def processMessages(processor: Processor, lockTableMessages: List[LockTableMessage], groupId: String): IO[List[Outcome[IO, Throwable, UUID]]] = {
     for {
       logger <- Slf4jLogger.create[IO]
-      _ <- logger.info(s"Processing ${responses.length} messages")
-      _ <- logger.info(responses.map(_.message.ref).mkString(","))
-      dedupedMessages = dedupeMessages(responses)
-      (deletedEntities, nonDeletedEntities) = dedupedMessages.partition(_.message.deleted)
+      _ <- logger.info(s"Processing ${lockTableMessages.length} messages")
+      dedupedMessages = dedupeMessages(lockTableMessages)
+      (deletedEntities, nonDeletedEntities) = dedupedMessages.partition(_.deleted)
+
+      fibersForDeletedEntities <- deletedEntities.traverse(processor.process(_, true).start)
 
       fibersForNonDeletedEntities <- nonDeletedEntities.parTraverse(processor.process(_, false).start)
       ndeFiberResults <- fibersForNonDeletedEntities.traverse(_.join)
@@ -114,24 +139,11 @@ object Main extends IOApp {
       _ <- processor.commitStagedChanges(UUID.fromString(groupId))
       _ <- logger.info(s"${allFiberResults.count(_.isSuccess)} messages out of ${allFibers.length} unique messages processed successfully")
       _ <- logger.info(s"${allFiberResults.count(_.isError)} messages out of ${allFibers.length} unique messages failed")
-
-      _ <- allFiberResults traverse {
-        case Outcome.Errored(e) => logError(e) >> IO.unit
-        case Outcome.Succeeded(refIO) =>
-          refIO.flatMap { ref =>
-            responses
-              .filter(_.message.ref == ref)
-              .map(_.receiptHandle)
-              .parTraverse(processor.deleteMessage)
-              .void
-          }
-        case _ => IO.unit
-      }
     } yield allFiberResults
   }
 
-  private def dedupeMessages(messages: List[MessageResponse[ReceivedSnsMessage]]): List[MessageResponse[ReceivedSnsMessage]] =
-    messages.distinctBy(_.message.ref)
+  private def dedupeMessages(messages: List[LockTableMessage]): List[LockTableMessage] =
+    messages.distinctBy(_.ref)
 
   private def logError(err: Throwable) = for {
     logger <- Slf4jLogger.create[IO]

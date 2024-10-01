@@ -42,6 +42,7 @@ lazy val custodialCopyBackend = (project in file("custodial-copy-backend"))
     scalacOptions += "-Wunused:imports",
     libraryDependencies ++= Seq(
       preservicaClient,
+      dynamoClient,
       snsClient,
       sqsClient,
       fs2Core

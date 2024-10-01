@@ -6,7 +6,7 @@ import cats.effect.unsafe.implicits.global
 import fs2.Stream
 import io.circe.{Decoder, Encoder}
 import io.ocfl.api.model.DigestAlgorithm
-import io.ocfl.api.{OcflConfig, MutableOcflRepository}
+import io.ocfl.api.{MutableOcflRepository, OcflConfig}
 import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.storage.OcflStorageBuilder
@@ -17,17 +17,18 @@ import org.mockito.{ArgumentCaptor, ArgumentMatcher, ArgumentMatchers, Mockito}
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.{Assertion, EitherValues}
 import org.scalatestplus.mockito.MockitoSugar
-import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
+import software.amazon.awssdk.services.sqs.model.{DeleteMessageResponse, SendMessageResponse}
 import software.amazon.awssdk.services.sns.model.PublishBatchResponse
 import sttp.capabilities.fs2.Fs2Streams
-import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.utils.TestUtils.*
 import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.MetadataObject
-import uk.gov.nationalarchives.custodialcopy.{CustodialCopyObject, Message, OcflService, Processor}
+import uk.gov.nationalarchives.custodialcopy.{CustodialCopyObject, DynamoService, Message, OcflService, Processor}
 import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
-import uk.gov.nationalarchives.custodialcopy.Message.{CoReceivedSnsMessage, IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage, SoReceivedSnsMessage}
+import uk.gov.nationalarchives.custodialcopy.Message.{CoLockTableMessage, IoLockTableMessage, LockTableMessage, SendSnsMessage, SoLockTableMessage, SqsMessage}
 import uk.gov.nationalarchives.custodialcopy.OcflService.MissingAndChangedObjects
 import uk.gov.nationalarchives.*
+import uk.gov.nationalarchives.DASQSClient.{FifoQueueConfiguration, MessageResponse}
+import uk.gov.nationalarchives.custodialcopy.DynamoService.LockTableItem
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.{Entity, fromType}
 import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
@@ -223,15 +224,21 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       .buildMutable()
   }
 
-  private def mockSqs(messages: List[ReceivedSnsMessage], messageGroupId: String): DASQSClient[IO] = {
+  private def mockDynamo(lockTableItems: List[LockTableItem]): DynamoService = {
+    val dynamoService = mock[DynamoService]
+    when(dynamoService.retrieveItems(any[String])).thenReturn(IO(lockTableItems))
+    when(dynamoService.deleteItems(any[List[UUID]])).thenReturn(IO.unit)
+    dynamoService
+  }
+
+  private def mockSqs(groupId: String, retryCount: Int): DASQSClient[IO] = {
     val sqsClient = mock[DASQSClient[IO]]
-    val responses = IO {
-      messages.zipWithIndex.map { case (message, idx) =>
-        MessageResponse[ReceivedSnsMessage](s"handle$idx", Option(messageGroupId), message)
-      }
-    }
-    when(sqsClient.receiveMessages[ReceivedSnsMessage](any[String], any[Int])(using any[Decoder[ReceivedSnsMessage]]))
-      .thenReturn(responses)
+    val sqsMessage = SqsMessage(groupId, s"${groupId}_1", 1, retryCount)
+    val messageResponse: MessageResponse[SqsMessage] = MessageResponse(s"receiptHandle$groupId", None, sqsMessage)
+    when(sqsClient.sendMessage[SqsMessage](any[String])(any[SqsMessage], any[Option[FifoQueueConfiguration]], any[Int])(using any[Encoder[SqsMessage]]))
+      .thenReturn(IO(SendMessageResponse.builder.build))
+    when(sqsClient.receiveMessages[SqsMessage](any[String], any[Int])(using any[Decoder[SqsMessage]]))
+      .thenReturn(IO(List(messageResponse)))
     when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO(DeleteMessageResponse.builder().build))
     sqsClient
   }
@@ -274,10 +281,11 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         )
       ),
       bitstreamInfo2Responses: Seq[BitStreamInfo] = Nil,
-      addAccessRepUrl: Boolean = false
+      addAccessRepUrl: Boolean = false,
+      retryCount: Int = 0
   ) {
 
-    val config: Config = Config("", "", "", "", "", None, "", "")
+    val config: Config = Config("", "", "", "", "", None, "", "", "", "")
 
     val bitstreamInfoResponsesWithSameName: Seq[BitStreamInfo] = bitstreamInfo1Responses.flatMap { bitstreamInfo1Response =>
       bitstreamInfo2Responses.filter { bitstreamInfo2Response =>
@@ -289,22 +297,24 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val coId2: UUID = UUID.randomUUID()
     val coId3: UUID = if bitstreamInfoResponsesWithSameName.nonEmpty then coId1 else UUID.randomUUID()
     val ioId: UUID = bitstreamInfo1Responses.headOption.flatMap(_.parentRef).getOrElse(UUID.randomUUID())
+    val groupId: String = s"CC_${UUID.randomUUID}"
     lazy val repoDir: Path = Files.createTempDirectory("repo")
     lazy val repo: MutableOcflRepository = createTestRepo(repoDir)
 
     private val coIds: Seq[UUID] = List(coId1, coId2, coId3, coId1)
-    private val sqsMessages: List[ReceivedSnsMessage] =
+    private val lockTableItems: List[LockTableItem] =
       typesOfSqsMsgAndDeletionStatus.zipWithIndex.flatMap { case ((entityType, hasBeenDeleted), index) =>
         entityType match { // create duplicates in order to test deduplication
-          case InformationObject => (1 to 2).map(_ => IoReceivedSnsMessage(ioId, hasBeenDeleted))
+          case InformationObject => (1 to 2).map(_ => LockTableItem(ioId, IoLockTableMessage(ioId, hasBeenDeleted)))
           case ContentObject =>
             val coId = coIds(index)
-            (1 to 2).map(_ => CoReceivedSnsMessage(coId, hasBeenDeleted))
-          case StructuralObject => (1 to 2).map(_ => SoReceivedSnsMessage(UUID.randomUUID, hasBeenDeleted))
+            (1 to 2).map(_ => LockTableItem(ioId, CoLockTableMessage(coId, hasBeenDeleted)))
+          case StructuralObject => (1 to 2).map(_ => LockTableItem(ioId, SoLockTableMessage(UUID.randomUUID, hasBeenDeleted)))
         }
       }
-    val sqsClient: DASQSClient[IO] = mockSqs(sqsMessages, ioId.toString)
+    val sqsClient: DASQSClient[IO] = mockSqs(groupId, retryCount)
     val snsClient: DASNSClient[IO] = mockSns()
+    val dynamoService: DynamoService = mockDynamo(lockTableItems)
 
     lazy val expectedIoMetadataFileDestinationPath: String = metadataFile(ioId, ioType)
     lazy val expectedCoMetadataFileDestinationPath: String = metadataFile(ioId, coType, Some(s"Preservation_1/$coId1"))
@@ -391,7 +401,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val semaphore: Semaphore[IO] = Semaphore[IO](1).unsafeRunSync()
     val ocflService = new OcflService(repo, semaphore)
     val xmlValidator: ValidateXmlAgainstXsd[IO] = ValidateXmlAgainstXsd[IO](XipXsdSchemaV7)
-    val processor = new Processor(config, sqsClient, ocflService, preservicaClient, xmlValidator, snsClient)
+    val processor = new Processor(config, ocflService, preservicaClient, xmlValidator, snsClient)
 
     def latestObjectVersion(repo: MutableOcflRepository, id: UUID): Long =
       repo.getObject(id.toHeadVersion).getObjectVersionId.getVersionNum.getVersionNum
@@ -415,26 +425,24 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       pathsOfObjectsUnderIo: List[String] = Nil,
       throwErrorInMissingAndChangedObjects: Boolean = false
   ) {
-    val config: Config = Config("", "", "queueUrl", "", "", Option(URI.create("https://example.com")), "", "topicArn")
+    val config: Config = Config("", "", "queueUrl", "", "", Option(URI.create("https://example.com")), "", "topicArn", "", "")
     val ioId: UUID = UUID.randomUUID()
     val coId: UUID = UUID.randomUUID()
     val soId: UUID = UUID.randomUUID()
 
-    lazy val coMessage: CoReceivedSnsMessage = CoReceivedSnsMessage(coId, false)
-    lazy val ioMessage: IoReceivedSnsMessage = IoReceivedSnsMessage(ioId, false)
-    lazy val soMessage: SoReceivedSnsMessage = SoReceivedSnsMessage(soId, false)
+    lazy val coMessage: CoLockTableMessage = CoLockTableMessage(coId, false)
+    lazy val ioMessage: IoLockTableMessage = IoLockTableMessage(ioId, false)
+    lazy val soMessage: SoLockTableMessage = SoLockTableMessage(soId, false)
+    val dynamoClient: DADynamoDBClient[IO] = mock[DADynamoDBClient[IO]]
     val sqsClient: DASQSClient[IO] = mock[DASQSClient[IO]]
     val entityClient: EntityClient[IO, Fs2Streams[IO]] = mock[EntityClient[IO, Fs2Streams[IO]]]
     val snsClient: DASNSClient[IO] = mock[DASNSClient[IO]]
 
-    val duplicatesSoMessageResponse: MessageResponse[ReceivedSnsMessage] =
-      MessageResponse[ReceivedSnsMessage]("receiptHandle0", Option(soMessage.ref.toString), soMessage)
+    val duplicatesSoMessage: LockTableMessage = soMessage
 
-    val duplicatesIoMessageResponse: MessageResponse[ReceivedSnsMessage] =
-      MessageResponse[ReceivedSnsMessage]("receiptHandle1", Option(ioMessage.ref.toString), ioMessage)
+    val duplicatesIoMessage: LockTableMessage = ioMessage
 
-    val duplicatesCoMessageResponses: MessageResponse[ReceivedSnsMessage] =
-      MessageResponse[ReceivedSnsMessage]("receiptHandle2", Option(coMessage.ref.toString), coMessage)
+    val duplicatesCoMessage: LockTableMessage = coMessage
 
     private val potentialParentRef = if parentRefExists then Some(ioId) else None
 
@@ -588,10 +596,11 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     when(sqsClient.deleteMessage(ArgumentMatchers.eq("queueUrl"), ArgumentMatchers.startsWith("receiptHandle")))
       .thenReturn(IO.pure(DeleteMessageResponse.builder.build))
 
+
     val ocflService: OcflService = mockOcflService(missingObjects, changedObjects, pathsOfObjectsUnderIo, throwErrorInMissingAndChangedObjects)
     val xmlValidator: ValidateXmlAgainstXsd[IO] = spy(ValidateXmlAgainstXsd[IO](XipXsdSchemaV7))
 
-    val processor: Processor = new Processor(config, sqsClient, ocflService, entityClient, xmlValidator, snsClient)
+    val processor: Processor = new Processor(config, ocflService, entityClient, xmlValidator, snsClient)
     val ioXmlToValidate: Elem =
       <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>

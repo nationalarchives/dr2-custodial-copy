@@ -7,38 +7,32 @@ import fs2.io.file.{Files, Flags}
 import io.circe.Encoder
 import org.apache.commons.codec.digest.DigestUtils
 import org.typelevel.log4cats.slf4j.Slf4jLogger
-import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
 import sttp.capabilities.fs2.Fs2Streams
-import uk.gov.nationalarchives.{DASNSClient, DASQSClient}
-import uk.gov.nationalarchives.DASQSClient.MessageResponse
+import uk.gov.nationalarchives.DASNSClient
 import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.*
 import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
 import uk.gov.nationalarchives.custodialcopy.Message.*
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Deleted, Updated}
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Bitstream, Metadata, MetadataAndPotentialBitstreams}
-import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
-import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
-import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
-import uk.gov.nationalarchives.dp.client.EntityClient.*
 import uk.gov.nationalarchives.dp.client.Entities.{Entity, fromType}
+import uk.gov.nationalarchives.dp.client.EntityClient.*
+import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
+import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.ValidateXmlAgainstXsd.PreservicaSchema.XipXsdSchemaV7
+import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
 
 import java.util.UUID
 import scala.xml.{Elem, Node}
 
 class Processor(
     config: Config,
-    sqsClient: DASQSClient[IO],
     ocflService: OcflService,
     entityClient: EntityClient[IO, Fs2Streams[IO]],
     xmlValidator: ValidateXmlAgainstXsd[IO],
     snsClient: DASNSClient[IO]
 ) {
   private val newlineAndIndent = "\n          "
-
-  def deleteMessage(receiptHandle: String): IO[DeleteMessageResponse] =
-    sqsClient.deleteMessage(config.sqsQueueUrl, receiptHandle)
 
   private def createMetadataObject(
       ioRef: UUID,
@@ -136,8 +130,8 @@ class Processor(
 
   private def createMetadataFileName(entityTypeShort: String) = s"${entityTypeShort}_Metadata.xml"
 
-  private def toCustodialCopyObject(receivedSnsMessage: ReceivedSnsMessage): IO[List[CustodialCopyObject]] = receivedSnsMessage match {
-    case IoReceivedSnsMessage(ref, deleted) =>
+  private def toCustodialCopyObject(receivedSnsMessage: LockTableMessage): IO[List[CustodialCopyObject]] = receivedSnsMessage match {
+    case IoLockTableMessage(ref, deleted) =>
       for {
         entity <- fromType[IO](InformationObject.entityTypeShort, ref, None, None, deleted = deleted)
         metadataFileName = createMetadataFileName(InformationObject.entityTypeShort)
@@ -152,7 +146,7 @@ class Processor(
           )
         }
       } yield metadataObject
-    case CoReceivedSnsMessage(ref, deleted) =>
+    case CoLockTableMessage(ref, deleted) =>
       for {
         bitstreamInfoPerCo <- entityClient.getBitstreamInfo(ref)
         entity <- fromType[IO](
@@ -208,7 +202,7 @@ class Processor(
           removeFileExtension(bitStreamInfo.name)
         )
       } ++ metadata
-    case SoReceivedSnsMessage(_, _) => IO.pure(Nil)
+    case SoLockTableMessage(_, _) => IO.pure(Nil)
   }
 
   private def download(custodialCopyObject: CustodialCopyObject) = custodialCopyObject match {
@@ -267,10 +261,10 @@ class Processor(
       .apply(message)
   }
 
-  private def processNonDeletedMessages(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[List[SendSnsMessage]] =
+  private def processNonDeletedMessages(message: LockTableMessage): IO[List[SendSnsMessage]] =
     for {
       logger <- Slf4jLogger.create[IO]
-      custodialCopyObjects <- toCustodialCopyObject(messageResponse.message)
+      custodialCopyObjects <- toCustodialCopyObject(message)
 
       missingAndChangedObjects <- ocflService.getMissingAndChangedObjects(custodialCopyObjects)
 
@@ -287,48 +281,47 @@ class Processor(
 
     } yield createdObjsSnsMessages ++ updatedObjsSnsMessages
 
-  private def processDeletedEntities(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[List[SendSnsMessage]] =
-    messageResponse.message match {
-      case IoReceivedSnsMessage(ref, _) =>
+  private def processDeletedEntities(message: LockTableMessage): IO[List[SendSnsMessage]] =
+    message match {
+      case IoLockTableMessage(ref, _) =>
         for {
           filePaths <- ocflService.getAllFilePathsOnAnObject(ref)
           _ <- ocflService.deleteObjects(ref, filePaths)
           deletedObjsSnsMessages = List(SendSnsMessage(InformationObject, ref, MetadataAndPotentialBitstreams, Deleted, ""))
         } yield deletedObjsSnsMessages
-      case CoReceivedSnsMessage(ref, _) =>
+      case CoLockTableMessage(ref, _) =>
         IO.raiseError(new Exception(s"A Content Object '$ref' has been deleted in Preservica"))
       case _ =>
         IO.raiseError(new Exception(s"Entity type is not supported for deletion"))
     }
 
-  def process(messageResponse: MessageResponse[ReceivedSnsMessage], entityDeleted: Boolean): IO[UUID] =
+  def process(message: LockTableMessage, entityDeleted: Boolean): IO[UUID] =
     for {
       logger <- Slf4jLogger.create[IO]
       entityTypeDeletionSupported =
-        messageResponse.message match {
-          case SoReceivedSnsMessage(_, _) => false
+        message match {
+          case SoLockTableMessage(_, _) => false
           case _                          => true
         }
       snsMessages <-
-        if entityDeleted && entityTypeDeletionSupported then processDeletedEntities(messageResponse)
-        else processNonDeletedMessages(messageResponse)
+        if entityDeleted && entityTypeDeletionSupported then processDeletedEntities(message)
+        else processNonDeletedMessages(message)
       _ <- IO.whenA(snsMessages.nonEmpty) {
         snsClient.publish[SendSnsMessage](config.topicArn)(snsMessages).map(_ => ())
       }
       _ <- logger.info(s"${snsMessages.length} 'created/updated objects' messages published to SNS")
-    } yield messageResponse.message.ref
+    } yield message.ref
 
   def commitStagedChanges(id: UUID): IO[Unit] = ocflService.commitStagedChanges(id)
 }
 object Processor {
   def apply(
       config: Config,
-      sqsClient: DASQSClient[IO],
       ocflService: OcflService,
       entityClient: EntityClient[IO, Fs2Streams[IO]],
       snsClient: DASNSClient[IO]
   ): IO[Processor] = IO(
-    new Processor(config, sqsClient, ocflService, entityClient, ValidateXmlAgainstXsd[IO](XipXsdSchemaV7), snsClient)
+    new Processor(config, ocflService, entityClient, ValidateXmlAgainstXsd[IO](XipXsdSchemaV7), snsClient)
   )
 
   enum ObjectStatus:
