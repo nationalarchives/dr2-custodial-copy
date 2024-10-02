@@ -3,7 +3,7 @@ package uk.gov.nationalarchives.custodialcopy
 import cats.effect.{IO, Outcome}
 import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
-import io.ocfl.api.OcflRepository
+import io.ocfl.api.MutableOcflRepository
 import io.ocfl.api.model.ObjectVersionId
 import org.apache.commons.codec.digest.DigestUtils
 import org.mockito.ArgumentMatchers
@@ -45,7 +45,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       sqsClient: DASQSClient[IO],
       config: Config,
       processor: Processor
-  ): List[Outcome[IO, Throwable, Unit]] = Main.runCustodialCopy(sqsClient, config, processor).compile.toList.unsafeRunSync().flatten
+  ): List[Outcome[IO, Throwable, UUID]] = Main.runCustodialCopy(sqsClient, config, processor).compile.toList.unsafeRunSync().flatten
 
   "runCustodialCopy" should "(given an IO message with 'deleted' set to 'true') delete all objects underneath it" in {
     val fixity = List(Fixity("SHA256", ""))
@@ -57,11 +57,10 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val bitStreamInfoList2 = Seq(
       BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt3", 1, "", fixity, 1, Original, None, Some(ioId))
     )
-
     val utils = new MainTestUtils(
       List((ContentObject, false), (ContentObject, false), (InformationObject, true)),
       typesOfMetadataFilesInRepo = List(InformationObject, ContentObject),
-      objectVersion = 4,
+      objectVersion = 2,
       fileContentToWriteToEachFileInRepo = List("fileContent1", "fileContent2"),
       entityDeleted = true,
       bitstreamInfo1Responses = bitStreamInfoList,
@@ -81,7 +80,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     expectedDestinationFilePathsAlreadyInRepo.foreach { path =>
       repo.getObject(ioId.toHeadVersion).containsFile(path) must be(true)
     }
-    utils.latestObjectVersion(repo, utils.ioId) must equal(4)
+    utils.latestObjectVersion(repo, utils.ioId) must equal(2)
 
     runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 
@@ -93,19 +92,19 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val ocflObject = repo.getObject(ioId.toHeadVersion)
 
     repo.getObject(ioId.toHeadVersion).getFiles.toArray.toList must be(Nil)
-    utils.latestObjectVersion(repo, utils.ioId) must equal(7)
+    utils.latestObjectVersion(repo, utils.ioId) must equal(2)
   }
 
   "runCustodialCopy" should "write a new version and new IO metadata object, to the correct location in the repository " +
     "if it doesn't already exist" in {
-      val utils = new MainTestUtils(objectVersion = 0)
+      val utils = new MainTestUtils(List((InformationObject, false)), objectVersion = 0)
       val ioId = utils.ioId
       val repo = utils.repo
       val expectedIoMetadataFileDestinationPath = utils.expectedIoMetadataFileDestinationPath
 
       runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 
-      utils.latestObjectVersion(repo, ioId) must equal(1)
+      utils.latestObjectVersion(repo, ioId) must equal(2) // The OCFL library generates an empty v1 when you use the mutable repository.
       repo.containsObject(ioId.toString) must be(true)
       repo.getObject(ioId.toHeadVersion).containsFile(expectedIoMetadataFileDestinationPath) must be(true)
 
@@ -143,7 +142,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
       runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 
-      utils.latestObjectVersion(repo, ioId) must equal(1)
+      utils.latestObjectVersion(repo, ioId) must equal(2)
     }
 
   "runCustodialCopy" should "write a new version and a new IO metadata object if there is an IO message with different metadata" in {
@@ -197,7 +196,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val repo = utils.repo
 
     runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
-    utils.latestObjectVersion(repo, ioId) must equal(1)
+    utils.latestObjectVersion(repo, ioId) must equal(2)
 
     val metadataStoragePath =
       repo.getObject(ioId.toHeadVersion).getFile(utils.expectedIoMetadataFileDestinationPath).getStorageRelativePath
@@ -230,7 +229,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val repo = utils.repo
 
     runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
-    utils.latestObjectVersion(repo, ioId) must equal(1)
+    utils.latestObjectVersion(repo, ioId) must equal(2)
+    verify(utils.sqsClient, times(4)).deleteMessage(any[String], any[String])
   }
 
   "runCustodialCopy" should "return an error if there is an error fetching the metadata" in {
@@ -268,14 +268,14 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val utils = new MainTestUtils(
       List((ContentObject, true)),
       typesOfMetadataFilesInRepo = List(InformationObject, ContentObject),
-      objectVersion = 3,
+      objectVersion = 2,
       fileContentToWriteToEachFileInRepo = List("fileContent1"),
       entityDeleted = true
     )
 
     val repo = utils.repo
 
-    utils.latestObjectVersion(repo, utils.ioId) must equal(3)
+    utils.latestObjectVersion(repo, utils.ioId) must equal(2)
 
     val err: Throwable = getError(utils.sqsClient, utils.config, utils.processor)
 
@@ -289,14 +289,14 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       val utils = new MainTestUtils(
         List((ContentObject, true), (InformationObject, true)),
         typesOfMetadataFilesInRepo = List(InformationObject, ContentObject),
-        objectVersion = 3,
+        objectVersion = 2,
         fileContentToWriteToEachFileInRepo = List("fileContent1"),
         entityDeleted = true
       )
 
       val repo = utils.repo
 
-      utils.latestObjectVersion(repo, utils.ioId) must equal(3)
+      utils.latestObjectVersion(repo, utils.ioId) must equal(2)
       val expectedDestinationFilePathsAlreadyInRepo = List(
         s"${utils.ioId}/Preservation_1/${utils.coId1}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
         s"${utils.ioId}/Preservation_1/${utils.coId1}/CO_Metadata.xml",
@@ -310,7 +310,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       val err: Throwable = getError(utils.sqsClient, utils.config, utils.processor)
 
       err.getMessage must equal(s"A Content Object '${utils.coId1}' has been deleted in Preservica")
-      utils.latestObjectVersion(repo, utils.ioId) must equal(4)
+      utils.latestObjectVersion(repo, utils.ioId) must equal(2)
       repo.getObject(utils.ioId.toHeadVersion).getFiles.toArray.toList must be(Nil)
     }
 
@@ -321,14 +321,14 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       val utils = new MainTestUtils(
         List((ContentObject, false), (InformationObject, true)),
         typesOfMetadataFilesInRepo = List(InformationObject, ContentObject),
-        objectVersion = 3,
+        objectVersion = 2,
         fileContentToWriteToEachFileInRepo = List("fileContent1"),
         entityDeleted = true
       )
 
       val repo = utils.repo
 
-      utils.latestObjectVersion(repo, utils.ioId) must equal(3)
+      utils.latestObjectVersion(repo, utils.ioId) must equal(2)
       val expectedDestinationFilePathsAlreadyInRepo = List(
         s"${utils.ioId}/Preservation_1/${utils.coId1}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
         s"${utils.ioId}/Preservation_1/${utils.coId1}/CO_Metadata.xml",
@@ -341,7 +341,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
       runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 
-      utils.latestObjectVersion(repo, utils.ioId) must equal(5)
+      utils.latestObjectVersion(repo, utils.ioId) must equal(2)
 
       repo.getObject(utils.ioId.toHeadVersion).getFiles.toArray.toList must be(Nil)
     }
@@ -476,7 +476,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
       runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 
-      utils.latestObjectVersion(repo, ioId) must equal(3)
+      utils.latestObjectVersion(repo, ioId) must equal(2)
       repo.containsObject(ioId.toString) must be(true)
       repo.getObject(ioId.toHeadVersion).containsFile(expectedCoFileDestinationFilePath) must be(true)
 
@@ -522,7 +522,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       repo.getObject(ioId.toHeadVersion).containsFile(path) must be(true)
     }
 
-    utils.latestObjectVersion(repo, ioId) must equal(4)
+    utils.latestObjectVersion(repo, ioId) must equal(2)
   }
 
   "runCustodialCopy" should "only write one version if there are two identical CO messages" in {
@@ -531,7 +531,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val repo = utils.repo
 
     runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
-    utils.latestObjectVersion(repo, ioId) must equal(1)
+    utils.latestObjectVersion(repo, ioId) must equal(2)
   }
 
   "runCustodialCopy" should "return an error if there is an error fetching the bitstream info" in {
@@ -554,7 +554,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       val ioId = UUID.randomUUID()
       val utils = new MainTestUtils(
         List((ContentObject, false)),
-        1,
+        2,
         fileContentToWriteToEachFileInRepo = List(fileContent),
         bitstreamInfo1Responses = List(
           BitStreamInfo(
@@ -625,7 +625,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
     runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 
-    utils.latestObjectVersion(repo, ioId) must equal(3)
+    utils.latestObjectVersion(repo, ioId) must equal(2)
 
     val metadataStoragePath =
       repo.getObject(ioId.toHeadVersion).getFile(utils.expectedCoMetadataFileDestinationPath).getStorageRelativePath
@@ -655,7 +655,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val utils = new MainTestUtils(objectVersion = 0)
     val ioId = utils.ioId
 
-    val repo = mock[OcflRepository]
+    val repo = mock[MutableOcflRepository]
     when(repo.getObject(any[ObjectVersionId])).thenThrow(new RuntimeException("Unexpected Exception"))
     val semaphore: Semaphore[IO] = Semaphore[IO](1).unsafeRunSync()
     val ocflService = new OcflService(repo, semaphore)

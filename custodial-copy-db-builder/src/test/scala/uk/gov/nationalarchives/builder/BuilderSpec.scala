@@ -32,7 +32,7 @@ class BuilderSpec extends AnyFlatSpec:
         assert(files.map(_.id).sorted == ids.sorted)
       }
 
-    val messages = List(MessageResponse[Message]("", Message(idOne)), MessageResponse[Message]("", Message(idTwo)))
+    val messages = List(MessageResponse[Message]("", None, Message(idOne)), MessageResponse[Message]("", None, Message(idTwo)))
     Builder[IO].run(messages).unsafeRunSync()
   }
 
