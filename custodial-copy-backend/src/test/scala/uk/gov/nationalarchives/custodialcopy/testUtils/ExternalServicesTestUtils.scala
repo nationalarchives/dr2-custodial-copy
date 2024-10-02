@@ -6,7 +6,7 @@ import cats.effect.unsafe.implicits.global
 import fs2.Stream
 import io.circe.{Decoder, Encoder}
 import io.ocfl.api.model.DigestAlgorithm
-import io.ocfl.api.{OcflConfig, OcflRepository}
+import io.ocfl.api.{OcflConfig, MutableOcflRepository}
 import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.storage.OcflStorageBuilder
@@ -135,7 +135,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
           Seq(<Link><Type/><FromEntity/><ToEntity/></Link>),
           metadataElems,
           Seq(
-            <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
+            <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>,
+            <EventAction commandType="command_download"></EventAction>
           )
         )
       )
@@ -180,7 +181,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
   private def createExistingMetadataEntryInRepo(
       id: UUID,
       entityType: String,
-      repo: OcflRepository,
+      repo: MutableOcflRepository,
       existingMetadata: Elem,
       destinationPath: String
   ) = {
@@ -190,7 +191,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
 
   private def addFileToRepo(
       id: UUID,
-      repo: OcflRepository,
+      repo: MutableOcflRepository,
       bodyAsString: String,
       sourceFilePath: String,
       destinationPath: String
@@ -219,14 +220,14 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       }).asJava)
       .prettyPrintJson()
       .workDir(workDir)
-      .build()
+      .buildMutable()
   }
 
-  private def mockSqs(messages: List[ReceivedSnsMessage]): DASQSClient[IO] = {
+  private def mockSqs(messages: List[ReceivedSnsMessage], messageGroupId: String): DASQSClient[IO] = {
     val sqsClient = mock[DASQSClient[IO]]
     val responses = IO {
       messages.zipWithIndex.map { case (message, idx) =>
-        MessageResponse[ReceivedSnsMessage](s"handle$idx", message)
+        MessageResponse[ReceivedSnsMessage](s"handle$idx", Option(messageGroupId), message)
       }
     }
     when(sqsClient.receiveMessages[ReceivedSnsMessage](any[String], any[Int])(using any[Decoder[ReceivedSnsMessage]]))
@@ -253,7 +254,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
 
   class MainTestUtils(
       typesOfSqsMsgAndDeletionStatus: List[(EntityType, Boolean)] = List((InformationObject, false)),
-      objectVersion: Int = 1,
+      objectVersion: Int = 2,
       typesOfMetadataFilesInRepo: List[EntityType] = Nil,
       fileContentToWriteToEachFileInRepo: List[String] = Nil,
       entityDeleted: Boolean = false,
@@ -289,7 +290,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val coId3: UUID = if bitstreamInfoResponsesWithSameName.nonEmpty then coId1 else UUID.randomUUID()
     val ioId: UUID = bitstreamInfo1Responses.headOption.flatMap(_.parentRef).getOrElse(UUID.randomUUID())
     lazy val repoDir: Path = Files.createTempDirectory("repo")
-    lazy val repo: OcflRepository = createTestRepo(repoDir)
+    lazy val repo: MutableOcflRepository = createTestRepo(repoDir)
 
     private val coIds: Seq[UUID] = List(coId1, coId2, coId3, coId1)
     private val sqsMessages: List[ReceivedSnsMessage] =
@@ -302,7 +303,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
           case StructuralObject => (1 to 2).map(_ => SoReceivedSnsMessage(UUID.randomUUID, hasBeenDeleted))
         }
       }
-    val sqsClient: DASQSClient[IO] = mockSqs(sqsMessages)
+    val sqsClient: DASQSClient[IO] = mockSqs(sqsMessages, ioId.toString)
     val snsClient: DASNSClient[IO] = mockSns()
 
     lazy val expectedIoMetadataFileDestinationPath: String = metadataFile(ioId, ioType)
@@ -392,7 +393,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val xmlValidator: ValidateXmlAgainstXsd[IO] = ValidateXmlAgainstXsd[IO](XipXsdSchemaV7)
     val processor = new Processor(config, sqsClient, ocflService, preservicaClient, xmlValidator, snsClient)
 
-    def latestObjectVersion(repo: OcflRepository, id: UUID): Long =
+    def latestObjectVersion(repo: MutableOcflRepository, id: UUID): Long =
       repo.getObject(id.toHeadVersion).getObjectVersionId.getVersionNum.getVersionNum
 
     private val potentialObjectVersion: Try[Long] = Try(latestObjectVersion(repo, ioId))
@@ -427,13 +428,13 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val snsClient: DASNSClient[IO] = mock[DASNSClient[IO]]
 
     val duplicatesSoMessageResponse: MessageResponse[ReceivedSnsMessage] =
-      MessageResponse[ReceivedSnsMessage]("receiptHandle0", soMessage)
+      MessageResponse[ReceivedSnsMessage]("receiptHandle0", Option(soMessage.ref.toString), soMessage)
 
     val duplicatesIoMessageResponse: MessageResponse[ReceivedSnsMessage] =
-      MessageResponse[ReceivedSnsMessage]("receiptHandle1", ioMessage)
+      MessageResponse[ReceivedSnsMessage]("receiptHandle1", Option(ioMessage.ref.toString), ioMessage)
 
     val duplicatesCoMessageResponses: MessageResponse[ReceivedSnsMessage] =
-      MessageResponse[ReceivedSnsMessage]("receiptHandle2", coMessage)
+      MessageResponse[ReceivedSnsMessage]("receiptHandle2", Option(coMessage.ref.toString), coMessage)
 
     private val potentialParentRef = if parentRefExists then Some(ioId) else None
 
@@ -488,7 +489,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     private val linksFromApi = Seq(<Link><Type/><FromEntity/><ToEntity/></Link>)
     private val eventActionFromApi =
       Seq(
-        <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
+        <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>,
+        <EventAction commandType="command_download"></EventAction>
       )
 
     private val getBitstreamsCoIdCaptor: ArgumentCaptor[UUID] = ArgumentCaptor.forClass(classOf[UUID])
@@ -497,7 +499,6 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     private val repTypeCaptor: ArgumentCaptor[RepresentationType] = ArgumentCaptor.forClass(classOf[RepresentationType])
     private val repIndexCaptor: ArgumentCaptor[Int] = ArgumentCaptor.forClass(classOf[Int])
 
-    private val queueUrlCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
     private val idWithSourceAndDestPathsCaptor: ArgumentCaptor[List[IdWithSourceAndDestPaths]] =
       ArgumentCaptor.forClass(classOf[List[IdWithSourceAndDestPaths]])
     private val metadataXmlStringToValidate: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
@@ -509,6 +510,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     private val messagesCaptor: ArgumentCaptor[List[SendSnsMessage]] =
       ArgumentCaptor.forClass(classOf[List[SendSnsMessage]])
     private val receiptHandleCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
+    val commitIdCaptor: ArgumentCaptor[UUID] = ArgumentCaptor.forClass(classOf[UUID])
 
     private def mockOcflService(
         missingObjects: List[CustodialCopyObject] = Nil,
@@ -527,7 +529,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       when(ocflService.createObjects(any[List[IdWithSourceAndDestPaths]])).thenReturn(IO.unit)
       when(ocflService.getAllFilePathsOnAnObject(any[UUID])).thenReturn(IO.pure(pathsOfObjects))
       when(ocflService.deleteObjects(any[UUID], any[List[String]])).thenReturn(IO.unit)
-
+      when(ocflService.commitStagedChanges(commitIdCaptor.capture)).thenReturn(IO.unit)
       ocflService
     }
 
@@ -623,8 +625,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         createdIdSourceAndDestinationPathAndId: List[List[IdWithSourceAndDestPaths]] = Nil,
         drosToLookup: List[List[String]] = List(List(s"$ioId/IO_Metadata.xml")),
         destinationPathsToDelete: List[String] = Nil,
-        snsMessagesToSend: List[SendSnsMessage] = Nil,
-        receiptHandles: List[String] = List("receiptHandle1")
+        snsMessagesToSend: List[SendSnsMessage] = Nil
     ): Assertion = {
 
       verify(entityClient, times(numOfGetBitstreamInfoCalls)).getBitstreamInfo(getBitstreamsCoIdCaptor.capture)
@@ -646,8 +647,6 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       val numOfTimesToDeleteObjects = if destinationPathsToDelete.nonEmpty then 1 else 0
       verify(ocflService, times(numOfTimesToDeleteObjects))
         .deleteObjects(ioToDeleteObjectsFromCaptor.capture(), pathsToDeleteCaptor.capture())
-      verify(sqsClient, times(receiptHandles.length))
-        .deleteMessage(queueUrlCaptor.capture, receiptHandleCaptor.capture)
 
       val numOfTimesSnsMsgShouldBeSent =
         if (snsMessagesToSend.nonEmpty || createdIdSourceAndDestinationPathAndId.flatten.nonEmpty) 1 else 0
@@ -671,9 +670,6 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
 
       repTypeCaptor.getAllValues.asScala.toList should equal(repTypes)
       repIndexCaptor.getAllValues.asScala.toList should equal(repIndexes)
-
-      queueUrlCaptor.getAllValues.asScala.toList should equal(List.fill(receiptHandles.length)("queueUrl"))
-      receiptHandleCaptor.getAllValues.asScala.toList should equal(receiptHandles)
 
       val expectedIdsWithSourceAndDestPath = createdIdSourceAndDestinationPathAndId.flatten
       idWithSourceAndDestPathsCaptor.getAllValues.asScala.toList.flatten.zipWithIndex.foreach { case (capturedIdWithSourceAndDestPath, index) =>

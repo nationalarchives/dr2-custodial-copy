@@ -4,7 +4,7 @@ import cats.effect.IO
 import cats.effect.std.Semaphore
 import io.ocfl.api.exception.{CorruptObjectException, NotFoundException}
 import io.ocfl.api.model.{DigestAlgorithm, VersionInfo}
-import io.ocfl.api.{OcflConfig, OcflObjectUpdater, OcflOption, OcflRepository}
+import io.ocfl.api.{MutableOcflRepository, OcflConfig, OcflObjectUpdater, OcflOption}
 import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.storage.OcflStorageBuilder
@@ -14,17 +14,25 @@ import uk.gov.nationalarchives.utils.Utils.*
 
 import java.nio.file.Paths
 import java.util.UUID
-import scala.jdk.FunctionConverters.*
 import scala.jdk.CollectionConverters.*
+import scala.jdk.FunctionConverters.*
 
-class OcflService(ocflRepository: OcflRepository, semaphore: Semaphore[IO]) {
+class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO]) {
+
+  def commitStagedChanges(id: UUID): IO[Unit] =
+    IO.whenA(ocflRepository.hasStagedChanges(id.toString)) {
+      IO.blocking {
+        ocflRepository.commitStagedChanges(id.toString, ocflRepository.getObject(id.toHeadVersion).getVersionInfo)
+      }.void
+    }
+
   def createObjects(paths: List[IdWithSourceAndDestPaths]): IO[Unit] = semaphore.acquire >> IO.blocking {
     paths
       .groupBy(_.id)
       .view
       .toMap
       .map { case (id, paths) =>
-        ocflRepository.updateObject(
+        ocflRepository.stageChanges(
           id.toHeadVersion,
           new VersionInfo(),
           { (updater: OcflObjectUpdater) =>
@@ -42,7 +50,7 @@ class OcflService(ocflRepository: OcflRepository, semaphore: Semaphore[IO]) {
   } >> semaphore.release
 
   def deleteObjects(ioId: UUID, destinationFilePaths: List[String]): IO[Unit] = semaphore.acquire >> IO.blocking {
-    ocflRepository.updateObject(
+    ocflRepository.stageChanges(
       ioId.toHeadVersion,
       new VersionInfo(),
       { (updater: OcflObjectUpdater) => destinationFilePaths.foreach { path => updater.removeFile(path) } }.asJava
@@ -126,7 +134,7 @@ object OcflService {
         config.workDir
       )
 
-    val repo: OcflRepository = new OcflRepositoryBuilder()
+    val repo: MutableOcflRepository = new OcflRepositoryBuilder()
       .defaultLayoutConfig(new HashedNTupleLayoutConfig())
       .storage(((osb: OcflStorageBuilder) => {
         osb.fileSystem(repoDir)
@@ -138,7 +146,7 @@ object OcflService {
       }).asJava)
       .prettyPrintJson()
       .workDir(workDir)
-      .build()
+      .buildMutable()
     new OcflService(repo, semaphore)
   }
   case class MissingAndChangedObjects(
