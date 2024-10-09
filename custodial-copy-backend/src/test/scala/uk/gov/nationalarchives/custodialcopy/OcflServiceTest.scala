@@ -312,9 +312,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
 
     commitIdCaptor.getValue should equal(id.toString)
     val capturedVersionInfo = versionInfoCaptor.getValue
-    capturedVersionInfo.getUser.getName should equal("user")
-    capturedVersionInfo.getUser.getAddress should equal("address")
-    capturedVersionInfo.getMessage should equal("message")
+    capturedVersionInfo should equal(null)
   }
 
   "commitStagedChanges" should "not commit to the repository if there are no staged changes" in {
