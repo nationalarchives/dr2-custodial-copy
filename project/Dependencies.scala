@@ -1,6 +1,6 @@
 import sbt.*
 object Dependencies {
-  private lazy val daAwsClientsVersion = "0.1.93"
+  private lazy val daAwsClientsVersion = "0.1.94"
   private lazy val logbackVersion = "2.24.1"
   private lazy val log4CatsVersion = "2.7.0"
   private lazy val pureConfigVersion = "0.17.7"
