@@ -3,7 +3,7 @@ package uk.gov.nationalarchives.custodialcopy
 import cats.effect.IO
 import cats.effect.std.Semaphore
 import io.ocfl.api.exception.{CorruptObjectException, NotFoundException}
-import io.ocfl.api.model.{DigestAlgorithm, VersionInfo}
+import io.ocfl.api.model.DigestAlgorithm
 import io.ocfl.api.{MutableOcflRepository, OcflConfig, OcflObjectUpdater, OcflOption}
 import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
@@ -20,11 +20,11 @@ import scala.jdk.FunctionConverters.*
 class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO]) {
 
   def commitStagedChanges(id: UUID): IO[Unit] =
-    IO.whenA(ocflRepository.hasStagedChanges(id.toString)) {
+    semaphore.acquire >> IO.whenA(ocflRepository.hasStagedChanges(id.toString)) {
       IO.blocking {
-        ocflRepository.commitStagedChanges(id.toString, ocflRepository.getObject(id.toHeadVersion).getVersionInfo)
+        ocflRepository.commitStagedChanges(id.toString, null)
       }.void
-    }
+    } >> semaphore.release
 
   def createObjects(paths: List[IdWithSourceAndDestPaths]): IO[Unit] = semaphore.acquire >> IO.blocking {
     paths
@@ -34,7 +34,7 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO
       .map { case (id, paths) =>
         ocflRepository.stageChanges(
           id.toHeadVersion,
-          new VersionInfo(),
+          null,
           { (updater: OcflObjectUpdater) =>
             paths.foreach { idWithSourceAndDestPath =>
               updater.addPath(
@@ -52,7 +52,7 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO
   def deleteObjects(ioId: UUID, destinationFilePaths: List[String]): IO[Unit] = semaphore.acquire >> IO.blocking {
     ocflRepository.stageChanges(
       ioId.toHeadVersion,
-      new VersionInfo(),
+      null,
       { (updater: OcflObjectUpdater) => destinationFilePaths.foreach { path => updater.removeFile(path) } }.asJava
     )
   } >> semaphore.release
