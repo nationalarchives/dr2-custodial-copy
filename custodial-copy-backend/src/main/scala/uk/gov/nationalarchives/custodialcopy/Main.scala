@@ -72,6 +72,7 @@ object Main extends IOApp {
       _ <- {
         Stream.fixedRateStartImmediately[IO](10.seconds) >>
           runCustodialCopy(sqs, config, processor)
+            .map(outcomes => if outcomes.exists(_.isError) then semaphore.release else IO.unit)
             .handleErrorWith(err => Stream.eval(semaphore.release >> logError(err)))
       }.compile.drain
     } yield ExitCode.Success
