@@ -124,7 +124,6 @@ object Main extends IOApp {
               .filter(_.message.ref == ref)
               .map(_.receiptHandle)
               .parTraverse(processor.deleteMessage)
-              .void
           }
         case _ => IO.unit
       }
