@@ -32,36 +32,40 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO
       }.onError(logErrorAndRelease)
     } >> semaphore.release
 
-  def createObjects(paths: List[IdWithSourceAndDestPaths]): IO[Unit] = semaphore.acquire >> IO.blocking {
-    paths
-      .groupBy(_.id)
-      .view
-      .toMap
-      .map { case (id, paths) =>
-        ocflRepository.stageChanges(
-          id.toHeadVersion,
-          null,
-          { (updater: OcflObjectUpdater) =>
-            paths.foreach { idWithSourceAndDestPath =>
-              updater.addPath(
-                idWithSourceAndDestPath.sourceNioFilePath,
-                idWithSourceAndDestPath.destinationPath,
-                OcflOption.OVERWRITE
-              )
-            }
-          }.asJava
-        )
-      }
-      .toList
-  }.onError(logErrorAndRelease) >> semaphore.release
+  def createObjects(paths: List[IdWithSourceAndDestPaths]): IO[Unit] = semaphore.acquire >> IO
+    .blocking {
+      paths
+        .groupBy(_.id)
+        .view
+        .toMap
+        .map { case (id, paths) =>
+          ocflRepository.stageChanges(
+            id.toHeadVersion,
+            null,
+            { (updater: OcflObjectUpdater) =>
+              paths.foreach { idWithSourceAndDestPath =>
+                updater.addPath(
+                  idWithSourceAndDestPath.sourceNioFilePath,
+                  idWithSourceAndDestPath.destinationPath,
+                  OcflOption.OVERWRITE
+                )
+              }
+            }.asJava
+          )
+        }
+        .toList
+    }
+    .onError(logErrorAndRelease) >> semaphore.release
 
-  def deleteObjects(ioId: UUID, destinationFilePaths: List[String]): IO[Unit] = semaphore.acquire >> IO.blocking {
-    ocflRepository.stageChanges(
-      ioId.toHeadVersion,
-      null,
-      { (updater: OcflObjectUpdater) => destinationFilePaths.foreach { path => updater.removeFile(path) } }.asJava
-    )
-  }.onError(logErrorAndRelease) >> semaphore.release
+  def deleteObjects(ioId: UUID, destinationFilePaths: List[String]): IO[Unit] = semaphore.acquire >> IO
+    .blocking {
+      ocflRepository.stageChanges(
+        ioId.toHeadVersion,
+        null,
+        { (updater: OcflObjectUpdater) => destinationFilePaths.foreach { path => updater.removeFile(path) } }.asJava
+      )
+    }
+    .onError(logErrorAndRelease) >> semaphore.release
 
   def getMissingAndChangedObjects(
       objects: List[CustodialCopyObject]
