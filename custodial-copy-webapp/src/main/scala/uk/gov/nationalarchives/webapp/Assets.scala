@@ -8,7 +8,6 @@ import doobie.util.fragments.whereAndOpt
 import doobie.util.log.LogHandler
 import doobie.util.transactor.Transactor.Aux
 import doobie.util.{Get, Put}
-import pureconfig.generic.derivation.default.*
 import pureconfig.module.catseffect.syntax.*
 import pureconfig.{ConfigReader, ConfigSource}
 import uk.gov.nationalarchives.utils.Utils.{OcflFile, given}

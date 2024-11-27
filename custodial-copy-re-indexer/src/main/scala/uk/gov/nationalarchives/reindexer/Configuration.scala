@@ -5,7 +5,6 @@ import cats.implicits.*
 import com.monovore.decline.*
 import org.w3c.dom.Document
 import pureconfig.*
-import pureconfig.generic.derivation.default.*
 import uk.gov.nationalarchives.reindexer.Configuration.Config
 
 import java.util.UUID

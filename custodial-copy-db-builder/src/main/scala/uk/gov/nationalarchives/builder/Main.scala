@@ -7,7 +7,6 @@ import fs2.Stream
 import io.circe.{Decoder, HCursor}
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import pureconfig.ConfigReader
-import pureconfig.generic.derivation.default.*
 import uk.gov.nationalarchives.DASQSClient
 
 import java.net.URI
