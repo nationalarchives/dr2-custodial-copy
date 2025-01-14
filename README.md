@@ -1,6 +1,8 @@
 # DR2 Custodial Copy
 
-This repository contains three components which together make up the custodial copy service.
+This repository contains three components which together make up the custodial copy service.  
+
+The principle of the Custodial Copy approach is described [here](https://zenodo.org/records/13647420)
 
 ## 1. Custodial Copy backend
 
