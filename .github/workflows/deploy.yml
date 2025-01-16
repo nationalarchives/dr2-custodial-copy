@@ -20,7 +20,7 @@ on:
 run-name: Deploying Custodial Copy ${{inputs.to-deploy}} to ${{inputs.environment}}
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     environment: ${{ github.event.inputs.environment }}
     steps:
       - name: Checkout
