@@ -1,5 +1,5 @@
 addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "2.3.0")
-addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.5.3")
+addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.5.4")
 addSbtPlugin("uk.gov.nationalarchives" % "sbt-assembly-log4j2" % "0.0.4")
 addSbtPlugin("com.github.sbt" % "sbt-release" % "1.4.0")
 addSbtPlugin("org.playframework.twirl" % "sbt-twirl" % "2.0.7")
