@@ -12,8 +12,10 @@ import pureconfig.module.catseffect.syntax.*
 import uk.gov.nationalarchives.DASQSClient
 import uk.gov.nationalarchives.dp.client.fs2.Fs2Client
 import uk.gov.nationalarchives.custodialcopy.Message.*
+import uk.gov.nationalarchives.custodialcopy.Processor.Result.*
 import uk.gov.nationalarchives.DASNSClient
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
+import uk.gov.nationalarchives.custodialcopy.Processor.Result
 
 import java.net.URI
 import java.nio.file
@@ -76,15 +78,30 @@ object Main extends IOApp {
       }.compile.drain
     } yield ExitCode.Success
 
-  def runCustodialCopy(sqs: DASQSClient[IO], config: Config, processor: Processor): Stream[IO, List[Outcome[IO, Throwable, UUID]]] =
+  private def aggregateMessages(sqs: DASQSClient[IO], config: Config): IO[List[MessageResponse[ReceivedSnsMessage]]] = {
+    def collectMessages(messages: List[MessageResponse[ReceivedSnsMessage]]): IO[List[MessageResponse[ReceivedSnsMessage]]] = {
+      sqs
+        .receiveMessages[ReceivedSnsMessage](config.sqsQueueUrl)
+        .flatMap { newMessages =>
+          val allMessages = newMessages ++ messages
+          if newMessages.isEmpty || allMessages.size >= 50 then IO.pure(allMessages) else collectMessages(allMessages)
+        }
+        .handleErrorWith { err =>
+          logError(err) >> IO.pure[List[MessageResponse[ReceivedSnsMessage]]](Nil)
+        }
+    }
+    collectMessages(Nil)
+  }
+
+  def runCustodialCopy(sqs: DASQSClient[IO], config: Config, processor: Processor): Stream[IO, List[Result]] =
     Stream
-      .eval(sqs.receiveMessages[ReceivedSnsMessage](config.sqsQueueUrl))
+      .eval(aggregateMessages(sqs, config))
       .filter(messageResponses => messageResponses.nonEmpty)
       .evalMap { messageResponses =>
         messageResponses
           .groupBy(_.messageGroupId)
           .toList
-          .traverse { case (potentialMessageGroupId, responses) =>
+          .parTraverse { case (potentialMessageGroupId, responses) =>
             potentialMessageGroupId match
               case Some(groupId) =>
                 processMessages(processor, responses, groupId)
@@ -100,33 +117,22 @@ object Main extends IOApp {
       _ <- logger.info(s"Processing ${responses.length} messages")
       _ <- logger.info(responses.map(_.message.ref).mkString(","))
       dedupedMessages = dedupeMessages(responses)
-      (deletedEntities, nonDeletedEntities) = dedupedMessages.partition(_.message.deleted)
 
-      fibersForNonDeletedEntities <- nonDeletedEntities.parTraverse(processor.process(_, false).start)
-      ndeFiberResults <- fibersForNonDeletedEntities.traverse(_.join)
-
-      fibersForDeletedEntities <- deletedEntities.parTraverse(processor.process(_, true).start)
-      deFiberResults <- fibersForDeletedEntities.traverse(_.join)
-
-      allFibers = fibersForNonDeletedEntities ++ fibersForDeletedEntities
-      allFiberResults = ndeFiberResults ++ deFiberResults
+      results <- dedupedMessages.traverse(processor.process)
 
       _ <- processor.commitStagedChanges(UUID.fromString(groupId))
-      _ <- logger.info(s"${allFiberResults.count(_.isSuccess)} messages out of ${allFibers.length} unique messages processed successfully")
-      _ <- logger.info(s"${allFiberResults.count(_.isError)} messages out of ${allFibers.length} unique messages failed")
+      _ <- logger.info(s"${results.count(_.isSuccess)} messages out of ${results.length} unique messages processed successfully")
+      _ <- logger.info(s"${results.count(_.isError)} messages out of ${results.length} unique messages failed")
 
-      _ <- allFiberResults traverse {
-        case Outcome.Errored(e) => logError(e) >> IO.unit
-        case Outcome.Succeeded(refIO) =>
-          refIO.flatMap { ref =>
-            responses
-              .filter(_.message.ref == ref)
-              .map(_.receiptHandle)
-              .parTraverse(processor.deleteMessage)
-          }
-        case _ => IO.unit
+      _ <- results.parTraverse {
+        case Failure(e) => logError(e) >> IO.unit
+        case Success(ref) =>
+          responses
+            .filter(_.message.ref == ref)
+            .map(_.receiptHandle)
+            .parTraverse(processor.deleteMessage)
       }
-    } yield allFiberResults
+    } yield results
   }
 
   private def dedupeMessages(messages: List[MessageResponse[ReceivedSnsMessage]]): List[MessageResponse[ReceivedSnsMessage]] =

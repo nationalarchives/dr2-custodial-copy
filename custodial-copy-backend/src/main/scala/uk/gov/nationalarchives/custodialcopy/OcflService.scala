@@ -2,12 +2,15 @@ package uk.gov.nationalarchives.custodialcopy
 
 import cats.effect.IO
 import cats.effect.std.Semaphore
+import cats.syntax.all.*
 import io.ocfl.api.exception.{CorruptObjectException, NotFoundException}
 import io.ocfl.api.model.DigestAlgorithm
 import io.ocfl.api.{MutableOcflRepository, OcflConfig, OcflObjectUpdater, OcflOption}
 import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
+import io.ocfl.core.lock.ObjectLockBuilder
 import io.ocfl.core.storage.OcflStorageBuilder
+import org.h2.jdbcx.JdbcDataSource
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
@@ -32,30 +35,26 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO
       }.onError(logErrorAndRelease)
     } >> semaphore.release
 
-  def createObjects(paths: List[IdWithSourceAndDestPaths]): IO[Unit] = semaphore.acquire >> IO
-    .blocking {
-      paths
-        .groupBy(_.id)
-        .view
-        .toMap
-        .map { case (id, paths) =>
-          ocflRepository.stageChanges(
-            id.toHeadVersion,
-            null,
-            { (updater: OcflObjectUpdater) =>
-              paths.foreach { idWithSourceAndDestPath =>
-                updater.addPath(
-                  idWithSourceAndDestPath.sourceNioFilePath,
-                  idWithSourceAndDestPath.destinationPath,
-                  OcflOption.OVERWRITE
-                )
-              }
-            }.asJava
-          )
-        }
-        .toList
+  def createObjects(paths: List[IdWithSourceAndDestPaths]): IO[Unit] = paths
+    .traverse { path =>
+      semaphore.acquire >> IO.blocking {
+        ocflRepository.stageChanges(
+          path.id.toHeadVersion,
+          null,
+          { (updater: OcflObjectUpdater) =>
+            updater.addPath(
+              path.sourceNioFilePath,
+              path.destinationPath,
+              OcflOption.MOVE_SOURCE,
+              OcflOption.OVERWRITE
+            )
+            ()
+          }.asJava
+        )
+      } >> semaphore.release
     }
-    .onError(logErrorAndRelease) >> semaphore.release
+    .onError(logErrorAndRelease)
+    .void
 
   def deleteObjects(ioId: UUID, destinationFilePaths: List[String]): IO[Unit] = semaphore.acquire >> IO
     .blocking {
@@ -147,9 +146,11 @@ object OcflService {
       Paths.get(
         config.workDir
       )
-
+    val dataSource = new JdbcDataSource()
+    dataSource.setURL(s"jdbc:h2:file:${config.workDir}/database")
     val repo: MutableOcflRepository = new OcflRepositoryBuilder()
       .defaultLayoutConfig(new HashedNTupleLayoutConfig())
+      .objectLock(new ObjectLockBuilder().dataSource(dataSource).build())
       .storage(((osb: OcflStorageBuilder) => {
         osb.fileSystem(repoDir)
         ()
