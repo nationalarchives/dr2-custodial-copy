@@ -8,8 +8,9 @@ The principle of the Custodial Copy approach is described [here](https://zenodo.
 
 This is a service which is intended to run in a long-running Docker container.
 
-Every 20 seconds, it polls the queue specified in the `SQS_QUEUE_URL` environment variable.
+Every 10 seconds, it polls the queue specified in the `SQS_QUEUE_URL` environment variable.
 This will be set to the queue which receives messages from the entity event generator.
+For each invocation, it will try to fetch messages from the queue until there are either no more messages, or there are 50 messages.
 
 ### Messages
 
