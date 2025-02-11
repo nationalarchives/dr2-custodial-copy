@@ -52,7 +52,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     )
   }
 
-  "process" should "return a failure if a CO message has 'deleted' set to 'true'" in {
+  "process" should "return a Failure if a CO message has 'deleted' set to 'true'" in {
     val utils = new ProcessorTestUtils()
 
     val messageResponse = MessageResponse[ReceivedSnsMessage](
@@ -116,7 +116,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     )
   }
 
-  "process" should "return a failure if a Content Object does not have a parent" in {
+  "process" should "return a Failure if a Content Object does not have a parent" in {
     val utils = new ProcessorTestUtils(parentRefExists = false)
 
     val response = utils.processor.process(utils.duplicatesCoMessageResponses).unsafeRunSync()
@@ -136,7 +136,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     )
   }
 
-  "process" should "return a failure if a Content Object belongs to more than 1 Representation type" in {
+  "process" should "return a Failure if a Content Object belongs to more than 1 Representation type" in {
     val utils = new ProcessorTestUtils(urlsToRepresentations =
       Seq(
         "http://testurl/representations/Preservation/1",
@@ -245,7 +245,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
         )
       )
 
-    val res = utils.processor.process(utils.duplicatesIoMessageResponse).unsafeRunSync()
+    utils.processor.process(utils.duplicatesIoMessageResponse).unsafeRunSync()
     utils.verifyCallsAndArguments(
       repTypes = Nil,
       repIndexes = Nil,

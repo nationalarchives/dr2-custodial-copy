@@ -87,7 +87,7 @@ object Main extends IOApp {
           if newMessages.isEmpty || allMessages.size >= 50 then IO.pure(allMessages) else collectMessages(allMessages)
         }
         .handleErrorWith { err =>
-          logError(err) >> IO.pure[List[MessageResponse[ReceivedSnsMessage]]](Nil)
+          logError(err) >> IO.pure[List[MessageResponse[ReceivedSnsMessage]]](messages)
         }
     }
     collectMessages(Nil)
@@ -125,7 +125,7 @@ object Main extends IOApp {
       _ <- logger.info(s"${results.count(_.isError)} messages out of ${results.length} unique messages failed")
 
       _ <- results.parTraverse {
-        case Failure(e) => logError(e) >> IO.unit
+        case Failure(e) => logError(e)
         case Success(ref) =>
           responses
             .filter(_.message.ref == ref)
