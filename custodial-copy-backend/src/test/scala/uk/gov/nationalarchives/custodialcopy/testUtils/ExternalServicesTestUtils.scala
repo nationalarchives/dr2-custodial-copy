@@ -6,10 +6,12 @@ import cats.effect.unsafe.implicits.global
 import fs2.Stream
 import io.circe.{Decoder, Encoder}
 import io.ocfl.api.model.DigestAlgorithm
-import io.ocfl.api.{OcflConfig, MutableOcflRepository}
+import io.ocfl.api.{MutableOcflRepository, OcflConfig}
 import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
+import io.ocfl.core.lock.ObjectLockBuilder
 import io.ocfl.core.storage.OcflStorageBuilder
+import org.h2.jdbcx.JdbcDataSource
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doReturn, spy, times, verify, when}
 import org.mockito.invocation.InvocationOnMock
@@ -208,8 +210,11 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
 
   private def createTestRepo(repoDir: Path = Files.createTempDirectory("repo")) = {
     val workDir = Files.createTempDirectory("work")
+    val dataSource = new JdbcDataSource()
+    dataSource.setURL(s"jdbc:h2:file:$workDir/database")
     new OcflRepositoryBuilder()
       .defaultLayoutConfig(new HashedNTupleLayoutConfig())
+      .objectLock(new ObjectLockBuilder().dataSource(dataSource).build())
       .storage(((s: OcflStorageBuilder) => {
         s.fileSystem(repoDir)
         ()
@@ -232,6 +237,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     }
     when(sqsClient.receiveMessages[ReceivedSnsMessage](any[String], any[Int])(using any[Decoder[ReceivedSnsMessage]]))
       .thenReturn(responses)
+      .thenReturn(IO.pure(Nil))
     when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO(DeleteMessageResponse.builder().build))
     sqsClient
   }
@@ -276,8 +282,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       bitstreamInfo2Responses: Seq[BitStreamInfo] = Nil,
       addAccessRepUrl: Boolean = false
   ) {
-
-    val config: Config = Config("", "", "", "", "", None, "", "")
+    val downloadDir: String = Files.createTempDirectory("downloads").toString
+    val config: Config = Config("", "", "", "", downloadDir, None, "", "")
 
     val bitstreamInfoResponsesWithSameName: Seq[BitStreamInfo] = bitstreamInfo1Responses.flatMap { bitstreamInfo1Response =>
       bitstreamInfo2Responses.filter { bitstreamInfo2Response =>
@@ -415,7 +421,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       pathsOfObjectsUnderIo: List[String] = Nil,
       throwErrorInMissingAndChangedObjects: Boolean = false
   ) {
-    val config: Config = Config("", "", "queueUrl", "", "", Option(URI.create("https://example.com")), "", "topicArn")
+    val workDir: String = Files.createTempDirectory("download").toString
+    val config: Config = Config("", "", "queueUrl", "", workDir, Option(URI.create("https://example.com")), "", "topicArn")
     val ioId: UUID = UUID.randomUUID()
     val coId: UUID = UUID.randomUUID()
     val soId: UUID = UUID.randomUUID()

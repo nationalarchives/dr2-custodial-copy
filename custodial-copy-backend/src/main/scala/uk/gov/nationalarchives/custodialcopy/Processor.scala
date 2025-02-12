@@ -14,7 +14,8 @@ import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.*
 import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
 import uk.gov.nationalarchives.custodialcopy.Message.*
-import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus
+import uk.gov.nationalarchives.custodialcopy.Processor.{ObjectStatus, Result}
+import uk.gov.nationalarchives.custodialcopy.Processor.Result.*
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Deleted, Updated}
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Bitstream, Metadata, MetadataAndPotentialBitstreams}
 import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
@@ -214,7 +215,7 @@ class Processor(
   private def download(custodialCopyObject: CustodialCopyObject) = custodialCopyObject match {
     case fo: FileObject =>
       for {
-        writePath <- fo.sourceFilePath
+        writePath <- fo.sourceFilePath(config.workDir)
         _ <- entityClient.streamBitstreamContent[Unit](Fs2Streams.apply)(
           fo.url,
           s => s.through(Files[IO].writeAll(writePath, Flags.Write)).compile.drain
@@ -223,7 +224,7 @@ class Processor(
     case mo: MetadataObject =>
       val metadataXmlAsString = mo.metadata.toString
       for {
-        writePath <- mo.sourceFilePath
+        writePath <- mo.sourceFilePath(config.workDir)
         _ <- Stream
           .emit(metadataXmlAsString)
           .through(Files[IO].writeUtf8(writePath))
@@ -301,22 +302,26 @@ class Processor(
         IO.raiseError(new Exception(s"Entity type is not supported for deletion"))
     }
 
-  def process(messageResponse: MessageResponse[ReceivedSnsMessage], entityDeleted: Boolean): IO[UUID] =
+  private def deletionSupported(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[Boolean] = IO.pure {
+    messageResponse.message match {
+      case SoReceivedSnsMessage(_, _) => false
+      case _                          => true
+    }
+  }
+
+  def process(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[Result] = {
     for {
       logger <- Slf4jLogger.create[IO]
-      entityTypeDeletionSupported =
-        messageResponse.message match {
-          case SoReceivedSnsMessage(_, _) => false
-          case _                          => true
-        }
+      entityTypeDeletionSupported <- deletionSupported(messageResponse)
       snsMessages <-
-        if entityDeleted && entityTypeDeletionSupported then processDeletedEntities(messageResponse)
+        if messageResponse.message.deleted && entityTypeDeletionSupported then processDeletedEntities(messageResponse)
         else processNonDeletedMessages(messageResponse)
       _ <- IO.whenA(snsMessages.nonEmpty) {
         snsClient.publish[SendSnsMessage](config.topicArn)(snsMessages).map(_ => ())
       }
       _ <- logger.info(s"${snsMessages.length} 'created/updated objects' messages published to SNS")
-    } yield messageResponse.message.ref
+    } yield Success(messageResponse.message.ref)
+  }.handleError(err => Failure(err))
 
   def commitStagedChanges(id: UUID): IO[Unit] = ocflService.commitStagedChanges(id)
 }
@@ -336,4 +341,14 @@ object Processor {
 
   enum ObjectType:
     case Bitstream, Metadata, MetadataAndPotentialBitstreams
+
+  enum Result:
+    def isSuccess: Boolean = this match
+      case _: Result.Success => true
+      case _: Result.Failure => false
+
+    def isError: Boolean = !isSuccess
+
+    case Success(id: UUID)
+    case Failure(ex: Throwable)
 }

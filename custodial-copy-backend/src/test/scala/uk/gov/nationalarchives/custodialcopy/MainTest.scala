@@ -1,23 +1,26 @@
 package uk.gov.nationalarchives.custodialcopy
 
-import cats.effect.{IO, Outcome}
+import cats.effect.IO
 import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
+import io.circe.Decoder
 import io.ocfl.api.MutableOcflRepository
 import io.ocfl.api.model.ObjectVersionId
 import org.apache.commons.codec.digest.DigestUtils
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.*
-import org.mockito.Mockito.{never, times, verify, when}
+import org.mockito.Mockito.{never, reset, times, verify, when}
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers.*
 import org.scalatestplus.mockito.MockitoSugar
+import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DASQSClient
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.Main.*
-import uk.gov.nationalarchives.custodialcopy.Message.ReceivedSnsMessage
+import uk.gov.nationalarchives.custodialcopy.Message.{ReceivedSnsMessage, SoReceivedSnsMessage}
+import uk.gov.nationalarchives.custodialcopy.Processor.Result
 import uk.gov.nationalarchives.utils.TestUtils.*
 import uk.gov.nationalarchives.custodialcopy.testUtils.ExternalServicesTestUtils.MainTestUtils
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
@@ -38,14 +41,14 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       config: Config,
       processor: Processor
   ): Throwable = runCustodialCopy(sqsClient, config, processor).head match
-    case Outcome.Errored(e) => e
-    case _                  => throw new Exception("Expected an error but none found")
+    case Result.Failure(e) => e
+    case _                 => throw new Exception("Expected an error but none found")
 
   private def runCustodialCopy(
       sqsClient: DASQSClient[IO],
       config: Config,
       processor: Processor
-  ): List[Outcome[IO, Throwable, UUID]] = Main.runCustodialCopy(sqsClient, config, processor).compile.toList.unsafeRunSync().flatten
+  ): List[Result] = Main.runCustodialCopy(sqsClient, config, processor).compile.toList.unsafeRunSync().flatten
 
   "runCustodialCopy" should "(given an IO message with 'deleted' set to 'true') delete all objects underneath it" in {
     val fixity = List(Fixity("SHA256", ""))
@@ -58,7 +61,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt3", 1, "", fixity, 1, Original, None, Some(ioId))
     )
     val utils = new MainTestUtils(
-      List((ContentObject, false), (ContentObject, false), (InformationObject, true)),
+      List((ContentObject, false), (InformationObject, true)),
       typesOfMetadataFilesInRepo = List(InformationObject, ContentObject),
       objectVersion = 2,
       fileContentToWriteToEachFileInRepo = List("fileContent1", "fileContent2"),
@@ -254,12 +257,12 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
 
   "runCustodialCopy" should "not call the process method if no messages are received" in {
     val processor = mock[Processor]
-    when(processor.process(any[MessageResponse[ReceivedSnsMessage]], ArgumentMatchers.eq(false))).thenReturn(IO.unit)
+    when(processor.process(any[MessageResponse[ReceivedSnsMessage]])).thenReturn(IO.unit)
     val utils = new MainTestUtils(typesOfSqsMsgAndDeletionStatus = Nil, objectVersion = 0)
 
     runCustodialCopy(utils.sqsClient, utils.config, processor)
 
-    verify(processor, never()).process(any[MessageResponse[ReceivedSnsMessage]], any[Boolean])
+    verify(processor, never()).process(any[MessageResponse[ReceivedSnsMessage]])
   }
 
   "runCustodialCopy" should "(given a CO message with 'deleted' set to 'true') throw an Exception" in {
@@ -674,5 +677,95 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     ex.getMessage must equal(
       s"'getObject' returned an unexpected error 'java.lang.RuntimeException: Unexpected Exception' when called with object id $ioId"
     )
+  }
+
+  "runCustodialCopy" should "return more than 10 messages if there are more messages available" in {
+    val utils = new MainTestUtils(objectVersion = 0)
+    val sqsClient = utils.sqsClient
+    val groupId = UUID.randomUUID.toString
+    def messages = (1 to 10).map(i => MessageResponse("", Option(groupId), SoReceivedSnsMessage(UUID.randomUUID, false))).toList
+    reset(sqsClient)
+    when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO(DeleteMessageResponse.builder.build))
+    when(sqsClient.receiveMessages(any[String], any[Int])(using any[Decoder[SoReceivedSnsMessage]]))
+      .thenReturn(IO(messages))
+      .thenReturn(IO(messages))
+      .thenReturn(IO(Nil))
+
+    val results = runCustodialCopy(sqsClient, utils.config, utils.processor)
+
+    results.size must equal(20)
+  }
+
+  "runCustodialCopy" should "return 50 messages if there are more than 50 messages available" in {
+    val utils = new MainTestUtils(objectVersion = 0)
+    val sqsClient = utils.sqsClient
+    val groupId = UUID.randomUUID.toString
+
+    def messages = (1 to 25).map(i => MessageResponse("", Option(groupId), SoReceivedSnsMessage(UUID.randomUUID, false))).toList
+
+    reset(sqsClient)
+    when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO(DeleteMessageResponse.builder.build))
+    when(sqsClient.receiveMessages(any[String], any[Int])(using any[Decoder[SoReceivedSnsMessage]]))
+      .thenReturn(IO(messages))
+      .thenReturn(IO(messages))
+      .thenReturn(IO(messages))
+      .thenReturn(IO(Nil))
+
+    val results = runCustodialCopy(sqsClient, utils.config, utils.processor)
+
+    results.size must equal(50)
+  }
+
+  "runCustodialCopy" should "return 52 messages if the second call takes the total messages over 50" in {
+    val utils = new MainTestUtils(objectVersion = 0)
+    val sqsClient = utils.sqsClient
+    val groupId = UUID.randomUUID.toString
+
+    def messages = (1 to 26).map(i => MessageResponse("", Option(groupId), SoReceivedSnsMessage(UUID.randomUUID, false))).toList
+
+    reset(sqsClient)
+    when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO(DeleteMessageResponse.builder.build))
+    when(sqsClient.receiveMessages(any[String], any[Int])(using any[Decoder[SoReceivedSnsMessage]]))
+      .thenReturn(IO(messages))
+      .thenReturn(IO(messages))
+      .thenReturn(IO(messages))
+      .thenReturn(IO(Nil))
+
+    val results = runCustodialCopy(sqsClient, utils.config, utils.processor)
+
+    results.size must equal(52)
+  }
+
+  "runCustodialCopy" should "return no messages if there is an error getting the first messages" in {
+    val utils = new MainTestUtils(objectVersion = 0)
+    val sqsClient = utils.sqsClient
+    val groupId = UUID.randomUUID.toString
+
+    reset(sqsClient)
+    when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO(DeleteMessageResponse.builder.build))
+    when(sqsClient.receiveMessages(any[String], any[Int])(using any[Decoder[SoReceivedSnsMessage]]))
+      .thenReturn(IO.raiseError(new Exception("Error getting SQS messages")))
+
+    val results = runCustodialCopy(sqsClient, utils.config, utils.processor)
+
+    results.size must equal(0)
+  }
+
+  "runCustodialCopy" should "return 10 messages if the first call succeeds but the subsequent call fails" in {
+    val utils = new MainTestUtils(objectVersion = 0)
+    val sqsClient = utils.sqsClient
+    val groupId = UUID.randomUUID.toString
+
+    def messages = (1 to 10).map(i => MessageResponse("", Option(groupId), SoReceivedSnsMessage(UUID.randomUUID, false))).toList
+
+    reset(sqsClient)
+    when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO(DeleteMessageResponse.builder.build))
+    when(sqsClient.receiveMessages(any[String], any[Int])(using any[Decoder[SoReceivedSnsMessage]]))
+      .thenReturn(IO(messages))
+      .thenReturn(IO.raiseError(new Exception("Error getting SQS messages")))
+
+    val results = runCustodialCopy(sqsClient, utils.config, utils.processor)
+
+    results.size must equal(10)
   }
 }
