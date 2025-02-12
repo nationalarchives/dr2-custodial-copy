@@ -24,7 +24,6 @@ The queue sends messages in this format:
 ```
 
 The prefix of the id can be `io`, `co` or `so` depending on the entity type; they are dealt with differently.
-Messages are deduped before they are processed.
 The "deleted" entry refers to the status on Preservica; the value could be `true` or `false`.
 
 #### Processing incoming messages based on message group ID.
@@ -32,6 +31,8 @@ The "deleted" entry refers to the status on Preservica; the value could be `true
 The SQS queue which feeds this process is a FIFO queue. Each message has a UUID as a message group ID. This is the IO UUID for an IO message or the parent of the CO for a CO message.
 
 The process groups by the message group ID. Each group id corresponds to an OCFL object (which may not exist yet)
+
+The messages within each group are deduplicated to prevent repeat processing of the same entity.
 
 All updates for a single group of messages with the same group id are staged in OCFL. This allows us to write multiple changes without creating new versions.
 
