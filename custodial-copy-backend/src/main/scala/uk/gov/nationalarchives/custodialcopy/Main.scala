@@ -3,7 +3,6 @@ package uk.gov.nationalarchives.custodialcopy
 import cats.effect.*
 import cats.effect.std.Semaphore
 import cats.implicits.*
-import cats.syntax.all.*
 import fs2.Stream
 import io.circe.{Decoder, HCursor}
 import org.typelevel.log4cats.slf4j.Slf4jLogger
