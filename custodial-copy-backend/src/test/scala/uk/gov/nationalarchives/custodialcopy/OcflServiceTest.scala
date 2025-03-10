@@ -180,7 +180,8 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     val updater = mock[OcflObjectUpdater]
     val sourceNioFilePathToAdd: ArgumentCaptor[Path] = ArgumentCaptor.forClass(classOf[Path])
     val destinationPathToAdd: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
-    val optionToAdd: ArgumentCaptor[OcflOption] = ArgumentCaptor.forClass(classOf[OcflOption])
+    val optionMoveToAdd: ArgumentCaptor[OcflOption] = ArgumentCaptor.forClass(classOf[OcflOption])
+    val optionOverwriteToAdd: ArgumentCaptor[OcflOption] = ArgumentCaptor.forClass(classOf[OcflOption])
 
     when(ocflRepository.stageChanges(objectVersionCaptor.capture, any[VersionInfo], any[Consumer[OcflObjectUpdater]]))
       .thenAnswer { invocation =>
@@ -196,11 +197,13 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     verify(updater, times(1)).addPath(
       sourceNioFilePathToAdd.capture,
       destinationPathToAdd.capture,
-      optionToAdd.capture
+      optionMoveToAdd.capture,
+      optionOverwriteToAdd.capture()
     )
     sourceNioFilePathToAdd.getAllValues.asScala.toList should equal(List(Paths.get("test")))
     destinationPathToAdd.getAllValues.asScala.toList should equal(List(destinationPath))
-    optionToAdd.getAllValues.asScala.toList should equal(List(OcflOption.OVERWRITE))
+    optionMoveToAdd.getAllValues.asScala.toList.head should equal(OcflOption.MOVE_SOURCE)
+    optionOverwriteToAdd.getAllValues.asScala.toList.head should equal(OcflOption.OVERWRITE)
   }
 
   "getAllFilePathsOnAnObject" should "throw an exception if the object to be deleted does not exist" in {

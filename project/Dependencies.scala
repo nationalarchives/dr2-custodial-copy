@@ -1,6 +1,6 @@
 import sbt.*
 object Dependencies {
-  private lazy val daAwsClientsVersion = "0.1.111"
+  private lazy val daAwsClientsVersion = "0.1.112"
   private lazy val logbackVersion = "2.24.3"
   private lazy val log4CatsVersion = "2.7.0"
   private lazy val pureConfigVersion = "0.17.8"
@@ -10,12 +10,13 @@ object Dependencies {
   lazy val fs2Core = "co.fs2" %% "fs2-core" % "3.11.0"
   lazy val log4Cats = "org.typelevel" %% "log4cats-core" % log4CatsVersion
   lazy val declineEffect = "com.monovore" %% "decline-effect" % "2.5.0"
+  lazy val h2 = "com.h2database" % "h2" % "2.3.232"
   lazy val log4CatsSlf4j = "org.typelevel" %% "log4cats-slf4j" % log4CatsVersion
   lazy val log4jCore = "org.apache.logging.log4j" % "log4j-core" % logbackVersion
   lazy val log4jSlf4j = "org.apache.logging.log4j" % "log4j-slf4j2-impl" % logbackVersion
   lazy val log4jTemplateJson = "org.apache.logging.log4j" % "log4j-layout-template-json" % logbackVersion
   lazy val mockito = "org.scalatestplus" %% "mockito-5-10" % s"$scalaTestVersion.0"
-  lazy val ocfl = "io.ocfl" % "ocfl-java-core" % "2.2.1"
+  lazy val ocfl = "io.ocfl" % "ocfl-java-core" % "2.2.2"
   lazy val preservicaClient = "uk.gov.nationalarchives" %% "preservica-client-fs2" % "0.0.124"
   lazy val pureConfigCatsEffect = "com.github.pureconfig" %% "pureconfig-cats-effect" % pureConfigVersion
   lazy val pureConfig = "com.github.pureconfig" %% "pureconfig-core" % pureConfigVersion
@@ -28,6 +29,6 @@ object Dependencies {
   lazy val wiremock = "com.github.tomakehurst" % "wiremock" % "3.0.1"
   lazy val http4sEmber = "org.http4s" %% "http4s-ember-server" % http4sVersion
   lazy val http4sDsl = "org.http4s" %% "http4s-dsl" % http4sVersion
-  lazy val doobieCore = "org.tpolecat" %% "doobie-core" % "1.0.0-RC6"
+  lazy val doobieCore = "org.tpolecat" %% "doobie-core" % "1.0.0-RC8"
   lazy val sqlite = "org.xerial" % "sqlite-jdbc" % "3.49.0.0"
 }

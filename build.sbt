@@ -4,7 +4,7 @@ import uk.gov.nationalarchives.sbt.Log4j2MergePlugin.log4j2MergeStrategy
 import scala.sys.process._
 
 ThisBuild / organization := "uk.gov.nationalarchives"
-ThisBuild / scalaVersion := "3.6.3"
+ThisBuild / scalaVersion := "3.6.4"
 
 lazy val tagImage = taskKey[Unit]("Sets a GitHub actions output for the latest tag")
 
@@ -18,7 +18,7 @@ def setupDirectories(serviceName: String) =
   Cmd(
     "RUN",
     s"""apk update && apk upgrade && apk add openjdk21-jre && \\
-               |    mkdir -p /poduser/work /poduser/repo /poduser/version /poduser/database && \\
+               |    mkdir -p /poduser/work/downloads /poduser/repo /poduser/version /poduser/database && \\
                |    mkdir /poduser/logs && \\
                |    touch /poduser/logs/$serviceName.log && \\
                |    chmod 644 /poduser/logs/$serviceName.log && \\
@@ -41,6 +41,7 @@ lazy val custodialCopyBackend = (project in file("custodial-copy-backend"))
     assembly / assemblyJarName := "custodial-copy.jar",
     scalacOptions += "-Wunused:imports",
     libraryDependencies ++= Seq(
+      h2,
       preservicaClient,
       snsClient,
       sqsClient,
@@ -159,6 +160,6 @@ lazy val commonSettings = Seq(
     setupDirectories(name.value),
     Cmd("COPY", s"2/opt/docker/lib/${(assembly / assemblyJarName).value}", s"/opt/${(assembly / assemblyJarName).value}"),
     Cmd("USER", "1002"),
-    ExecCmd("CMD", "java", "-Xmx2g", "-jar", s"/opt/${(assembly / assemblyJarName).value}")
+    Cmd("CMD", s"rm -rf /poduser/work/downloads && java -Xmx2g -jar /opt/${(assembly / assemblyJarName).value}")
   )
 )
