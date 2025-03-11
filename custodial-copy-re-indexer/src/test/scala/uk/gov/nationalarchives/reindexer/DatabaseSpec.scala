@@ -70,7 +70,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach with TableDrivenP
   case class SearchParameters(columnName: String, value: String)
 
   val searchParameters: Gen[SearchParameters] = for {
-    length <- Gen.choose(1, 9)
+    length <- Gen.choose(1, 10)
     columnName <- Gen.listOfN(length, Gen.alphaChar)
     value <- Gen.alphaNumStr
   } yield SearchParameters(columnName.mkString, value)
