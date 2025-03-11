@@ -1,24 +1,19 @@
 package uk.gov.nationalarchives.webapp
 
 import cats.effect.IO
-import org.scalacheck.Prop.forAll
-import org.scalacheck.Properties
-import cats.implicits.*
-import cats.syntax.all.*
-import uk.gov.nationalarchives.webapp.FrontEndRoutes.SearchResponse
-import uk.gov.nationalarchives.utils.TestUtils.*
-import uk.gov.nationalarchives.utils.Utils.OcflFile
-import doobie.Transactor
-import doobie.implicits.*
-import org.scalatest.flatspec.AnyFlatSpec
 import cats.effect.unsafe.implicits.global
+import cats.implicits.*
 import org.scalacheck.Gen
 import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
+import uk.gov.nationalarchives.utils.TestUtils.*
+import uk.gov.nationalarchives.utils.Utils.OcflFile
+import uk.gov.nationalarchives.webapp.FrontEndRoutes.SearchResponse
 
 import java.nio.file.{Files, Paths}
-import java.time.{Instant, ZoneId, LocalDateTime, ZoneOffset}
+import java.time.{Instant, LocalDateTime, ZoneOffset}
 import java.util.UUID
 
 class AssetsSpec extends AnyFlatSpec with BeforeAndAfterAll with ScalaCheckDrivenPropertyChecks:
@@ -31,7 +26,7 @@ class AssetsSpec extends AnyFlatSpec with BeforeAndAfterAll with ScalaCheckDrive
   override def beforeAll(): Unit = createTable()
 
   private def ocflFile(id: UUID, fileId: UUID, zref: String = "zref") =
-    OcflFile(1, id, "name".some, fileId, zref.some, "path".some, "fileName".some, ingestDateTime.some, "sourceId".some, "citation".some)
+    OcflFile(1, id, "name".some, fileId, zref.some, "path".some, "fileName".some, ingestDateTime.some, "sourceId".some, "citation".some, "TDR-2025-RNDM".some)
 
   override def afterAll(): Unit = Files.delete(Paths.get("test-database"))
 
@@ -64,7 +59,7 @@ class AssetsSpec extends AnyFlatSpec with BeforeAndAfterAll with ScalaCheckDrive
     "findFiles" should s"return the correct file for search $searchResponse" in {
       val id = searchResponse.id.getOrElse(UUID.randomUUID)
       (for {
-        file <- createFile(id, searchResponse.zref, searchResponse.sourceId, searchResponse.citation, searchResponse.ingestDateTime)
+        file <- createFile(id, searchResponse.zref, searchResponse.sourceId, searchResponse.citation, searchResponse.ingestDateTime, "PLACEHOLDER-CHANGE-ME".some)
         files <- Assets[IO].findFiles(searchResponse)
       } yield {
         files.size should equal(1)
@@ -79,7 +74,7 @@ class AssetsSpec extends AnyFlatSpec with BeforeAndAfterAll with ScalaCheckDrive
     val dbInstant = LocalDateTime.of(2024, 7, 9, 17, 26, 30).toInstant(ZoneOffset.UTC)
     val searchInstant = LocalDateTime.of(2024, 7, 9, 0, 0, 0).toInstant(ZoneOffset.UTC)
     (for {
-      file <- createFile(id, "zref".some, "sourceId".some, "citation".some, dbInstant.some)
+      file <- createFile(id, "zref".some, "sourceId".some, "citation".some, dbInstant.some, "TDR-2025-RNDM".some)
       files <- Assets[IO].findFiles(SearchResponse(None, None, None, None, searchInstant.some))
     } yield {
       files.size should equal(1)

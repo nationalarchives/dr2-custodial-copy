@@ -32,11 +32,13 @@ object TestUtils:
         .transact(xa)
         .unsafeRunSync()
 
-    def createTable(): Int =
-      sql"CREATE TABLE IF NOT EXISTS files(version int, id text, name text, fileId text, zref text, path text, fileName text, ingestDateTime numeric, sourceId text, citation text, consignmentRef text);".update.run
-        .transact(xa)
-        .unsafeRunSync()
-
+    def createTable(): Unit = {
+      val transaction = for {
+        _ <- sql"DROP TABLE IF EXISTS files".update.run
+        _ <- sql"CREATE TABLE files(version int, id text, name text, fileId text, zref text, path text, fileName text, ingestDateTime numeric, sourceId text, citation text, consignmentRef text);".update.run
+      } yield ()
+      transaction.transact(xa).unsafeRunSync()
+    }
     def addColumn(columnName: String): Unit =
       (fr"ALTER TABLE files ADD COLUMN" ++ Fragment.const(columnName)).update.run.transact(xa).unsafeRunSync()
 

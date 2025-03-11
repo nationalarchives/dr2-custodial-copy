@@ -167,9 +167,10 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
 
     val file = files.head
     file.id should equal(id)
-    file.name.isEmpty should equal(true)
-    file.zref.isEmpty should equal(true)
-    file.fileName.isEmpty should equal(true)
+    file.name should be(empty)
+    file.zref should be(empty)
+    file.fileName should be(empty)
+    file.consignmentRef should be(empty)
   }
 
   "runBuilder" should "call the correct SQS endpoints" in {
