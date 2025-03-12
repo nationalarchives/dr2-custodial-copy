@@ -17,7 +17,7 @@ def tagDockerImage(imageName: String): Unit = {
 
 def scanDockerImage(imageName: String): Unit = {
   val wizPath = Path(sys.env.getOrElse("WIZ_CLI_PATH", ".")).absolutePath
-  s"$wizPath docker scan --image $imageName:${sys.env("DOCKER_TAG")}".!!
+  s"$wizPath docker scan --file-hashes-scan --image $imageName:${sys.env("DOCKER_TAG")}".!!
 }
 
 def setupDirectories(serviceName: String) =
