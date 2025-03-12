@@ -59,7 +59,14 @@ class AssetsSpec extends AnyFlatSpec with BeforeAndAfterAll with ScalaCheckDrive
     "findFiles" should s"return the correct file for search $searchResponse" in {
       val id = searchResponse.id.getOrElse(UUID.randomUUID)
       (for {
-        file <- createFile(id, searchResponse.zref, searchResponse.sourceId, searchResponse.citation, searchResponse.ingestDateTime, "PLACEHOLDER-CHANGE-ME".some)
+        file <- createFile(
+          id,
+          searchResponse.zref,
+          searchResponse.sourceId,
+          searchResponse.citation,
+          searchResponse.ingestDateTime,
+          "PLACEHOLDER-CHANGE-ME".some
+        )
         files <- Assets[IO].findFiles(searchResponse)
       } yield {
         files.size should equal(1)
