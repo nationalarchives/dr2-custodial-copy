@@ -24,7 +24,21 @@ class BuilderSpec extends AnyFlatSpec:
     given Ocfl[IO] = new Ocfl[IO](config):
       override def generateOcflObjects(id: UUID): IO[List[OcflFile]] = IO {
         ids.contains(id) should equal(true)
-        List(OcflFile(1, id, "name".some, fileId, "zref".some, "path".some, "fileName".some, Instant.now.some, "sourceId".some, "citation".some))
+        List(
+          OcflFile(
+            1,
+            id,
+            "name".some,
+            fileId,
+            "zref".some,
+            "path".some,
+            "fileName".some,
+            Instant.now.some,
+            "sourceId".some,
+            "citation".some,
+            "TDR-2025-RNDM".some
+          )
+        )
       }
     given Database[IO] = (files: List[OcflFile]) =>
       IO {

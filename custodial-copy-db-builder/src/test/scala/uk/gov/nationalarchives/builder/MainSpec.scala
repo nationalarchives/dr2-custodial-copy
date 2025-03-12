@@ -79,6 +79,7 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
     firstFile.ingestDateTime.get should equal(Instant.parse("2024-07-03T11:39:15.372Z"))
     firstFile.sourceId.get should equal("SourceID")
     firstFile.citation.get should equal("Citation")
+    firstFile.consignmentRef.get should equal("TDR-2025-RNDM")
 
     secondFile.id should equal(id)
     secondFile.name.get should equal("Title")
@@ -88,6 +89,7 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
     secondFile.ingestDateTime.get should equal(Instant.parse("2024-07-03T11:39:15.372Z"))
     secondFile.sourceId.get should equal("SourceID")
     secondFile.citation.get should equal("Citation")
+    secondFile.consignmentRef.get should equal("TDR-2025-RNDM")
   }
 
   "runBuilder" should "write the correct items to the database for a single content object" in {
@@ -111,6 +113,7 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
     firstFile.ingestDateTime.get should equal(Instant.parse("2024-07-03T11:39:15.372Z"))
     firstFile.sourceId.get should equal("SourceID")
     firstFile.citation.get should equal("Citation")
+    firstFile.consignmentRef.get should equal("TDR-2025-RNDM")
   }
 
   "runBuilder" should "copy the content file to the new location" in {
@@ -164,9 +167,10 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
 
     val file = files.head
     file.id should equal(id)
-    file.name.isEmpty should equal(true)
-    file.zref.isEmpty should equal(true)
-    file.fileName.isEmpty should equal(true)
+    file.name should be(empty)
+    file.zref should be(empty)
+    file.fileName should be(empty)
+    file.consignmentRef should be(empty)
   }
 
   "runBuilder" should "call the correct SQS endpoints" in {

@@ -30,7 +30,8 @@ object Utils:
       fileName: Option[String],
       ingestDateTime: Option[Instant],
       sourceId: Option[String],
-      citation: Option[String]
+      citation: Option[String],
+      consignmentRef: Option[String]
   )
 
   extension (uuid: UUID) def toHeadVersion: ObjectVersionId = ObjectVersionId.head(uuid.toString)

@@ -67,7 +67,8 @@ class FrontEndSpec extends AnyFlatSpec:
               searchResponse.zref,
               ingestDateTime.some,
               "sourceId".some,
-              "citation".some
+              "citation".some,
+              "TDR-2025-RNDM".some
             )
           )
         )
@@ -106,7 +107,8 @@ class FrontEndSpec extends AnyFlatSpec:
               searchResponse.zref,
               ingestDateTime.some,
               "sourceId".some,
-              "citation".some
+              "citation".some,
+              "TDR-2025-RNDM".some
             )
           )
         )
@@ -141,7 +143,8 @@ class FrontEndSpec extends AnyFlatSpec:
               "fileName".some,
               ingestDateTime.some,
               "sourceId".some,
-              "citation".some
+              "citation".some,
+              "TDR-2025-RNDM".some
             )
           )
         )
@@ -187,7 +190,8 @@ class FrontEndSpec extends AnyFlatSpec:
               searchResponse.zref,
               ingestDateTime.some,
               "sourceId".some,
-              "citation".some
+              "citation".some,
+              "TDR-2025-RNDM".some
             )
           )
         )
