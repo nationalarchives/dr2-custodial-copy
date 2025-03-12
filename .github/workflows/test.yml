@@ -11,6 +11,10 @@ jobs:
     uses: nationalarchives/dr2-github-actions/.github/workflows/dr2_test.yml@main
     with:
       repo-name: dr2-custodial-copy
-      test-command: sbt scalafmtCheckAll test
+      test-command: |
+        curl -o wizcli https://wizcli.app.wiz.io/wizcli
+        chmod +x ./wizcli
+        ./wizcli auth --id ${{ secrets.WIZ_CLIENT_ID }} --secret ${{ secrets.WIZ_CLIENT_SECRET }}
+        MANAGEMENT_ACCOUNT_NUMBER=1 DOCKER_TAG=1 WIZ_CLI_PATH=./wizcli sbt scalafmtCheckAll test Docker/publishLocal scanDockerImage
     secrets:
       SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}

@@ -27,6 +27,7 @@ jobs:
         run: |
           curl -o wizcli https://wizcli.app.wiz.io/wizcli
           chmod +x wizcli
+          ./wizcli auth --id ${{ secrets.WIZ_CLIENT_ID }} --secret ${{ secrets.WIZ_CLIENT_SECRET }}
       - id: build-image
         run: | 
           sbt Docker/publish scanDockerImage
