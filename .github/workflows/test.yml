@@ -23,4 +23,4 @@ jobs:
           curl -o wizcli https://wizcli.app.wiz.io/wizcli
           chmod +x ./wizcli
           ./wizcli auth --id ${{ secrets.WIZ_CLIENT_ID }} --secret ${{ secrets.WIZ_CLIENT_SECRET }}
-          MANAGEMENT_ACCOUNT_NUMBER=1 DOCKER_TAG=1 WIZ_CLI_PATH=./wizcli sbt scalafmtCheckAll test Docker/publishLocal scanDockerImage
+          MANAGEMENT_ACCOUNT_NUMBER=1 DOCKER_TAG=1 sbt scalafmtCheckAll test Docker/publishLocal scanDockerImage

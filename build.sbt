@@ -10,13 +10,15 @@ lazy val tagImage = taskKey[Unit]("Sets a GitHub actions output for the latest t
 lazy val scanDockerImage = taskKey[Unit]("Uses the Wiz CLI to scan the image")
 
 def tagDockerImage(imageName: String): Unit = {
+  val wizPath = Path(sys.env.getOrElse("WIZ_CLI_PATH", "./wizcli")).absolutePath
   s"docker pull $imageName:${sys.env("DOCKER_TAG")}".!!
   s"docker tag $imageName:${sys.env("DOCKER_TAG")} $imageName:${sys.env("ENVIRONMENT_TAG")}".!!
   s"docker push $imageName:${sys.env("ENVIRONMENT_TAG")}".!!
+  s"$wizPath docker tag --image $imageName:${sys.env("DOCKER_TAG")}".!!
 }
 
 def scanDockerImage(imageName: String): Unit = {
-  val wizPath = Path(sys.env.getOrElse("WIZ_CLI_PATH", ".")).absolutePath
+  val wizPath = Path(sys.env.getOrElse("WIZ_CLI_PATH", "./wizcli")).absolutePath
   s"$wizPath docker scan --file-hashes-scan --image $imageName:${sys.env("DOCKER_TAG")}".!!
 }
 
