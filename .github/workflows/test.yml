@@ -18,3 +18,5 @@ jobs:
         MANAGEMENT_ACCOUNT_NUMBER=1 DOCKER_TAG=1 WIZ_CLI_PATH=./wizcli sbt scalafmtCheckAll test Docker/publishLocal scanDockerImage
     secrets:
       SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+      WIZ_CLIENT_ID: ${{ secrets.WIZ_CLIENT_ID }}
+      WIZ_CLIENT_SECRET: ${{ secrets.WIZ_CLIENT_SECRET }}
