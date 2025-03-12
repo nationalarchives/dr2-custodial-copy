@@ -7,6 +7,7 @@ ThisBuild / organization := "uk.gov.nationalarchives"
 ThisBuild / scalaVersion := "3.6.4"
 
 lazy val tagImage = taskKey[Unit]("Sets a GitHub actions output for the latest tag")
+lazy val tagScannedImage = taskKey[Unit]("Tags the image with the Wiz CLI")
 lazy val scanDockerImage = taskKey[Unit]("Uses the Wiz CLI to scan the image")
 
 def tagDockerImage(imageName: String): Unit = {
@@ -14,12 +15,16 @@ def tagDockerImage(imageName: String): Unit = {
   s"docker pull $imageName:${sys.env("DOCKER_TAG")}".!!
   s"docker tag $imageName:${sys.env("DOCKER_TAG")} $imageName:${sys.env("ENVIRONMENT_TAG")}".!!
   s"docker push $imageName:${sys.env("ENVIRONMENT_TAG")}".!!
-  s"$wizPath docker tag --image $imageName:${sys.env("DOCKER_TAG")}".!!
 }
 
+def getWizPath = Path(sys.env.getOrElse("WIZ_CLI_PATH", "./wizcli")).absolutePath
+
 def scanDockerImage(imageName: String): Unit = {
-  val wizPath = Path(sys.env.getOrElse("WIZ_CLI_PATH", "./wizcli")).absolutePath
-  s"$wizPath docker scan --file-hashes-scan --image $imageName:${sys.env("DOCKER_TAG")}".!!
+  s"$getWizPath docker scan --file-hashes-scan --image $imageName:${sys.env("DOCKER_TAG")}".!!
+}
+
+def tagScannedImage(imageName: String): Unit = {
+  s"$getWizPath docker tag --image $imageName:${sys.env("DOCKER_TAG")}".!!
 }
 
 def setupDirectories(serviceName: String) =
@@ -122,7 +127,8 @@ lazy val webapp = (project in file("custodial-copy-webapp"))
 lazy val imageSettings = {
   Seq(
     tagImage := tagDockerImage(s"${dockerRepository.value.get}/${(Docker / packageName).value}"),
-    scanDockerImage := scanDockerImage(s"${dockerRepository.value.get}/${(Docker / packageName).value}")
+    scanDockerImage := scanDockerImage(s"${dockerRepository.value.get}/${(Docker / packageName).value}"),
+    tagScannedImage := tagScannedImage(s"${dockerRepository.value.get}/${(Docker / packageName).value}")
   )
 }
 

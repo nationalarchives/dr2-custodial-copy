@@ -30,7 +30,7 @@ jobs:
           ./wizcli auth --id ${{ secrets.WIZ_CLIENT_ID }} --secret ${{ secrets.WIZ_CLIENT_SECRET }}
       - id: build-image
         run: | 
-          sbt Docker/publish scanDockerImage
+          sbt Docker/publish scanDockerImage tagScannedImage
           git tag ${{ steps.next-tag.outputs.next-version }}
           git push origin ${{ steps.next-tag.outputs.next-version }}
           gh workflow run deploy.yml -f environment=intg -f to-deploy=${{ steps.next-tag.outputs.next-version }}
