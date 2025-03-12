@@ -7,11 +7,17 @@ ThisBuild / organization := "uk.gov.nationalarchives"
 ThisBuild / scalaVersion := "3.6.4"
 
 lazy val tagImage = taskKey[Unit]("Sets a GitHub actions output for the latest tag")
+lazy val scanDockerImage = taskKey[Unit]("Uses the Wiz CLI to scan the image")
 
 def tagDockerImage(imageName: String): Unit = {
   s"docker pull $imageName:${sys.env("DOCKER_TAG")}".!!
   s"docker tag $imageName:${sys.env("DOCKER_TAG")} $imageName:${sys.env("ENVIRONMENT_TAG")}".!!
   s"docker push $imageName:${sys.env("ENVIRONMENT_TAG")}".!!
+}
+
+def scanDockerImage(imageName: String): Unit = {
+  val wizPath = Path(sys.env.getOrElse("WIZ_CLI_PATH", ".")).absolutePath
+  s"$wizPath docker scan --image $imageName:${sys.env("DOCKER_TAG")}".!!
 }
 
 def setupDirectories(serviceName: String) =
@@ -34,7 +40,7 @@ lazy val root = (project in file("."))
 
 lazy val custodialCopyBackend = (project in file("custodial-copy-backend"))
   .enablePlugins(DockerPlugin, BuildInfoPlugin)
-  .settings(tagSettings)
+  .settings(imageSettings)
   .settings(commonSettings)
   .settings(
     name := "custodial-copy-backend",
@@ -73,7 +79,7 @@ lazy val utils = (project in file("utils"))
 lazy val reIndexer = (project in file("custodial-copy-re-indexer"))
   .enablePlugins(UniversalPlugin, JavaAppPackaging)
   .settings(commonSettings)
-  .settings(tagSettings)
+  .settings(imageSettings)
   .dependsOn(utils)
   .settings(
     libraryDependencies ++= Seq(
@@ -85,7 +91,7 @@ lazy val reIndexer = (project in file("custodial-copy-re-indexer"))
 lazy val builder = (project in file("custodial-copy-db-builder"))
   .enablePlugins(DockerPlugin)
   .settings(commonSettings)
-  .settings(tagSettings)
+  .settings(imageSettings)
   .settings(
     name := "custodial-copy-db-builder",
     scalacOptions += "-Wunused:imports",
@@ -100,7 +106,7 @@ lazy val builder = (project in file("custodial-copy-db-builder"))
 lazy val webapp = (project in file("custodial-copy-webapp"))
   .enablePlugins(SbtTwirl, DockerPlugin)
   .settings(commonSettings)
-  .settings(tagSettings)
+  .settings(imageSettings)
   .settings(
     assembly / assemblyJarName := "custodial-copy-webapp.jar",
     name := "custodial-copy-webapp",
@@ -111,9 +117,12 @@ lazy val webapp = (project in file("custodial-copy-webapp"))
   )
   .dependsOn(utils)
 
-lazy val tagSettings = Seq(
-  tagImage := tagDockerImage(s"${dockerRepository.value.get}/${(Docker / packageName).value}")
-)
+lazy val imageSettings = {
+  Seq(
+    tagImage := tagDockerImage(s"${dockerRepository.value.get}/${(Docker / packageName).value}"),
+    scanDockerImage := scanDockerImage(s"${dockerRepository.value.get}/${(Docker / packageName).value}")
+  )
+}
 
 lazy val commonSettings = Seq(
   libraryDependencies ++= Seq(
