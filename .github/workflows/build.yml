@@ -23,9 +23,14 @@ jobs:
         uses: nationalarchives/dr2-github-actions/.github/actions/get-next-version@main
         with:
           repo-name: dr2-custodial-copy
+      - name: Install Wiz CLI
+        run: |
+          curl -o wizcli https://wizcli.app.wiz.io/wizcli
+          chmod +x wizcli
+          ./wizcli auth --id ${{ secrets.WIZ_CLIENT_ID }} --secret ${{ secrets.WIZ_CLIENT_SECRET }}
       - id: build-image
         run: | 
-          sbt Docker/publish
+          sbt Docker/publish scanDockerImage tagScannedImage
           git tag ${{ steps.next-tag.outputs.next-version }}
           git push origin ${{ steps.next-tag.outputs.next-version }}
           gh workflow run deploy.yml -f environment=intg -f to-deploy=${{ steps.next-tag.outputs.next-version }}
@@ -33,6 +38,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
           MANAGEMENT_ACCOUNT_NUMBER: ${{ secrets.MANAGEMENT_ACCOUNT }}
           DOCKER_TAG: ${{ steps.next-tag.outputs.next-version }}
+          WIZ_CLI_PATH: ./wizcli
       - name: Send failure message
         uses: nationalarchives/dr2-github-actions/.github/actions/slack-send@main
         if: failure()
