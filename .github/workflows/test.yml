@@ -1,4 +1,4 @@
-name: DR2 Run Lambda Tests
+name: DR2 Run Custodial Copy Tests
 on:
   push:
     branches-ignore:
