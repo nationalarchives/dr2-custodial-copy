@@ -40,6 +40,7 @@ object Ocfl:
       val zref = getIdentifier("BornDigitalRef")
       val sourceId = getIdentifier("SourceID")
       val citation = getIdentifier("NeutralCitation")
+      val consignmentRef = getIdentifier("ConsignmentReference")
 
       val title = ioMetadata
         .flatMap { metadata =>
@@ -72,7 +73,8 @@ object Ocfl:
           nameOpt,
           ingestDateTime,
           sourceId,
-          citation
+          citation,
+          consignmentRef
         )
       }
     }
