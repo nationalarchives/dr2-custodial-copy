@@ -30,6 +30,7 @@ import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPa
 import uk.gov.nationalarchives.custodialcopy.Message.{CoReceivedSnsMessage, IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage, SoReceivedSnsMessage}
 import uk.gov.nationalarchives.custodialcopy.OcflService.MissingAndChangedObjects
 import uk.gov.nationalarchives.*
+import uk.gov.nationalarchives.custodialcopy.Processor.Result
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.{Entity, fromType}
 import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
@@ -434,13 +435,13 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
 
     val snsClient: DASNSClient[IO] = mock[DASNSClient[IO]]
 
-    val duplicatesSoMessageResponse: MessageResponse[ReceivedSnsMessage] =
+    val soMessageResponse: MessageResponse[ReceivedSnsMessage] =
       MessageResponse[ReceivedSnsMessage]("receiptHandle0", Option(soMessage.ref.toString), soMessage)
 
-    val duplicatesIoMessageResponse: MessageResponse[ReceivedSnsMessage] =
+    val ioMessageResponse: MessageResponse[ReceivedSnsMessage] =
       MessageResponse[ReceivedSnsMessage]("receiptHandle1", Option(ioMessage.ref.toString), ioMessage)
 
-    val duplicatesCoMessageResponses: MessageResponse[ReceivedSnsMessage] =
+    val coMessageResponse: MessageResponse[ReceivedSnsMessage] =
       MessageResponse[ReceivedSnsMessage]("receiptHandle2", Option(coMessage.ref.toString), coMessage)
 
     private val potentialParentRef = if parentRefExists then Some(ioId) else None
@@ -635,6 +636,13 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val xmlValidator: ValidateXmlAgainstXsd[IO] = spy(ValidateXmlAgainstXsd[IO](XipXsdSchemaV7))
 
     val processor: Processor = new Processor(config, sqsClient, ocflService, entityClient, xmlValidator, snsClient)
+
+    val processMessage: IO[Result] = entityType match {
+      case ContentObject     => processor.process(coMessageResponse)
+      case InformationObject => processor.process(ioMessageResponse)
+      case unsupportedObject => throw new Exception(s"Unsupported object: $unsupportedObject")
+    }
+
     val ioXmlToValidate: Elem =
       <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
