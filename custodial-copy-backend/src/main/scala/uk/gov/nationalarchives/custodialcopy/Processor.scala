@@ -275,8 +275,8 @@ class Processor(
 
       missingAndChangedObjects <- ocflService.getMissingAndChangedObjects(custodialCopyObjects)
 
-      missingObjectsPaths <- missingAndChangedObjects.missingObjects.map(download).sequence
-      changedObjectsPaths <- missingAndChangedObjects.changedObjects.map(download).sequence
+      missingObjectsPaths <- missingAndChangedObjects.missingObjects.traverse(download)
+      changedObjectsPaths <- missingAndChangedObjects.changedObjects.traverse(download)
 
       _ <- ocflService.createObjects(missingObjectsPaths)
       _ <- logger.info(s"${missingObjectsPaths.length} objects created")
@@ -317,7 +317,7 @@ class Processor(
         if messageResponse.message.deleted && entityTypeDeletionSupported then processDeletedEntities(messageResponse)
         else processNonDeletedMessages(messageResponse)
       _ <- IO.whenA(snsMessages.nonEmpty) {
-        snsClient.publish[SendSnsMessage](config.topicArn)(snsMessages).map(_ => ())
+        snsClient.publish[SendSnsMessage](config.topicArn)(snsMessages).void
       }
       _ <- logger.info(s"${snsMessages.length} 'created/updated objects' messages published to SNS")
     } yield Success(messageResponse.message.ref)
