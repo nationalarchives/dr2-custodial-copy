@@ -4,23 +4,20 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import fs2.io.file.Path
 import org.mockito.ArgumentMatchers
-import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.{doReturn, times, verify, when}
+import org.mockito.Mockito.{doReturn, times, verify}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
-import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.MetadataObject
 import uk.gov.nationalarchives.custodialcopy.Main.IdWithSourceAndDestPaths
 import uk.gov.nationalarchives.custodialcopy.Message.{IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
-import uk.gov.nationalarchives.custodialcopy.OcflService.MissingAndChangedObjects
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Deleted, Updated}
-import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Metadata, MetadataAndPotentialBitstreams}
+import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Bitstream, Metadata, MetadataAndPotentialBitstreams}
 import uk.gov.nationalarchives.custodialcopy.Processor.Result.{Failure, Success}
+import uk.gov.nationalarchives.custodialcopy.testUtils.ExternalServicesTestUtils.*
+import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.IoMetadata
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
-import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
-import uk.gov.nationalarchives.custodialcopy.testUtils.ExternalServicesTestUtils.*
 
 import java.util.UUID
 import scala.xml.Elem
@@ -28,7 +25,7 @@ import scala.xml.Elem
 class ProcessorTest extends AnyFlatSpec with MockitoSugar {
   "process" should "delete the file paths under an IO, if an IO message has 'deleted' set to 'true'" in {
     val paths = List("destinationPathToDelete", "destinationPath2ToDelete")
-    val utils = new ProcessorTestUtils(pathsOfObjectsUnderIo = paths)
+    val utils = new ProcessorTestUtils(InformationObject, pathsOfObjectsUnderIo = paths)
     val message: IoReceivedSnsMessage = utils.duplicatesIoMessageResponse.message.asInstanceOf[IoReceivedSnsMessage]
     val response = MessageResponse[ReceivedSnsMessage](
       "receiptHandle1",
@@ -53,7 +50,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
   }
 
   "process" should "return a Failure if a CO message has 'deleted' set to 'true'" in {
-    val utils = new ProcessorTestUtils()
+    val utils = new ProcessorTestUtils(ContentObject)
 
     val messageResponse = MessageResponse[ReceivedSnsMessage](
       "receiptHandle1",
@@ -81,43 +78,55 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     )
   }
 
-  "process" should "retrieve the metadata if an information object update is received" in {
-    val utils = new ProcessorTestUtils()
+  "process" should "retrieve the metadata if an Information Object update is received" in {
+    val utils = new ProcessorTestUtils(InformationObject, Some(true))
+    val id = utils.ioId
 
     utils.processor.process(utils.duplicatesIoMessageResponse).unsafeRunSync()
     utils.verifyCallsAndArguments(
       repTypes = Nil,
       repIndexes = Nil,
-      createdIdSourceAndDestinationPathAndId = List(Nil, Nil)
+      createdIdSourceAndDestinationPathAndId = List(Nil, List(IdWithSourceAndDestPaths(id, Path(s"$id/changed").toNioPath, "destinationPath"))),
+      snsMessagesToSend = List(SendSnsMessage(InformationObject, id, Metadata, Updated, "SourceIDValue"))
     )
   }
 
   "process" should "retrieve the bitstream info for a CO message" in {
-    val utils = new ProcessorTestUtils()
+    val utils = new ProcessorTestUtils(ContentObject)
     val id = utils.coId
     val parentRef = utils.ioId
 
     utils.processor.process(utils.duplicatesCoMessageResponses).unsafeRunSync()
 
+    val bitstreamCalls = 1
+    val tableItemIdentifier = UUID.fromString("90dfb573-7419-4e89-8558-6cfa29f8fb16")
     utils.verifyCallsAndArguments(
-      1,
+      bitstreamCalls,
       1,
       1,
       idsOfEntityToGetMetadataFrom = List(id),
       entityTypesToGetMetadataFrom = List(ContentObject),
       xmlRequestsToValidate = List(utils.coXmlToValidate),
-      createdIdSourceAndDestinationPathAndId = List(Nil, Nil),
+      numOfStreamBitstreamContentCalls = bitstreamCalls,
+      createdIdSourceAndDestinationPathAndId = List(
+        List(IdWithSourceAndDestPaths(id, Path(s"$id/missing").toNioPath, "destinationPath")),
+        List(IdWithSourceAndDestPaths(id, Path(s"$id/missing").toNioPath, "destinationPath"))
+      ),
       drosToLookup = List(
         List(
           s"$parentRef/Preservation_1/$id/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
         )
+      ),
+      snsMessagesToSend = List(
+        SendSnsMessage(ContentObject, id, Bitstream, Created, tableItemIdentifier),
+        SendSnsMessage(ContentObject, id, Metadata, Created, tableItemIdentifier)
       )
     )
   }
 
   "process" should "return a Failure if a Content Object does not have a parent" in {
-    val utils = new ProcessorTestUtils(parentRefExists = false)
+    val utils = new ProcessorTestUtils(ContentObject, parentRefExists = false)
 
     val response = utils.processor.process(utils.duplicatesCoMessageResponses).unsafeRunSync()
 
@@ -137,8 +146,9 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
   }
 
   "process" should "return a Failure if a Content Object belongs to more than 1 Representation type" in {
-    val utils = new ProcessorTestUtils(urlsToRepresentations =
-      Seq(
+    val utils = new ProcessorTestUtils(
+      ContentObject,
+      urlsToRepresentations = Seq(
         "http://testurl/representations/Preservation/1",
         "http://testurl/representations/Preservation/2",
         "http://testurl/representations/Access/1"
@@ -167,51 +177,61 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
   }
 
   "process" should "generate the correct destination paths for IO metadata" in {
-    val utils = new ProcessorTestUtils()
+    val utils = new ProcessorTestUtils(InformationObject)
     val id = utils.coId
     val parentRef = utils.ioId
 
     utils.processor.process(utils.duplicatesIoMessageResponse).unsafeRunSync()
     utils.verifyCallsAndArguments(
-      0,
-      0,
       idsOfEntityToGetMetadataFrom = List(parentRef),
       entityTypesToGetMetadataFrom = List(InformationObject),
       xmlRequestsToValidate = List(utils.ioXmlToValidate),
-      createdIdSourceAndDestinationPathAndId = List(Nil, Nil),
+      createdIdSourceAndDestinationPathAndId = List(
+        List(IdWithSourceAndDestPaths(parentRef, Path(s"$parentRef/missing").toNioPath, "destinationPath")),
+        List(IdWithSourceAndDestPaths(parentRef, Path(s"$parentRef/missing").toNioPath, "destinationPath"))
+      ),
       repTypes = Nil,
       repIndexes = Nil,
-      drosToLookup = List(
-        List(s"$parentRef/IO_Metadata.xml")
-      )
+      snsMessagesToSend = List(SendSnsMessage(InformationObject, parentRef, Metadata, Created, "SourceIDValue"))
     )
   }
 
   "process" should "generate the correct destination paths for CO metadata and CO bitstreams" in {
-    val utils = new ProcessorTestUtils()
+    val utils = new ProcessorTestUtils(ContentObject)
     val id = utils.coId
     val parentRef = utils.ioId
 
     utils.processor.process(utils.duplicatesCoMessageResponses).unsafeRunSync()
+
+    val bitstreamCalls = 1
+    val tableItemIdentifier = UUID.fromString("90dfb573-7419-4e89-8558-6cfa29f8fb16")
     utils.verifyCallsAndArguments(
-      1,
+      bitstreamCalls,
       1,
       1,
       idsOfEntityToGetMetadataFrom = List(id),
       entityTypesToGetMetadataFrom = List(ContentObject),
       xmlRequestsToValidate = List(utils.coXmlToValidate),
-      createdIdSourceAndDestinationPathAndId = List(Nil, Nil),
+      numOfStreamBitstreamContentCalls = bitstreamCalls,
+      createdIdSourceAndDestinationPathAndId = List(
+        List(IdWithSourceAndDestPaths(id, Path(s"$id/missing").toNioPath, "destinationPath")),
+        List(IdWithSourceAndDestPaths(id, Path(s"$id/missing").toNioPath, "destinationPath"))
+      ),
       drosToLookup = List(
         List(
           s"$parentRef/Preservation_1/$id/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
         )
+      ),
+      snsMessagesToSend = List(
+        SendSnsMessage(ContentObject, id, Bitstream, Created, tableItemIdentifier),
+        SendSnsMessage(ContentObject, id, Metadata, Created, tableItemIdentifier)
       )
     )
   }
 
   "process" should "not create nor update objects if no objects are missing or changed" in {
-    val utils = new ProcessorTestUtils()
+    val utils = new ProcessorTestUtils(InformationObject, Some(false))
 
     utils.processor.process(utils.duplicatesIoMessageResponse).unsafeRunSync()
     utils.verifyCallsAndArguments(
@@ -222,28 +242,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
   }
 
   "process" should "update but not create if the object has changed" in {
-    val utils = new ProcessorTestUtils()
+    val utils = new ProcessorTestUtils(InformationObject, Some(true))
     val id = utils.ioId
-
-    when(utils.ocflService.getMissingAndChangedObjects(any[List[MetadataObject]]))
-      .thenReturn(
-        IO.pure(
-          MissingAndChangedObjects(
-            Nil,
-            List(
-              MetadataObject(
-                id,
-                Some("Preservation_1"),
-                "changed",
-                List(Checksum("sha256", "checksum")),
-                utils.ioConsolidatedMetadata,
-                "destinationPath",
-                "SourceIDValue"
-              )
-            )
-          )
-        )
-      )
 
     utils.processor.process(utils.duplicatesIoMessageResponse).unsafeRunSync()
     utils.verifyCallsAndArguments(
@@ -262,28 +262,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
   }
 
   "process" should "create but not update if the object is missing" in {
-    val utils = new ProcessorTestUtils()
+    val utils = new ProcessorTestUtils(InformationObject)
     val id = utils.ioId
-
-    when(utils.ocflService.getMissingAndChangedObjects(any[List[MetadataObject]]))
-      .thenReturn(
-        IO.pure(
-          MissingAndChangedObjects(
-            List(
-              MetadataObject(
-                id,
-                Some("Preservation_1"),
-                "missing",
-                List(Checksum("sha256", "checksum")),
-                utils.ioConsolidatedMetadata,
-                "destinationPath",
-                "SourceIDValue"
-              )
-            ),
-            Nil
-          )
-        )
-      )
 
     utils.processor.process(utils.duplicatesIoMessageResponse).unsafeRunSync()
 
@@ -298,28 +278,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
   }
 
   "process" should "update a changed file" in {
-    val utils = new ProcessorTestUtils()
+    val utils = new ProcessorTestUtils(InformationObject, Some(true))
     val changedFileId = utils.ioId
-
-    when(utils.ocflService.getMissingAndChangedObjects(any[List[MetadataObject]]))
-      .thenReturn(
-        IO.pure(
-          MissingAndChangedObjects(
-            Nil,
-            List(
-              MetadataObject(
-                changedFileId,
-                Some("Preservation_1"),
-                "changed",
-                List(Checksum("sha256", "checksum")),
-                utils.ioConsolidatedMetadata,
-                "destinationPath2",
-                "SourceIDValue"
-              )
-            )
-          )
-        )
-      )
 
     val response: MessageResponse[ReceivedSnsMessage] = MessageResponse[ReceivedSnsMessage](
       "receiptHandle2",
@@ -336,7 +296,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       xmlRequestsToValidate = List(utils.ioXmlToValidate),
       createdIdSourceAndDestinationPathAndId = List(
         Nil,
-        List(IdWithSourceAndDestPaths(changedFileId, Path(s"$changedFileId/changed").toNioPath, "destinationPath2"))
+        List(IdWithSourceAndDestPaths(changedFileId, Path(s"$changedFileId/changed").toNioPath, "destinationPath"))
       ),
       drosToLookup = List(
         List(
@@ -350,29 +310,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
   }
 
   "process" should "update a missing file" in {
-    val utils = new ProcessorTestUtils()
-    val missingFileId = UUID.randomUUID()
-    val changedFileId = utils.ioId
-
-    when(utils.ocflService.getMissingAndChangedObjects(any[List[MetadataObject]]))
-      .thenReturn(
-        IO.pure(
-          MissingAndChangedObjects(
-            List(
-              MetadataObject(
-                missingFileId,
-                Some("Preservation_1"),
-                "missing",
-                List(Checksum("sha256", "checksum")),
-                utils.ioConsolidatedMetadata,
-                "destinationPath",
-                "SourceIDValue"
-              )
-            ),
-            Nil
-          )
-        )
-      )
+    val utils = new ProcessorTestUtils(InformationObject)
+    val missingFileId = utils.ioId
 
     val response: MessageResponse[ReceivedSnsMessage] =
       MessageResponse[ReceivedSnsMessage](
@@ -403,7 +342,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
   }
 
   "process" should "throw an Exception if XML string passed to validator is invalid" in {
-    val utils = new ProcessorTestUtils()
+    val utils = new ProcessorTestUtils(InformationObject)
 
     doReturn(
       IO.pure(
@@ -450,7 +389,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
   }
 
   "process" should "throw an Exception if an Unexpected Exception was returned from the OCFL service" in {
-    val utils = new ProcessorTestUtils(throwErrorInMissingAndChangedObjects = true)
+    val utils = new ProcessorTestUtils(InformationObject, throwErrorInMissingAndChangedObjects = true)
 
     val res = utils.processor.process(utils.duplicatesIoMessageResponse).attempt.unsafeRunSync()
 
@@ -463,7 +402,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
   }
 
   "process" should "return the ref of the message passed to it" in {
-    val utils = new ProcessorTestUtils()
+    val utils = new ProcessorTestUtils(InformationObject)
 
     val idResponse = utils.processor.process(utils.duplicatesIoMessageResponse).unsafeRunSync()
 
@@ -471,7 +410,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
   }
 
   "commit" should "call commit in the ocfl service" in {
-    val utils = new ProcessorTestUtils(throwErrorInMissingAndChangedObjects = true)
+    val utils = new ProcessorTestUtils(InformationObject, throwErrorInMissingAndChangedObjects = true)
     val id = UUID.randomUUID()
     utils.processor.commitStagedChanges(id).unsafeRunSync()
 

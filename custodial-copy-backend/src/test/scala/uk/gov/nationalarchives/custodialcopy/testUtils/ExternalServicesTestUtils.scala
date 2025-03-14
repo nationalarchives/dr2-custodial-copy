@@ -24,8 +24,8 @@ import software.amazon.awssdk.services.sns.model.PublishBatchResponse
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.utils.TestUtils.*
-import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.MetadataObject
-import uk.gov.nationalarchives.custodialcopy.{CustodialCopyObject, Message, OcflService, Processor}
+import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.{FileObject, MetadataObject}
+import uk.gov.nationalarchives.custodialcopy.{Checksum, CustodialCopyObject, Message, OcflService, Processor}
 import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
 import uk.gov.nationalarchives.custodialcopy.Message.{CoReceivedSnsMessage, IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage, SoReceivedSnsMessage}
 import uk.gov.nationalarchives.custodialcopy.OcflService.MissingAndChangedObjects
@@ -71,7 +71,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       metadataElems: Seq[Elem] = Nil,
       bitstreamInfo1: Seq[BitStreamInfo] = Nil,
       bitstreamInfo2: Seq[BitStreamInfo] = Nil,
-      addAccessRepUrl: Boolean = false
+      urlsToRepresentations: Seq[String]
   ) = {
     val preservicaClient = mock[EntityClient[IO, Fs2Streams[IO]]]
     val entityType = Some(ContentObject)
@@ -79,11 +79,6 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       Entity(entityType, coId, None, None, deleted = false, entityType.map(_.entityPath), parent = Option(ioId))
     val informationObjectResponse =
       Entity(entityType, ioId, None, None, deleted = false, entityType.map(_.entityPath), parent = Option(UUID.randomUUID()))
-
-    val urlToRepresentations = Seq(
-      s"http://localhost/api/entity/information-objects/$ioId/representations/Preservation/1"
-    ) ++ (if addAccessRepUrl then Seq(s"http://localhost/api/entity/information-objects/$ioId/representations/Access/1")
-          else Nil)
 
     val contentObjectsFromPreservica =
       Seq((coId, entityHasBeenDeleted), (coId2, false), (coId3, false)).map { (id, hasBeenDeleted) =>
@@ -145,7 +140,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     ).when(preservicaClient).metadataForEntity(ArgumentMatchers.argThat(new EntityWithSpecificType("CO")))
 
     when(preservicaClient.getUrlsToIoRepresentations(ArgumentMatchers.eq(ioId), any[Option[RepresentationType]]))
-      .thenReturn(IO(urlToRepresentations))
+      .thenReturn(IO(urlsToRepresentations))
     when(
       preservicaClient.getContentObjectsFromRepresentation(
         ArgumentMatchers.eq(ioId),
@@ -319,6 +314,11 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     lazy val expectedCoFileBitstream2DestinationPath: String =
       s"$ioId/Preservation_1/$coId1/derived/g2/${bitstreamInfo1Responses.last.name}"
 
+    lazy private val urlToRepresentations = Seq(
+      s"http://localhost/api/entity/information-objects/$ioId/representations/Preservation/1"
+    ) ++ (if addAccessRepUrl then Seq(s"http://localhost/api/entity/information-objects/$ioId/representations/Access/1")
+          else Nil)
+
     val preservicaClient: EntityClient[IO, Fs2Streams[IO]] = mockPreservicaClient(
       ioId,
       coId1,
@@ -328,7 +328,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       metadataElems = metadataElemsPreservicaResponse,
       bitstreamInfo1 = bitstreamInfo1Responses,
       bitstreamInfo2 = bitstreamInfo2Responses,
-      addAccessRepUrl
+      urlsToRepresentations = urlToRepresentations
     )
 
     private val ioMetadataInRepo =
@@ -412,12 +412,12 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
   }
 
   class ProcessorTestUtils(
+      entityType: EntityType,
+      objectHasChanged: Option[Boolean] = None, // None means object doesn't exist
       genVersion: Int = 1,
       genType: GenerationType = Original,
       parentRefExists: Boolean = true,
       urlsToRepresentations: Seq[String] = Seq("http://testurl/representations/Preservation/1"),
-      missingObjects: List[CustodialCopyObject] = Nil,
-      changedObjects: List[CustodialCopyObject] = Nil,
       pathsOfObjectsUnderIo: List[String] = Nil,
       throwErrorInMissingAndChangedObjects: Boolean = false
   ) {
@@ -431,7 +431,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     lazy val ioMessage: IoReceivedSnsMessage = IoReceivedSnsMessage(ioId, false)
     lazy val soMessage: SoReceivedSnsMessage = SoReceivedSnsMessage(soId, false)
     val sqsClient: DASQSClient[IO] = mock[DASQSClient[IO]]
-    val entityClient: EntityClient[IO, Fs2Streams[IO]] = mock[EntityClient[IO, Fs2Streams[IO]]]
+
     val snsClient: DASNSClient[IO] = mock[DASNSClient[IO]]
 
     val duplicatesSoMessageResponse: MessageResponse[ReceivedSnsMessage] =
@@ -455,6 +455,9 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       Some("CoTitle"),
       potentialParentRef
     )
+    val entityClient: EntityClient[IO, Fs2Streams[IO]] =
+      mockPreservicaClient(ioId, coId, bitstreamInfo1 = Seq(bitstreamFromApi), urlsToRepresentations = urlsToRepresentations)
+
     val bitstreamFromEndpoint: Seq[Elem] = Seq(
       <Bitstream><Filename>{bitstreamFromApi.name}</Filename> <FileSize>{
         bitstreamFromApi.fileSize
@@ -502,6 +505,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
 
     private val getBitstreamsCoIdCaptor: ArgumentCaptor[UUID] = ArgumentCaptor.forClass(classOf[UUID])
     private val metadataEntityCaptor: ArgumentCaptor[Entity] = ArgumentCaptor.forClass(classOf[Entity])
+    private val fileObjectUrl: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
     private val identifiersEntityCaptor: ArgumentCaptor[Entity] = ArgumentCaptor.forClass(classOf[Entity])
     private val repTypeCaptor: ArgumentCaptor[RepresentationType] = ArgumentCaptor.forClass(classOf[RepresentationType])
     private val repIndexCaptor: ArgumentCaptor[Int] = ArgumentCaptor.forClass(classOf[Int])
@@ -520,11 +524,46 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val commitIdCaptor: ArgumentCaptor[UUID] = ArgumentCaptor.forClass(classOf[UUID])
 
     private def mockOcflService(
-        missingObjects: List[CustodialCopyObject] = Nil,
-        changedObjects: List[CustodialCopyObject] = Nil,
+        entityType: EntityType,
+        objectHasChanged: Option[Boolean],
         pathsOfObjects: List[String] = Nil,
         throwErrorInMissingAndChangedObjects: Boolean = false
     ): OcflService = {
+      def generateObjects(entityType: EntityType, missingOrChanged: String): List[CustodialCopyObject] = {
+        val (id, consolidatedMetadata, fileObject, tableItemIdentifier) = entityType match {
+          case ContentObject =>
+            val identifier = UUID.fromString("90dfb573-7419-4e89-8558-6cfa29f8fb16")
+            (
+              coId,
+              coConsolidatedMetadata,
+              List(
+                FileObject(
+                  coId,
+                  missingOrChanged,
+                  List(Checksum("sha256", "checksum")),
+                  "url",
+                  "destinationPath",
+                  identifier
+                )
+              ),
+              identifier
+            )
+          case InformationObject => (ioId, ioConsolidatedMetadata, Nil, "SourceIDValue")
+          case unsupportedEntity => throw new Exception(s"Unexpected Entity type: ${unsupportedEntity.entityTypeShort}")
+        }
+
+        fileObject :+
+          MetadataObject(
+            id,
+            Some("Preservation_1"),
+            missingOrChanged,
+            List(Checksum("sha256", "checksum")),
+            consolidatedMetadata,
+            "destinationPath",
+            tableItemIdentifier
+          )
+      }
+
       val ocflService = mock[OcflService]
       Mockito.reset(ocflService)
       if throwErrorInMissingAndChangedObjects then
@@ -532,7 +571,15 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
           .thenThrow(new RuntimeException("Unexpected Error"))
       else
         when(ocflService.getMissingAndChangedObjects(any[List[MetadataObject]]))
-          .thenReturn(IO.pure(MissingAndChangedObjects(missingObjects, changedObjects)))
+          .thenReturn(
+            IO.pure(
+              objectHasChanged match {
+                case None => MissingAndChangedObjects(generateObjects(entityType, "missing"), Nil)
+                case Some(objectChanged) =>
+                  MissingAndChangedObjects(Nil, if objectChanged then generateObjects(entityType, "changed") else Nil)
+              }
+            )
+          )
       when(ocflService.createObjects(any[List[IdWithSourceAndDestPaths]])).thenReturn(IO.unit)
       when(ocflService.getAllFilePathsOnAnObject(any[UUID])).thenReturn(IO.pure(pathsOfObjects))
       when(ocflService.deleteObjects(any[UUID], any[List[String]])).thenReturn(IO.unit)
@@ -540,23 +587,12 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       ocflService
     }
 
-    when(entityClient.getBitstreamInfo(coId))
-      .thenReturn(
-        IO(
-          Seq(bitstreamFromApi)
-        )
-      )
-    potentialParentRef.foreach { parentRef =>
-      when(entityClient.getUrlsToIoRepresentations(parentRef, None))
-        .thenReturn(IO.pure(urlsToRepresentations))
-
-      urlsToRepresentations.foreach { url =>
-        val urlSplit = url.split("/").reverse
-        val repType = allRepresentationTypes(urlSplit(1))
-        val repIndex = urlSplit.head.toInt
-        when(entityClient.getContentObjectsFromRepresentation(parentRef, repType, repIndex))
-          .thenReturn(fromType[IO]("CO", coId, None, None, deleted = false, parent = Some(parentRef)).map(Seq(_)))
-      }
+    urlsToRepresentations.foreach { url =>
+      val urlSplit = url.split("/").reverse
+      val repType = allRepresentationTypes(urlSplit(1))
+      val repIndex = urlSplit.head.toInt
+      when(entityClient.getContentObjectsFromRepresentation(ioId, repType, repIndex))
+        .thenReturn(fromType[IO]("CO", coId, None, None, deleted = false, parent = Some(ioId)).map(Seq(_)))
     }
 
     doReturn(
@@ -595,7 +631,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     when(sqsClient.deleteMessage(ArgumentMatchers.eq("queueUrl"), ArgumentMatchers.startsWith("receiptHandle")))
       .thenReturn(IO.pure(DeleteMessageResponse.builder.build))
 
-    val ocflService: OcflService = mockOcflService(missingObjects, changedObjects, pathsOfObjectsUnderIo, throwErrorInMissingAndChangedObjects)
+    val ocflService: OcflService = mockOcflService(entityType, objectHasChanged, pathsOfObjectsUnderIo, throwErrorInMissingAndChangedObjects)
     val xmlValidator: ValidateXmlAgainstXsd[IO] = spy(ValidateXmlAgainstXsd[IO](XipXsdSchemaV7))
 
     val processor: Processor = new Processor(config, sqsClient, ocflService, entityClient, xmlValidator, snsClient)
@@ -629,6 +665,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         idsOfEntityToGetMetadataFrom: List[UUID] = List(ioId),
         entityTypesToGetMetadataFrom: List[EntityType] = List(InformationObject),
         xmlRequestsToValidate: List[Elem] = List(ioXmlToValidate),
+        numOfStreamBitstreamContentCalls: Int = 0,
         createdIdSourceAndDestinationPathAndId: List[List[IdWithSourceAndDestPaths]] = Nil,
         drosToLookup: List[List[String]] = List(List(s"$ioId/IO_Metadata.xml")),
         destinationPathsToDelete: List[String] = Nil,
@@ -644,6 +681,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         repIndexCaptor.capture()
       )
       verify(entityClient, times(idsOfEntityToGetMetadataFrom.length)).metadataForEntity(metadataEntityCaptor.capture)
+      verify(entityClient, times(numOfStreamBitstreamContentCalls)).streamBitstreamContent(any())(fileObjectUrl.capture, any())
 
       verify(ocflService, times(drosToLookup.length)).getMissingAndChangedObjects(
         droLookupCaptor.capture()
@@ -677,6 +715,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
 
       repTypeCaptor.getAllValues.asScala.toList should equal(repTypes)
       repIndexCaptor.getAllValues.asScala.toList should equal(repIndexes)
+
+      if numOfStreamBitstreamContentCalls > 0 then fileObjectUrl.getAllValues.asScala.toList should equal(List.fill(numOfStreamBitstreamContentCalls)("url"))
 
       val expectedIdsWithSourceAndDestPath = createdIdSourceAndDestinationPathAndId.flatten
       idWithSourceAndDestPathsCaptor.getAllValues.asScala.toList.flatten.zipWithIndex.foreach { case (capturedIdWithSourceAndDestPath, index) =>
