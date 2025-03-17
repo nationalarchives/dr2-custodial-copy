@@ -37,6 +37,7 @@ object Database:
       } yield (updateCount, deleteCount)
       for {
         logger <- Slf4jLogger.create[F]
+        _ <- logger.info(s"CCDBW: Writing files to database with consignmentRefs: ${files.map(_.consignmentRef).mkString(", ")}")
         (updateCount, deleteCount) <- deleteAndInsert.transact(xa)
         _ <- logger.info(s"$updateCount rows updated. $deleteCount rows deleted")
       } yield ()

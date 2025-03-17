@@ -30,11 +30,17 @@ object Ocfl:
 
       val ioMetadata = files.find(_.getPath.contains(s"IO_Metadata.xml")).map(loadMetadataXml)
 
-      def getIdentifier(identifierName: String) = ioMetadata
+      def getIdentifier(identifierName: String): Option[String] = ioMetadata
         .flatMap { metadata =>
-          (metadata \ "Identifier").toList
-            .find(i => (i \ "Type").text == identifierName)
-            .map(i => (i \ "Value").text)
+          val identifiers = (metadata \ "Identifier").toList
+          println(s"OCFLGEN1: Found list of identifiers ${identifiers.map(_.text.mkString(", "))} identifiers in metadata")
+
+          val foundIdentifier = identifiers.find(i => (i \ "Type").text == identifierName)
+          println(s"OCFLGEN2: Found identifier ${foundIdentifier.map(_.text)} identifiers in metadata")
+
+          val itsValue = foundIdentifier.map(i => (i \ "Value").text)
+          println(s"OCFLGEN3: Found its value as ${itsValue.map(_.toString)} identifiers in metadata")
+          itsValue
         }
 
       val zref = getIdentifier("BornDigitalRef")
