@@ -17,7 +17,7 @@ object Builder:
   given impl[F[_]: Async: Ocfl: Database](using configuration: Configuration): Builder[F] = messages =>
     for {
       logger <- Slf4jLogger.create[F]
-      _ <- logger.info(s"Received messages : ${messages.map(_.message.id.toString).mkString(",") } messages from queue")
+      _ <- logger.info(s"Received messages : ${messages.map(_.message.id.toString).mkString(",")} messages from queue")
       files <- messages.map(_.message.id).map(Ocfl[F].generateOcflObjects).sequence
       _ <- Database[F].write(files.flatten)
     } yield ()
