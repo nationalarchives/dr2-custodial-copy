@@ -11,7 +11,6 @@ lazy val tagScannedImage = taskKey[Unit]("Tags the image with the Wiz CLI")
 lazy val scanDockerImage = taskKey[Unit]("Uses the Wiz CLI to scan the image")
 
 def tagDockerImage(imageName: String): Unit = {
-  val wizPath = Path(sys.env.getOrElse("WIZ_CLI_PATH", "./wizcli")).absolutePath
   s"docker pull $imageName:${sys.env("DOCKER_TAG")}".!!
   s"docker tag $imageName:${sys.env("DOCKER_TAG")} $imageName:${sys.env("ENVIRONMENT_TAG")}".!!
   s"docker push $imageName:${sys.env("ENVIRONMENT_TAG")}".!!
