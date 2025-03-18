@@ -589,9 +589,9 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     }
 
     urlsToRepresentations.foreach { url =>
-      val urlSplit = url.split("/").reverse
-      val repType = allRepresentationTypes(urlSplit(1))
-      val repIndex = urlSplit.head.toInt
+      val urlSegments = url.split("/").reverse
+      val repType = allRepresentationTypes(urlSegments(1))
+      val repIndex = urlSegments.head.toInt
       when(entityClient.getContentObjectsFromRepresentation(ioId, repType, repIndex))
         .thenReturn(fromType[IO]("CO", coId, None, None, deleted = false, parent = Some(ioId)).map(Seq(_)))
     }
@@ -724,7 +724,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       repTypeCaptor.getAllValues.asScala.toList should equal(repTypes)
       repIndexCaptor.getAllValues.asScala.toList should equal(repIndexes)
 
-      if numOfStreamBitstreamContentCalls > 0 then fileObjectUrl.getAllValues.asScala.toList should equal(List.fill(numOfStreamBitstreamContentCalls)("url"))
+      fileObjectUrl.getAllValues.asScala.toList should equal(List.fill(numOfStreamBitstreamContentCalls)("url"))
 
       val expectedIdsWithSourceAndDestPath = createdIdSourceAndDestinationPathAndId.flatten
       idWithSourceAndDestPathsCaptor.getAllValues.asScala.toList.flatten.zipWithIndex.foreach { case (capturedIdWithSourceAndDestPath, index) =>
