@@ -38,7 +38,8 @@ object FrontEndRoutes:
         form.value("zref"),
         form.value("sourceId"),
         form.value("citation"),
-        form.toInstant
+        form.toInstant,
+        form.value("consignmentRef")
       )
 
   given QueryParamDecoder[UUID] = QueryParamDecoder[String].map(UUID.fromString)
@@ -49,14 +50,16 @@ object FrontEndRoutes:
   private object CitationQueryParam extends OptionalQueryParamDecoderMatcher[String]("citation")
   private object IngestDateQueryParam extends OptionalQueryParamDecoderMatcher[Instant]("ingestDate")
   private object ErrorMessageQueryParam extends QueryParamDecoderMatcher[String]("message")
+  private object ConsignmentRefQueryParam extends OptionalQueryParamDecoderMatcher[String]("consignmentRef")
 
-  case class SearchResponse(id: Option[UUID], zref: Option[String], sourceId: Option[String], citation: Option[String], ingestDateTime: Option[Instant]) {
+  case class SearchResponse(id: Option[UUID], zref: Option[String], sourceId: Option[String], citation: Option[String], ingestDateTime: Option[Instant], consignmentRef: Option[String]) {
     private val params: Vector[(String, Option[String])] = Vector(
       ("id", id.map(_.toString)),
       ("zref", zref),
       ("sourceId", sourceId),
       ("citation", citation),
-      ("ingestDate", ingestDateTime.map(_.toEpochMilli.toString))
+      ("ingestDate", ingestDateTime.map(_.toEpochMilli.toString)),
+      ("consignmentRef", consignmentRef)
     ).filter(_._2.nonEmpty)
 
     def toQuery: Query = Query.fromVector(params)
@@ -86,9 +89,9 @@ object FrontEndRoutes:
         } yield resp.asHtml
       case req @ GET -> Root / "search" :? IdQueryParam(id) +& ZrefQueryParam(zref) +& SourceIdQueryParam(sourceId) +& CitationQueryParam(
             citation
-          ) +& IngestDateQueryParam(ingestDate) =>
+          ) +& IngestDateQueryParam(ingestDate) +& ConsignmentRefQueryParam(consignmentRef) =>
         for {
-          files <- Assets[F].findFiles(SearchResponse(id, zref, sourceId, citation, ingestDate))
+          files <- Assets[F].findFiles(SearchResponse(id, zref, sourceId, citation, ingestDate, consignmentRef))
           resp <- Ok(results(files).body)
         } yield resp.asHtml
       case req @ POST -> Root / "search" =>
