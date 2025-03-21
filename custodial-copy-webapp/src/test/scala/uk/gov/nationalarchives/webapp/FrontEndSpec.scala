@@ -90,7 +90,7 @@ class FrontEndSpec extends AnyFlatSpec:
 
     val request = Request[IO](Method.GET, uri"/search?id=a73bce36-02e3-4d7a-b3ea-4e2bdd1fa46d&zref=zref")
     val response = FrontEndRoutes.ocflRoutes[IO].orNotFound(request)
-    def searchContains(text: String) = response.flatMap(_.as[String]).unsafeRunSync() should include (text)
+    def searchContains(text: String) = response.flatMap(_.as[String]).unsafeRunSync() should include(text)
 
     searchContains("<caption class=\"govuk-table__caption govuk-table__caption--m\">Search Results</caption>")
     searchContains(s"<a class=\"govuk-link\" href=\"/download/$id\" download=\"zref\">Download</a>")
@@ -131,7 +131,10 @@ class FrontEndSpec extends AnyFlatSpec:
       }
 
     val request =
-      Request[IO](Method.GET, uri"/search?id=a73bce36-02e3-4d7a-b3ea-4e2bdd1fa46d&zref=zref&citation=citation&sourceId=sourceId&ingestDate=1720483200000&consignmentRef=TDR-2025-RNDM")
+      Request[IO](
+        Method.GET,
+        uri"/search?id=a73bce36-02e3-4d7a-b3ea-4e2bdd1fa46d&zref=zref&citation=citation&sourceId=sourceId&ingestDate=1720483200000&consignmentRef=TDR-2025-RNDM"
+      )
     val response = FrontEndRoutes.ocflRoutes[IO].orNotFound(request).unsafeRunSync()
   }
 
