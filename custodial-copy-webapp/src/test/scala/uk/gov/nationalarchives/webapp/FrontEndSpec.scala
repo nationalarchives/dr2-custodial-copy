@@ -19,7 +19,7 @@ class FrontEndSpec extends AnyFlatSpec:
   private val ingestDateTime: Instant = LocalDate.of(2024, 7, 9).atStartOfDay(ZoneOffset.UTC).toInstant
 
   private def assertContains(uri: String, text: String) =
-    ocflRoutes(uri).flatMap(_.as[String].map(_.contains(text))).unsafeRunSync() should equal(true)
+    ocflRoutes(uri).flatMap(_.as[String]).unsafeRunSync() should include(text)
 
   private def ocflRoutes(url: String)(using Assets[IO]): IO[Response[IO]] =
     val request = Request[IO](Method.GET, Uri.unsafeFromString(url))
@@ -33,6 +33,21 @@ class FrontEndSpec extends AnyFlatSpec:
     assertContains("/", "<h1 class=\"govuk-heading-l\">Search for a file</h1>")
     assertContains("/", "<input class=\"govuk-input\" id=\"id\" name=\"id\" type=\"text\"/>")
     assertContains("/", "<input class=\"govuk-input\" id=\"zref\" name=\"zref\" type=\"text\"/>")
+    assertContains("/", "<input class=\"govuk-input\" id=\"sourceId\" name=\"sourceId\" type=\"text\"/>")
+    assertContains("/", "<input class=\"govuk-input\" id=\"citation\" name=\"citation\" type=\"text\"/>")
+    assertContains(
+      "/",
+      "<input class=\"govuk-input govuk-date-input__input govuk-input--width-2\" id=\"ingest-date-day\" name=\"ingest-date-day\" type=\"number\", min=\"1\" max=\"31\">"
+    )
+    assertContains(
+      "/",
+      "<input class=\"govuk-input govuk-date-input__input govuk-input--width-2\" id=\"ingest-date-month\" name=\"ingest-date-month\" type=\"number\" min=\"1\" max=\"12\">"
+    )
+    assertContains(
+      "/",
+      "<input class=\"govuk-input govuk-date-input__input govuk-input--width-4\" id=\"ingest-date-year\" name=\"ingest-date-year\" type=\"number\" autocomplete=\"bday-year\" inputmode=\"numeric\">"
+    )
+    assertContains("/", "<input class=\"govuk-input\" id=\"consignmentRef\" name=\"consignmentRef\" type=\"text\"/>")
   }
 
   "OcflRoutes /download" should "download a file for a given id" in {
@@ -75,7 +90,7 @@ class FrontEndSpec extends AnyFlatSpec:
 
     val request = Request[IO](Method.GET, uri"/search?id=a73bce36-02e3-4d7a-b3ea-4e2bdd1fa46d&zref=zref")
     val response = FrontEndRoutes.ocflRoutes[IO].orNotFound(request)
-    def searchContains(text: String) = response.flatMap(_.as[String].map(_.contains(text))).unsafeRunSync() should equal(true)
+    def searchContains(text: String) = response.flatMap(_.as[String]).unsafeRunSync() should include (text)
 
     searchContains("<caption class=\"govuk-table__caption govuk-table__caption--m\">Search Results</caption>")
     searchContains(s"<a class=\"govuk-link\" href=\"/download/$id\" download=\"zref\">Download</a>")
@@ -95,6 +110,7 @@ class FrontEndSpec extends AnyFlatSpec:
         assert(searchResponse.citation.get == "citation")
         assert(searchResponse.sourceId.get == "sourceId")
         assert(searchResponse.ingestDateTime.get == ingestDateTime)
+        assert(searchResponse.consignmentRef.get == "TDR-2025-RNDM")
         IO(
           List(
             OcflFile(
@@ -115,7 +131,7 @@ class FrontEndSpec extends AnyFlatSpec:
       }
 
     val request =
-      Request[IO](Method.GET, uri"/search?id=a73bce36-02e3-4d7a-b3ea-4e2bdd1fa46d&zref=zref&citation=citation&sourceId=sourceId&ingestDate=1720483200000")
+      Request[IO](Method.GET, uri"/search?id=a73bce36-02e3-4d7a-b3ea-4e2bdd1fa46d&zref=zref&citation=citation&sourceId=sourceId&ingestDate=1720483200000&consignmentRef=TDR-2025-RNDM")
     val response = FrontEndRoutes.ocflRoutes[IO].orNotFound(request).unsafeRunSync()
   }
 
@@ -131,6 +147,7 @@ class FrontEndSpec extends AnyFlatSpec:
         assert(searchResponse.citation.get == "citation")
         assert(searchResponse.sourceId.isEmpty)
         assert(searchResponse.ingestDateTime.isEmpty)
+        assert(searchResponse.consignmentRef.isEmpty)
         IO(
           List(
             OcflFile(

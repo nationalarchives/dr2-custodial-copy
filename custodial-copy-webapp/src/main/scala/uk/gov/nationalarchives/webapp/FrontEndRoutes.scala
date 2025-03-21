@@ -52,7 +52,14 @@ object FrontEndRoutes:
   private object ErrorMessageQueryParam extends QueryParamDecoderMatcher[String]("message")
   private object ConsignmentRefQueryParam extends OptionalQueryParamDecoderMatcher[String]("consignmentRef")
 
-  case class SearchResponse(id: Option[UUID], zref: Option[String], sourceId: Option[String], citation: Option[String], ingestDateTime: Option[Instant], consignmentRef: Option[String]) {
+  case class SearchResponse(
+      id: Option[UUID],
+      zref: Option[String],
+      sourceId: Option[String],
+      citation: Option[String],
+      ingestDateTime: Option[Instant],
+      consignmentRef: Option[String]
+  ) {
     private val params: Vector[(String, Option[String])] = Vector(
       ("id", id.map(_.toString)),
       ("zref", zref),
