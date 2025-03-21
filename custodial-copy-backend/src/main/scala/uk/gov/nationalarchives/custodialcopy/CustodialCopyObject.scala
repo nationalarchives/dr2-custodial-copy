@@ -2,6 +2,8 @@ package uk.gov.nationalarchives.custodialcopy
 
 import cats.effect.IO
 import fs2.io.file.*
+import uk.gov.nationalarchives.dp.client.EntityClient.EntityType
+
 import java.util.UUID
 import scala.xml.Elem
 
@@ -28,6 +30,7 @@ object CustodialCopyObject {
   ) extends CustodialCopyObject
   case class MetadataObject(
       id: UUID,
+      entityType: EntityType,
       repTypeGroup: Option[String],
       name: String,
       checksums: List[Checksum],

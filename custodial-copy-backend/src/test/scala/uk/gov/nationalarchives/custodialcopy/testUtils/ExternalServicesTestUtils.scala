@@ -491,7 +491,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     private val coIdentifiersFromApi = Seq(<Identifier><ApiId/><Type/><Value/><Entity/></Identifier>)
     private val representationFromApi =
       Seq(
-        <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
+        <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
       )
 
     private val generationFromApi =
@@ -556,8 +556,9 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         fileObject :+
           MetadataObject(
             id,
+            entityType,
             Some("Preservation_1"),
-            missingOrChanged,
+            s"${entityType.entityTypeShort}_Metadata_${missingOrChanged}.xml",
             List(Checksum("sha256", "checksum")),
             consolidatedMetadata,
             "destinationPath",
@@ -646,7 +647,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val ioXmlToValidate: Elem =
       <XIP xmlns="http://preservica.com/XIP/v7.0">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
-          <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
+          <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
           <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>
           <Identifier><ApiId/><Type>sourceID</Type><Value>sourceIDValue</Value><Entity/></Identifier>
           <Link><Type/><FromEntity/><ToEntity/></Link>
