@@ -19,7 +19,8 @@ class FrontEndSpec extends AnyFlatSpec:
   private val ingestDateTime: Instant = LocalDate.of(2024, 7, 9).atStartOfDay(ZoneOffset.UTC).toInstant
 
   private def assertContains(uri: String, text: String) =
-    ocflRoutes(uri).flatMap(_.as[String]).unsafeRunSync() should include(text)
+    val pageContent = ocflRoutes(uri).flatMap(_.as[String]).unsafeRunSync() 
+    pageContent should include(text)
 
   private def ocflRoutes(url: String)(using Assets[IO]): IO[Response[IO]] =
     val request = Request[IO](Method.GET, Uri.unsafeFromString(url))
