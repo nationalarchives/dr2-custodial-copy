@@ -53,7 +53,14 @@ class AssetsSpec extends AnyFlatSpec with BeforeAndAfterAll with ScalaCheckDrive
     zref <- Gen.option(Gen.alphaNumStr)
     sourceId <- Gen.option(Gen.alphaNumStr)
     citation <- Gen.option(Gen.alphaNumStr)
-  } yield SearchResponse(id, zref, sourceId, citation, instant.map(Instant.ofEpochSecond))
+    consignmentRef <- Gen.option(consignmentRefPattern)
+  } yield SearchResponse(id, zref, sourceId, citation, instant.map(Instant.ofEpochSecond), consignmentRef)
+
+  def consignmentRefPattern: Gen[String] = for {
+    system <- Gen.listOfN(3, Gen.alphaUpperChar).map(_.mkString)
+    year <- Gen.choose(2020, 2026)
+    randomLetters <- Gen.listOfN(4, Gen.alphaUpperChar).map(_.mkString)
+  } yield s"$system-$year-$randomLetters"
 
   forAll(generatedSearchResponses) { searchResponse =>
     "findFiles" should s"return the correct file for search $searchResponse" in {
@@ -65,13 +72,12 @@ class AssetsSpec extends AnyFlatSpec with BeforeAndAfterAll with ScalaCheckDrive
           searchResponse.sourceId,
           searchResponse.citation,
           searchResponse.ingestDateTime,
-          "PLACEHOLDER-CHANGE-ME".some
+          searchResponse.consignmentRef
         )
         files <- Assets[IO].findFiles(searchResponse)
       } yield {
         files.size should equal(1)
         files.head should equal(file)
-
       }).unsafeRunSync()
     }
   }
@@ -82,7 +88,7 @@ class AssetsSpec extends AnyFlatSpec with BeforeAndAfterAll with ScalaCheckDrive
     val searchInstant = LocalDateTime.of(2024, 7, 9, 0, 0, 0).toInstant(ZoneOffset.UTC)
     (for {
       file <- createFile(id, "zref".some, "sourceId".some, "citation".some, dbInstant.some, "TDR-2025-RNDM".some)
-      files <- Assets[IO].findFiles(SearchResponse(None, None, None, None, searchInstant.some))
+      files <- Assets[IO].findFiles(SearchResponse(None, None, None, None, searchInstant.some, None))
     } yield {
       files.size should equal(1)
     }).unsafeRunSync()
@@ -90,6 +96,6 @@ class AssetsSpec extends AnyFlatSpec with BeforeAndAfterAll with ScalaCheckDrive
 
   "findFiles" should "return an empty list if there are no matching entries in the database" in {
     for {
-      files <- Assets[IO].findFiles(SearchResponse(UUID.randomUUID.some, "zref".some, None, None, None))
+      files <- Assets[IO].findFiles(SearchResponse(UUID.randomUUID.some, "zref".some, None, None, None, None))
     } yield files.isEmpty should equal(true)
   }.unsafeRunSync()
