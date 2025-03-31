@@ -44,7 +44,7 @@ class Processor(
 
   private def createMetadataObject(
       ioRef: UUID,
-      entityTypeShort: EntityType,
+      entityType: EntityType,
       metadata: EntityMetadata,
       fileName: String,
       path: String,
@@ -88,7 +88,7 @@ class Processor(
     } yield List(
       MetadataObject(
         ioRef,
-        entityTypeShort,
+        entityType,
         repType,
         fileName,
         List(Checksum("SHA256", DigestUtils.sha256Hex(allMetadataAsXmlString))),
