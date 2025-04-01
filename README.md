@@ -109,8 +109,12 @@ Whether they are deleted or not, these are ignored as there is nothing in the st
                 * Compare the calculated checksum with the one in the OCFL repository.
                     * If they are the same, do nothing.
                     * If they are different, add the metadata object to the list of "changed" files
+* If a MetadataObject (IO) is missing, then it, as well as the COs that belong to it, need to be downloaded so that we 
+can be sure that we have at least one version of the IO (and its COs) saved.
+  * In order to do this, the steps from the [CO Messages](#handling-non-deleted-content-object-co-messages-if-entity-has-not-been-deleted), 
+  starting from the "getting the URLs of the representations" step, are followed
 * Once the list of all "missing" and "changed" files are generated, stream them from Preservica if it is a bitstream 
-  to a tmp directory or if it's a metadata update, convert the XML to a String and save it to a tmp directory 
+  to a tmp directory or if it's a metadata update, convert the XML to a String and save it to a tmp directory
     * For "missing" files:
         * Call `createObjects` on the OCFL repository in order to:
             * insert a new object into the `destinationPath` provided
