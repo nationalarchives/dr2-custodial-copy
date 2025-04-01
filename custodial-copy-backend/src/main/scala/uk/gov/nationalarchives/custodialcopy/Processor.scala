@@ -299,23 +299,23 @@ class Processor(
         case _                  => false
       }
 
-      missingIoObjectsAndTheirCos <- missingIoObjects.flatTraverse { missingIoObject =>
+      missingIosAndCos <- missingIoObjects.flatTraverse { missingIoObject =>
         for {
           urlsOfRepresentations <- entityClient.getUrlsToIoRepresentations(missingIoObject.id, None)
           cosAndRepType <- urlsOfRepresentations.flatTraverse { getCosPerRepresentationType(missingIoObject.id, _) }
           coAndRepTypesGroupedByCoRef = cosAndRepType.groupBy { case (co, _) => co.ref }.toList
 
-          allMissingCoObjectsUnderIo <- coAndRepTypesGroupedByCoRef.flatTraverse { case (coRef, coAndRepTypes) =>
+          allCoObjectsOfIo <- coAndRepTypesGroupedByCoRef.flatTraverse { case (coRef, coAndRepTypes) =>
             entityClient.getBitstreamInfo(coRef).flatMap { bitstreamInfoPerCo =>
               val (entity, _) = coAndRepTypes.head
               val repTypes = coAndRepTypes.map { case (_, repType) => repType }
               getCoFileAndMetadataObjects(entity, missingIoObject.id, repTypes, bitstreamInfoPerCo)
             }
           }
-        } yield allMissingCoObjectsUnderIo :+ missingIoObject
+        } yield allCoObjectsOfIo :+ missingIoObject
       }
 
-      allMissingObjects = missingIoObjectsAndTheirCos ++ missingCoObjects
+      allMissingObjects = missingIosAndCos ++ missingCoObjects
       missingObjectsPaths <- allMissingObjects.traverse(download)
       changedObjectsPaths <- missingAndChangedObjects.changedObjects.traverse(download)
 
