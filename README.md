@@ -28,29 +28,29 @@ The "deleted" entry refers to the status on Preservica; the value could be `true
 
 #### Processing incoming messages based on message group ID.
 
-The SQS queue which feeds this process is a FIFO queue. Each message has a UUID as a message group ID. This is the IO UUID for an IO message or the parent of the CO for a CO message.
+The SQS queue which feeds this process is a FIFO queue. Each message has a UUID as a message group ID; this is the IO UUID for an IO message or the parent of the CO for a CO message.
 
-The process groups by the message group ID. Each group id corresponds to an OCFL object (which may not exist yet)
+The process groups by the message group ID. Each group id corresponds to an OCFL object (which may not exist yet).
 
 The messages within each group are deduplicated to prevent repeat processing of the same entity.
 
-All updates for a single group of messages with the same group id are staged in OCFL. This allows us to write multiple changes without creating new versions.
+All updates for a single group of messages with the same group id are staged in OCFL; this allows us to write multiple changes without creating new versions.
 
 Once all messages are processed, we commit the changes to that OCFL object which writes the version permanently.
 
-#### Handling Information Object (IO) messages, if entity has not been deleted
+#### Handling Information Object (IO) messages, if entity has **not** been deleted
 
 * Create the metadata file name `IO_Metadata.xml`
 * Get the metadata from the Preservica API
 * Create the destination path for this metadata file `{IO_REF}/IO_Metadata.xml`
 * Wrap all returned metadata fragments in a `<AllMetadata/>` tag
-* Calculate the checksum of this metadata string.
+* Calculate the checksum of this metadata string
 * Use all of this information to create a `MetadataObject`
 
-#### Handling non-deleted Content Object (CO) messages, if entity has not been deleted
+#### Handling non-deleted Content Object (CO) messages, if entity has **not** been deleted
 
-* Get the bitstream information (which contains the parent ID) from the Preservica API.
-* Verify that the parent ID is present.
+* Get the bitstream information (which contains the parent ID) from the Preservica API
+* Verify that the parent ID is present
 * Use parent ID to get the URLs of the representations
 * Use URLs to get the COs under each representation
 * Return the representation types (`{representationType}_{index}`) for a given CO ref
@@ -62,13 +62,13 @@ Once all messages are processed, we commit the changes to that OCFL object which
 * Create the destination path for the CO file `{IO_REF}/{REP_TYPE}/{CO_REF}/{GEN_TYPE}/g{GEN_VERSION}/{FILE_NAME}`
 * Use the path and bitstream information to create a `FileObject`
 
-#### Handling Information Object (IO) messages, if entity have been deleted
+#### Handling Information Object (IO) messages, if entity **has** been deleted
 * Get all the paths to the files that sit underneath this object
 * Delete all the paths
 * Generate a `SendSnsMessage` object for it
 
-#### Handling non-deleted Content Object (CO) messages, if entity have been deleted
-We are not expected COs to be deleted in Preservica so if one is, an Exception will be thrown.
+#### Handling non-deleted Content Object (CO) messages, if entity **has** been deleted
+We are not expecting COs to be deleted in Preservica so if one is, an Exception will be thrown.
 
 #### Handling Structural Object (SO) messages
 
@@ -100,8 +100,8 @@ Whether they are deleted or not, these are ignored as there is nothing in the st
 
 * Once the list of all `MetadataObject`s and `FileObject`s have been generated
 * Check the OCFL repository for an object stored under this IO id.
-    * If an object is not found that means no files belong under this IO and therefore, add the metadata object to the
-      list of "missing" files
+    * If an object is not found, that means no files belong under this IO and therefore, add the metadata object to the
+      list of "missing" objects
     * If an object is found:
         * Get the file, using the destination path
             * If the file is missing, add metadata object to the list of "missing" files
@@ -113,7 +113,7 @@ Whether they are deleted or not, these are ignored as there is nothing in the st
 can be sure that we have at least one version of the IO (and its COs) saved.
   * In order to do this, the steps from the [CO Messages](#handling-non-deleted-content-object-co-messages-if-entity-has-not-been-deleted), 
   starting from the "getting the URLs of the representations" step, are followed
-* Once the list of all "missing" and "changed" files are generated, stream them from Preservica if it is a bitstream 
+* Once the list of all "missing" and "changed" files are generated, for the ones that are bitstreams, stream them from Preservica
   to a tmp directory or if it's a metadata update, convert the XML to a String and save it to a tmp directory
     * For "missing" files:
         * Call `createObjects` on the OCFL repository in order to:
@@ -135,22 +135,22 @@ Once the process completes successfully, a message per OCFL update is sent to SN
 
 #### Deleting Received SQS messages
 
-If the custodial copy process completes successfully, the messages that were received from SQS are then deleted from the SQS queue.
-If any messages in a batch fail, all messages are left to try again. This avoids having to work out which ones were
-successful which could be error-prone.
+If the Custodial Copy process completes successfully, the messages that were received from SQS are then deleted from the SQS queue.
+If any messages in a batch fail, all messages are left to try again; this avoids having to work out which ones were
+successful, which could be error-prone.
 
 #### Parallel processing
 Each message is processed in parallel, except for writing to the OCFL repository. 
 The OCFL library will throw an exception if you try to write to the same object at the same time so there is a single semaphore to prevent two fibers writing at the same time.
 All other processes such as fetching the data from Preservica and deleting the SQS messages are processed in parallel.
-All non-deleted messages are processed (in parallel first) and then deleted ones messages to prevent unwanted behaviour 
-like a deletion of an Information Object and then a CO being created afterward; this scenario could happen if a CO gets
+All non-deleted messages are processed (in parallel first) and then the deleted messages to prevent unwanted behaviour, like a
+deletion of an Information Object and then a CO being created afterward; this scenario could happen if a CO gets
 added to Preservica (manually or automatically) and then the IO gets deleted within the time window.
 
 ### Infrastructure
 
 This will be hosted on a machine at Kew rather than in the cloud so the only infrastructure resource needed is the
-repository to store the docker image.
+repository to store the Docker image.
 
 [Link to the infrastructure code](https://github.com/nationalarchives/dr2-terraform-environments)
 
