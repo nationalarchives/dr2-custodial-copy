@@ -50,7 +50,8 @@ object Assets:
         val endOfDay = i.atOffset(ZoneOffset.UTC).toLocalDate.atTime(23, 59, 59).atZone(ZoneOffset.UTC).toInstant
         fr"ingestDateTime >= $i AND ingestDateTime <= $endOfDay"
       }
-      val query = fr"SELECT * from files" ++ whereAndOpt(idWhere, zrefWhere, citationWhere, sourceIdWhere, ingestDateTimeWhere)
+      val consignmentRefWhere = searchResponse.consignmentRef.map(c => fr"consignmentRef = $c")
+      val query = fr"SELECT * from files" ++ whereAndOpt(idWhere, zrefWhere, citationWhere, sourceIdWhere, ingestDateTimeWhere, consignmentRefWhere)
       loadXa.flatMap { xa =>
         query.query[OcflFile].to[List].transact(xa)
       }
