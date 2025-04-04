@@ -40,6 +40,7 @@ import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.*
 import uk.gov.nationalarchives.dp.client.ValidateXmlAgainstXsd.PreservicaSchema.XipXsdSchemaV7
 
+import java.io.File
 import scala.jdk.FunctionConverters.*
 import java.net.URI
 import java.nio.file.{Files, Path, Paths}
@@ -731,9 +732,12 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       idWithSourceAndDestPathsCaptor.getAllValues.asScala.toList.flatten.zipWithIndex.foreach { case (capturedIdWithSourceAndDestPath, index) =>
         val expectedIdWithSourceAndDestPath = expectedIdsWithSourceAndDestPath(index)
         capturedIdWithSourceAndDestPath.id should equal(expectedIdWithSourceAndDestPath.id)
-        capturedIdWithSourceAndDestPath.sourceNioFilePath.toString
-          .endsWith(expectedIdWithSourceAndDestPath.sourceNioFilePath.toString) should equal(true)
+
+        val sourcePathString = capturedIdWithSourceAndDestPath.sourceNioFilePath.toString
+        sourcePathString.endsWith(expectedIdWithSourceAndDestPath.sourceNioFilePath.toString) should equal(true)
         capturedIdWithSourceAndDestPath.destinationPath should equal(expectedIdWithSourceAndDestPath.destinationPath)
+
+        File(sourcePathString).exists() should equal(false)
       }
       val capturedLookupDestinationPaths = droLookupCaptor.getAllValues.asScala.toList.map(_.map(_.destinationFilePath))
       capturedLookupDestinationPaths should equal(drosToLookup)
