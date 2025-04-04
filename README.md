@@ -123,6 +123,8 @@ can be sure that we have at least one version of the IO (and its COs) saved.
         * Call `createObjects` on the OCFL repository in order to:
             * overwrite the current file stored at the `destinationPath` provided
             * add a new version to the OCFL repository
+* Once these files are added to the OCFL repository, they can be deleted from the tmp directory in order to reduce space
+  * Even though files get deleted when the container restarts, there is a possibility that the container is active for a long time
 * Finally, generate a list of SNS messages with information on this update; more information directly below
 
 #### Sending Status messages to SNS
