@@ -50,6 +50,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       processor: Processor
   ): List[Result] = Main.runCustodialCopy(sqsClient, config, processor).compile.toList.unsafeRunSync().flatten
 
+  private val exampleUrl = "https://example.com"
+
   "runCustodialCopy" should "(given an IO message with 'deleted' set to 'true') delete all objects underneath it" in {
     val fixity = List(Fixity("SHA256", ""))
     val ioId = UUID.randomUUID()
@@ -506,7 +508,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
           BitStreamInfo(
             "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
             1,
-            "",
+            exampleUrl,
             List(Fixity("SHA256", "DifferentContent")),
             1,
             Original,
@@ -532,15 +534,48 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       coContent must equal(s"File content for 90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt")
     }
 
+  "runCustodialCopy" should "not write a new version and a bitstream to a file if the CO bitstream has no url" in {
+    val fileContent = "Test"
+    val ioId = UUID.randomUUID()
+
+    val utils = new MainTestUtils(
+      List((ContentObject, false)),
+      0,
+      bitstreamInfo1Responses = List(
+        BitStreamInfo(
+          "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+          1,
+          "",
+          List(Fixity("SHA256", "DifferentContent")),
+          1,
+          Original,
+          None,
+          Some(ioId)
+        )
+      )
+    )
+
+    val repo = utils.repo
+    val expectedCoFileDestinationFilePath = utils.expectedCoFileDestinationPath
+
+    runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
+
+    utils.latestObjectVersion(repo, ioId) must equal(2)
+    repo.containsObject(ioId.toString) must be(true)
+    repo.getObject(ioId.toHeadVersion).containsFile(expectedCoFileDestinationFilePath) must be(false)
+
+    repo.getObject(ioId.toHeadVersion).getFile(expectedCoFileDestinationFilePath) must equal(null)
+  }
+
   "runCustodialCopy" should "write multiple bitstreams to the same version and to the correct location" in {
     val ioId = UUID.randomUUID()
     val fixity = List(Fixity("SHA256", ""))
     val bitStreamInfoList = Seq(
-      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt", 1, "", fixity, 1, Original, None, Some(ioId)),
-      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2", 1, "", fixity, 2, Derived, None, Some(ioId))
+      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt", 1, exampleUrl, fixity, 1, Original, None, Some(ioId)),
+      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2", 1, exampleUrl, fixity, 2, Derived, None, Some(ioId))
     )
     val bitStreamInfoList2 = Seq(
-      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt3", 1, "", fixity, 1, Original, None, Some(ioId))
+      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt3", 1, exampleUrl, fixity, 1, Original, None, Some(ioId))
     )
 
     val utils = new MainTestUtils(

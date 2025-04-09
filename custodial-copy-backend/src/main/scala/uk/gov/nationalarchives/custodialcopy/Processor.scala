@@ -48,7 +48,7 @@ class Processor(
       metadata: EntityMetadata,
       fileName: String,
       path: String,
-      tableItemIdentifier: String | UUID,
+      tableItemIdentifier: String,
       repType: Option[String] = None
   ): IO[List[MetadataObject]] =
     for {
@@ -234,13 +234,16 @@ class Processor(
 
   private def download(custodialCopyObject: CustodialCopyObject) = custodialCopyObject match {
     case fo: FileObject =>
-      for {
-        writePath <- fo.sourceFilePath(config.workDir)
-        _ <- entityClient.streamBitstreamContent[Unit](Fs2Streams.apply)(
-          fo.url,
-          s => s.through(Files[IO].writeAll(writePath, Flags.Write)).compile.drain
-        )
-      } yield IdWithSourceAndDestPaths(fo.id, writePath.toNioPath, fo.destinationFilePath)
+      if fo.url.nonEmpty then
+        for {
+          writePath <- fo.sourceFilePath(config.workDir)
+          _ <- entityClient.streamBitstreamContent[Unit](Fs2Streams.apply)(
+            fo.url,
+            s => s.through(Files[IO].writeAll(writePath, Flags.Write)).compile.drain
+          )
+        } yield IdWithSourceAndDestPaths(fo.id, Option(writePath.toNioPath), fo.destinationFilePath)
+      else IO.pure(IdWithSourceAndDestPaths(fo.id, None, fo.destinationFilePath))
+
     case mo: MetadataObject =>
       val metadataXmlAsString = mo.metadata.toString
       for {
@@ -250,12 +253,11 @@ class Processor(
           .through(Files[IO].writeUtf8(writePath))
           .compile
           .drain
-      } yield IdWithSourceAndDestPaths(mo.id, writePath.toNioPath, mo.destinationFilePath)
+      } yield IdWithSourceAndDestPaths(mo.id, Option(writePath.toNioPath), mo.destinationFilePath)
   }
 
-  private def removeFileExtension(bitstreamName: String) = UUID.fromString {
+  private def removeFileExtension(bitstreamName: String) =
     if (bitstreamName.contains(".")) bitstreamName.split('.').dropRight(1).mkString(".") else bitstreamName
-  }
 
   private def getSourceIdFromIdentifierNodes(identifiers: Seq[Node]) = identifiers
     .collectFirst {
@@ -265,6 +267,7 @@ class Processor(
 
   private def generateSnsMessage(
       obj: CustodialCopyObject,
+      receivedSnsMessage: ReceivedSnsMessage,
       status: ObjectStatus
   ): SendSnsMessage = {
     val objectType = obj match {
@@ -272,10 +275,10 @@ class Processor(
       case _: MetadataObject => Metadata
     }
 
-    val entityType = obj.tableItemIdentifier match {
-      case _: String => InformationObject
-      case _: UUID   => ContentObject
-    }
+    val entityType = receivedSnsMessage match
+      case _: IoReceivedSnsMessage => InformationObject
+      case _: CoReceivedSnsMessage => ContentObject
+      case _: SoReceivedSnsMessage => StructuralObject
 
     SendSnsMessage(entityType, obj.id, objectType, status, obj.tableItemIdentifier)
   }
@@ -324,11 +327,11 @@ class Processor(
       _ <- ocflService.createObjects(changedObjectsPaths)
       _ <- logger.info(s"${changedObjectsPaths.length} objects updated")
 
-      _ <- missingObjectsPaths.parTraverse(missingObjectPath => Files[IO].deleteIfExists(Path.fromNioPath(missingObjectPath.sourceNioFilePath)))
-      _ <- changedObjectsPaths.parTraverse(changedObjectPath => Files[IO].deleteIfExists(Path.fromNioPath(changedObjectPath.sourceNioFilePath)))
+      _ <- missingObjectsPaths.flatMap(_.sourceNioFilePath).parTraverse(missingObjectPath => Files[IO].deleteIfExists(Path.fromNioPath(missingObjectPath)))
+      _ <- changedObjectsPaths.flatMap(_.sourceNioFilePath).parTraverse(changedObjectPath => Files[IO].deleteIfExists(Path.fromNioPath(changedObjectPath)))
 
-      createdObjsSnsMessages = missingAndChangedObjects.missingObjects.map(generateSnsMessage(_, Created))
-      updatedObjsSnsMessages = missingAndChangedObjects.changedObjects.map(generateSnsMessage(_, Updated))
+      createdObjsSnsMessages = missingAndChangedObjects.missingObjects.map(generateSnsMessage(_, messageResponse.message, Created))
+      updatedObjsSnsMessages = missingAndChangedObjects.changedObjects.map(generateSnsMessage(_, messageResponse.message, Updated))
 
     } yield createdObjsSnsMessages ++ updatedObjsSnsMessages
 
