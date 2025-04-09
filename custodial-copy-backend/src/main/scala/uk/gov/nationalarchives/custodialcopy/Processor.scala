@@ -19,6 +19,7 @@ import uk.gov.nationalarchives.custodialcopy.Processor.Result.*
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Deleted, Updated}
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Bitstream, Metadata, MetadataAndPotentialBitstreams}
 import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
+import uk.gov.nationalarchives.dp.client.Client.BitStreamInfo
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.*
@@ -43,6 +44,7 @@ class Processor(
 
   private def createMetadataObject(
       ioRef: UUID,
+      entityType: EntityType,
       metadata: EntityMetadata,
       fileName: String,
       path: String,
@@ -86,6 +88,7 @@ class Processor(
     } yield List(
       MetadataObject(
         ioRef,
+        entityType,
         repType,
         fileName,
         List(Checksum("SHA256", DigestUtils.sha256Hex(allMetadataAsXmlString))),
@@ -100,7 +103,7 @@ class Processor(
     Preservation.toString -> Preservation
   )
 
-  private def getRepresentationTypeOfCo(ioRef: UUID, urlOfRepresentation: String, coRef: UUID) = {
+  private def getCosPerRepresentationType(ioRef: UUID, urlOfRepresentation: String): IO[Seq[(Entity, String)]] = {
     val splitUrlReversed = urlOfRepresentation.split("/").reverse
     val index = splitUrlReversed.head.toInt
     val representationTypeAsString = splitUrlReversed(1)
@@ -113,9 +116,12 @@ class Processor(
         representationType,
         index
       )
-    } yield contentObjectsFromRep.collect {
-      case contentObjectFromRep if contentObjectFromRep.ref == coRef => s"${representationType}_$index"
-    }
+    } yield contentObjectsFromRep.map(contentObjectFromRep => contentObjectFromRep -> s"${representationType}_$index")
+  }
+
+  private def getRepresentationTypeOfCo(ioRef: UUID, urlOfRepresentation: String, coRef: UUID): IO[Seq[String]] = {
+    val cosPerRepresentationTypeIO = getCosPerRepresentationType(ioRef: UUID, urlOfRepresentation: String)
+    cosPerRepresentationTypeIO.map(_.collect { case (co, representationType) if co.ref == coRef => representationType }.toSeq)
   }
 
   private def createDestinationFilePath(
@@ -137,6 +143,58 @@ class Processor(
 
   private def createMetadataFileName(entityTypeShort: String) = s"${entityTypeShort}_Metadata.xml"
 
+  private def getCoFileAndMetadataObjects(
+      entity: Entity,
+      parentRef: UUID,
+      coRepTypes: Seq[String],
+      bitstreamInfoPerCo: Seq[BitStreamInfo]
+  ): IO[List[CustodialCopyObject]] =
+    for {
+      bitstreamIdentifiers <- IO.pure(bitstreamInfoPerCo.map(_.name).map(removeFileExtension).toSet)
+      _ <- IO.raiseWhen(bitstreamIdentifiers.size != 1)(new Exception(s"Expected 1 bitstream identifiers, found ${bitstreamIdentifiers.size}"))
+      _ <- IO.raiseWhen(coRepTypes.length > 1) {
+        new Exception(s"${entity.ref} belongs to more than 1 representation type: ${coRepTypes.mkString(", ")}")
+      }
+
+      representationTypeGroup = coRepTypes.headOption
+      metadataFileName = createMetadataFileName(ContentObject.entityTypeShort)
+      metadata <- entityClient.metadataForEntity(entity).flatMap { metadataFragments =>
+        val destinationFilePath = createDestinationFilePath(
+          parentRef,
+          Some(entity.ref),
+          representationTypeGroup,
+          fileName = metadataFileName
+        )
+        createMetadataObject(
+          parentRef,
+          entity.entityType.get,
+          metadataFragments,
+          metadataFileName,
+          destinationFilePath,
+          bitstreamIdentifiers.head,
+          representationTypeGroup
+        )
+      }
+    } yield bitstreamInfoPerCo.toList.map { bitStreamInfo =>
+      val destinationFilePath = createDestinationFilePath(
+        parentRef,
+        Some(entity.ref),
+        representationTypeGroup,
+        Some(bitStreamInfo.generationType),
+        Some(bitStreamInfo.generationVersion),
+        bitStreamInfo.name
+      )
+
+      FileObject(
+        parentRef,
+        bitStreamInfo.name,
+        bitStreamInfo.fixities.map(eachFixity => Checksum(eachFixity.algorithm, eachFixity.value)),
+        bitStreamInfo.url,
+        destinationFilePath,
+        removeFileExtension(bitStreamInfo.name)
+      )
+    } ++ metadata
+
   private def toCustodialCopyObject(receivedSnsMessage: ReceivedSnsMessage): IO[List[CustodialCopyObject]] = receivedSnsMessage match {
     case IoReceivedSnsMessage(ref, deleted) =>
       for {
@@ -146,6 +204,7 @@ class Processor(
           val destinationFilePath = createDestinationFilePath(entity.ref, fileName = metadataFileName)
           createMetadataObject(
             entity.ref,
+            entity.entityType.get,
             metadata,
             metadataFileName,
             destinationFilePath,
@@ -167,48 +226,9 @@ class Processor(
         parentRef <- IO.fromOption(entity.parent)(new Exception("Cannot get IO reference from CO"))
         urlsOfRepresentations <- entityClient.getUrlsToIoRepresentations(parentRef, None)
         coRepTypes <- urlsOfRepresentations.map(getRepresentationTypeOfCo(parentRef, _, entity.ref)).flatSequence
-        bitstreamIdentifiers = bitstreamInfoPerCo.map(_.name).map(removeFileExtension).toSet
-        _ <- IO.raiseWhen(bitstreamIdentifiers.size != 1)(new Exception(s"Expected 1 bitstream identifiers, found ${bitstreamIdentifiers.size}"))
-        _ <- IO.raiseWhen(coRepTypes.length > 1) {
-          new Exception(s"${entity.ref} belongs to more than 1 representation type: ${coRepTypes.mkString(", ")}")
-        }
-        representationTypeGroup = coRepTypes.headOption
-        metadataFileName = createMetadataFileName(ContentObject.entityTypeShort)
-        metadata <- entityClient.metadataForEntity(entity).flatMap { metadataFragments =>
-          val destinationFilePath = createDestinationFilePath(
-            parentRef,
-            Some(entity.ref),
-            representationTypeGroup,
-            fileName = metadataFileName
-          )
-          createMetadataObject(
-            parentRef,
-            metadataFragments,
-            metadataFileName,
-            destinationFilePath,
-            bitstreamIdentifiers.head,
-            representationTypeGroup
-          )
-        }
-      } yield bitstreamInfoPerCo.toList.map { bitStreamInfo =>
-        val destinationFilePath = createDestinationFilePath(
-          parentRef,
-          Some(entity.ref),
-          representationTypeGroup,
-          Some(bitStreamInfo.generationType),
-          Some(bitStreamInfo.generationVersion),
-          bitStreamInfo.name
-        )
+        coFileAndMetadataObjects <- getCoFileAndMetadataObjects(entity, parentRef, coRepTypes, bitstreamInfoPerCo)
+      } yield coFileAndMetadataObjects
 
-        FileObject(
-          parentRef,
-          bitStreamInfo.name,
-          bitStreamInfo.fixities.map(eachFixity => Checksum(eachFixity.algorithm, eachFixity.value)),
-          bitStreamInfo.url,
-          destinationFilePath,
-          removeFileExtension(bitStreamInfo.name)
-        )
-      } ++ metadata
     case SoReceivedSnsMessage(_, _) => IO.pure(Nil)
   }
 
@@ -275,8 +295,29 @@ class Processor(
       custodialCopyObjects <- toCustodialCopyObject(messageResponse.message)
 
       missingAndChangedObjects <- ocflService.getMissingAndChangedObjects(custodialCopyObjects)
+      (missingIoObjects, missingCoObjects) = missingAndChangedObjects.missingObjects.partition {
+        case mo: MetadataObject => mo.entityType == InformationObject
+        case _                  => false
+      }
 
-      missingObjectsPaths <- missingAndChangedObjects.missingObjects.traverse(download)
+      missingIosAndCos <- missingIoObjects.flatTraverse { missingIoObject =>
+        for {
+          urlsOfRepresentations <- entityClient.getUrlsToIoRepresentations(missingIoObject.id, None)
+          cosAndRepType <- urlsOfRepresentations.flatTraverse { getCosPerRepresentationType(missingIoObject.id, _) }
+          coAndRepTypesGroupedByCoRef = cosAndRepType.groupBy { case (co, _) => co.ref }.toList
+
+          allCoObjectsOfIo <- coAndRepTypesGroupedByCoRef.flatTraverse { case (coRef, coAndRepTypes) =>
+            entityClient.getBitstreamInfo(coRef).flatMap { bitstreamInfoPerCo =>
+              val (entity, _) = coAndRepTypes.head
+              val repTypes = coAndRepTypes.map { case (_, repType) => repType }
+              getCoFileAndMetadataObjects(entity, missingIoObject.id, repTypes, bitstreamInfoPerCo)
+            }
+          }
+        } yield allCoObjectsOfIo :+ missingIoObject
+      }
+
+      allMissingObjects = missingIosAndCos ++ missingCoObjects
+      missingObjectsPaths <- allMissingObjects.traverse(download)
       changedObjectsPaths <- missingAndChangedObjects.changedObjects.traverse(download)
 
       _ <- ocflService.createObjects(missingObjectsPaths)
