@@ -326,7 +326,7 @@ class Processor(
       _ <- logger.info(s"${missingObjectsPaths.length} objects created")
       _ <- ocflService.createObjects(changedObjectsPaths)
       _ <- logger.info(s"${changedObjectsPaths.length} objects updated")
-      
+
       _ <- missingObjectsPaths.flatMap(_.sourceNioFilePath).parTraverse(missingObjectPath => Files[IO].deleteIfExists(Path.fromNioPath(missingObjectPath)))
       _ <- changedObjectsPaths.flatMap(_.sourceNioFilePath).parTraverse(changedObjectPath => Files[IO].deleteIfExists(Path.fromNioPath(changedObjectPath)))
 
