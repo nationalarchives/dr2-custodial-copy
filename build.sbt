@@ -1,7 +1,8 @@
 import Dependencies.*
 import com.typesafe.sbt.packager.docker.{Cmd, ExecCmd}
 import uk.gov.nationalarchives.sbt.Log4j2MergePlugin.log4j2MergeStrategy
-import scala.sys.process._
+
+import scala.sys.process.*
 
 ThisBuild / organization := "uk.gov.nationalarchives"
 ThisBuild / scalaVersion := "3.6.4"
@@ -30,7 +31,7 @@ def setupDirectories(serviceName: String) =
   Cmd(
     "RUN",
     s"""apk update && apk upgrade && apk add openjdk21-jre && \\
-               |    mkdir -p /poduser/work/downloads /poduser/repo /poduser/version /poduser/database && \\
+               |    mkdir -p /poduser/work/downloads /poduser/repo /poduser/version /poduser/database /poduser/log-config && \\
                |    mkdir /poduser/logs && \\
                |    touch /poduser/logs/$serviceName.log && \\
                |    chmod 644 /poduser/logs/$serviceName.log && \\
@@ -162,10 +163,11 @@ lazy val commonSettings = Seq(
   Universal / mappings := {
     val universalMappings = (Universal / mappings).value
     val fatJar = (Compile / assembly).value
+    val properties = new java.io.File(s"${(Compile / resourceDirectory).value}/log4j2.properties")
     val filtered = universalMappings.filter { case (file, name) =>
       !name.endsWith(".jar")
     }
-    filtered :+ (fatJar -> ("lib/" + fatJar.getName))
+    filtered ++ Seq(fatJar -> ("lib/" + fatJar.getName), properties -> "lib/log4j2.properties")
   },
   dockerRepository := Some(s"${sys.env.getOrElse("MANAGEMENT_ACCOUNT_NUMBER", "")}.dkr.ecr.eu-west-2.amazonaws.com"),
   dockerBuildOptions ++= Seq("--no-cache", "--pull"),
@@ -174,8 +176,9 @@ lazy val commonSettings = Seq(
   dockerCommands := Seq(
     Cmd("FROM", "alpine"),
     setupDirectories(name.value),
+    Cmd("COPY", s"2/opt/docker/lib/log4j2.properties", "/poduser/log-config/log4j2.properties"),
     Cmd("COPY", s"2/opt/docker/lib/${(assembly / assemblyJarName).value}", s"/opt/${(assembly / assemblyJarName).value}"),
     Cmd("USER", "1002"),
-    Cmd("CMD", s"rm -rf /poduser/work/downloads && java -Xmx2g -jar /opt/${(assembly / assemblyJarName).value}")
+    Cmd("CMD", s"rm -rf /poduser/work/downloads && java -Xmx2g -Dlog4j.configurationFile=/poduser/log-config/log4j2.properties -jar /opt/${(assembly / assemblyJarName).value}")
   )
 )

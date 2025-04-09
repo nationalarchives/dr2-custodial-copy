@@ -296,6 +296,8 @@ class Processor(
       logger <- Slf4jLogger.create[IO]
       custodialCopyObjects <- toCustodialCopyObject(messageResponse.message)
 
+      _ <- custodialCopyObjects.traverse(obj => logger.info(Map("sourceId" -> obj.tableItemIdentifier))(s"Processing object ${obj.id}"))
+
       missingAndChangedObjects <- ocflService.getMissingAndChangedObjects(custodialCopyObjects)
       (missingIoObjects, missingCoObjects) = missingAndChangedObjects.missingObjects.partition {
         case mo: MetadataObject => mo.entityType == InformationObject
