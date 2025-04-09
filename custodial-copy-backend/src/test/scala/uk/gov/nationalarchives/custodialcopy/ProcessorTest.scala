@@ -104,7 +104,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     utils.processMessage.unsafeRunSync()
 
     val bitstreamCalls = 1
-    val tableItemIdentifier = UUID.fromString("90dfb573-7419-4e89-8558-6cfa29f8fb16")
+    val tableItemIdentifier = "90dfb573-7419-4e89-8558-6cfa29f8fb16"
     utils.verifyCallsAndArguments(
       bitstreamCalls,
       1,
@@ -219,7 +219,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     utils.processMessage.unsafeRunSync()
 
     val bitstreamCalls = 1
-    val tableItemIdentifier = UUID.fromString("90dfb573-7419-4e89-8558-6cfa29f8fb16")
+    val tableItemIdentifier = "90dfb573-7419-4e89-8558-6cfa29f8fb16"
     utils.verifyCallsAndArguments(
       bitstreamCalls,
       1,

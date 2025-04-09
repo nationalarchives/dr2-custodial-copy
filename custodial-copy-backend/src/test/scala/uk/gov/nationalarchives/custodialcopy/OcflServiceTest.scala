@@ -64,7 +64,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
 
     val service = new OcflService(ocflRepository, semaphore)
     val fileObjectThatShouldBeMissing =
-      FileObject(id, name, checksums, url, destinationPath, UUID.randomUUID)
+      FileObject(id, name, checksums, url, destinationPath, UUID.randomUUID.toString)
 
     val missingAndChangedObjects =
       service.getMissingAndChangedObjects(List(fileObjectThatShouldBeMissing)).unsafeRunSync()
@@ -84,7 +84,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
 
       val service = new OcflService(ocflRepository, semaphore)
       val fileObjectThatShouldBeMissing =
-        FileObject(id, name, checksums, url, "nonExistingDestinationPath", UUID.randomUUID)
+        FileObject(id, name, checksums, url, "nonExistingDestinationPath", UUID.randomUUID.toString)
 
       val missingAndChangedObjects =
         service.getMissingAndChangedObjects(List(fileObjectThatShouldBeMissing)).unsafeRunSync()
@@ -107,7 +107,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
       val missingAndChangedObjects =
         service
           .getMissingAndChangedObjects(
-            List(FileObject(id, name, checksums, url, destinationPath, UUID.randomUUID))
+            List(FileObject(id, name, checksums, url, destinationPath, UUID.randomUUID.toString))
           )
           .unsafeRunSync()
 
@@ -123,7 +123,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
 
       val service = new OcflService(ocflRepository, semaphore)
       val fileObjectThatShouldHaveChangedChecksum =
-        FileObject(id, name, List(Checksum("SHA256", "anotherChecksum")), url, destinationPath, UUID.randomUUID)
+        FileObject(id, name, List(Checksum("SHA256", "anotherChecksum")), url, destinationPath, UUID.randomUUID.toString)
 
       val missingAndChangedObjects =
         service.getMissingAndChangedObjects(List(fileObjectThatShouldHaveChangedChecksum)).unsafeRunSync()
@@ -141,7 +141,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
 
     val service = new OcflService(ocflRepository, semaphore)
     val fileObjectThatShouldHaveChangedChecksum =
-      FileObject(id, name, checksums, url, destinationPath, UUID.randomUUID)
+      FileObject(id, name, checksums, url, destinationPath, UUID.randomUUID.toString)
 
     val ex = intercept[Exception] {
       service.getMissingAndChangedObjects(List(fileObjectThatShouldHaveChangedChecksum)).unsafeRunSync()
@@ -161,7 +161,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
 
     val service = new OcflService(ocflRepository, semaphore)
     val fileObjectThatShouldHaveChangedChecksum =
-      FileObject(id, name, checksums, url, destinationPath, UUID.randomUUID)
+      FileObject(id, name, checksums, url, destinationPath, UUID.randomUUID.toString)
 
     val ex = intercept[Exception] {
       service.getMissingAndChangedObjects(List(fileObjectThatShouldHaveChangedChecksum)).unsafeRunSync()

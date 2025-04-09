@@ -48,7 +48,7 @@ class Processor(
       metadata: EntityMetadata,
       fileName: String,
       path: String,
-      tableItemIdentifier: String | UUID,
+      tableItemIdentifier: String,
       repType: Option[String] = None
   ): IO[List[MetadataObject]] =
     for {
@@ -267,6 +267,7 @@ class Processor(
 
   private def generateSnsMessage(
       obj: CustodialCopyObject,
+      receivedSnsMessage: ReceivedSnsMessage,
       status: ObjectStatus
   ): SendSnsMessage = {
     val objectType = obj match {
@@ -274,10 +275,10 @@ class Processor(
       case _: MetadataObject => Metadata
     }
 
-    val entityType = obj.tableItemIdentifier match {
-      case _: String => InformationObject
-      case _: UUID   => ContentObject
-    }
+    val entityType = receivedSnsMessage match
+      case _: IoReceivedSnsMessage => InformationObject
+      case _: CoReceivedSnsMessage => ContentObject
+      case _: SoReceivedSnsMessage => StructuralObject
 
     SendSnsMessage(entityType, obj.id, objectType, status, obj.tableItemIdentifier)
   }
@@ -326,8 +327,8 @@ class Processor(
       _ <- ocflService.createObjects(changedObjectsPaths)
       _ <- logger.info(s"${changedObjectsPaths.length} objects updated")
 
-      createdObjsSnsMessages = missingAndChangedObjects.missingObjects.map(generateSnsMessage(_, Created))
-      updatedObjsSnsMessages = missingAndChangedObjects.changedObjects.map(generateSnsMessage(_, Updated))
+      createdObjsSnsMessages = missingAndChangedObjects.missingObjects.map(generateSnsMessage(_, messageResponse.message, Created))
+      updatedObjsSnsMessages = missingAndChangedObjects.changedObjects.map(generateSnsMessage(_, messageResponse.message, Updated))
 
     } yield createdObjsSnsMessages ++ updatedObjsSnsMessages
 

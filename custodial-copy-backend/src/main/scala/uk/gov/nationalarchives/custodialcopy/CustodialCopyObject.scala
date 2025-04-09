@@ -13,7 +13,7 @@ sealed trait CustodialCopyObject {
   def checksums: List[Checksum]
   def name: String
   def sourceFilePath(workDir: String): IO[Path] = createDirectory(workDir).map(dir => Path(s"$dir/$name"))
-  def tableItemIdentifier: String | UUID
+  def tableItemIdentifier: String
   private def createDirectory(workDir: String): IO[Path] = {
     val path = Path(s"$workDir/downloads/${UUID.randomUUID()}/$id")
     Files[IO].createDirectories(path).map(_ => path)
@@ -26,7 +26,7 @@ object CustodialCopyObject {
       checksums: List[Checksum],
       url: String,
       destinationFilePath: String,
-      tableItemIdentifier: String | UUID
+      tableItemIdentifier: String
   ) extends CustodialCopyObject
   case class MetadataObject(
       id: UUID,
@@ -36,7 +36,7 @@ object CustodialCopyObject {
       checksums: List[Checksum],
       metadata: Elem,
       destinationFilePath: String,
-      tableItemIdentifier: String | UUID
+      tableItemIdentifier: String
   ) extends CustodialCopyObject
 }
 

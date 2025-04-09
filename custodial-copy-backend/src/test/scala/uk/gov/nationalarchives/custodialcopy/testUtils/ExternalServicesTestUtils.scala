@@ -535,7 +535,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       def generateObjects(entityType: EntityType, missingOrChanged: String): List[CustodialCopyObject] = {
         val (id, consolidatedMetadata, fileObject, tableItemIdentifier) = entityType match {
           case ContentObject =>
-            val identifier = UUID.fromString("90dfb573-7419-4e89-8558-6cfa29f8fb16")
+            val identifier = "90dfb573-7419-4e89-8558-6cfa29f8fb16"
             (
               coId,
               coConsolidatedMetadata,
