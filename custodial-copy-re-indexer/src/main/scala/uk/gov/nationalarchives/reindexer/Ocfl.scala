@@ -36,7 +36,12 @@ object Ocfl:
       for {
         logger <- Slf4jLogger.create[F]
         ocflObject <- Sync[F].onError(Sync[F].blocking(repo(configuration).getObject(ioId.toHeadVersion)))(err => logger.error(err)(err.getMessage))
-        objectVersionFiles <- Sync[F].blocking(ocflObject.getFiles.asScala.filter(_.getPath.endsWith(s"${fileType}_Metadata.xml")))
+        objectVersionFiles <- Sync[F].blocking(
+          ocflObject.getFiles.asScala.filter(ocflFile =>
+            ocflFile.getPath.endsWith(s"${fileType}_Metadata.xml") &&
+              new File(ocflFile.getPath).length() > 0
+          )
+        ) // due to our storage space saving, we have empty files in test repo, ignore them
         xmlFiles <- objectVersionFiles.toList.traverse(objectVersionFile =>
           fileToXml(s"${configuration.config.ocflRepoDir}/${objectVersionFile.getStorageRelativePath}")
         )
