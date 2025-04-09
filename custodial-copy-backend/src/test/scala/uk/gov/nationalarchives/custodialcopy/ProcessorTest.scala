@@ -4,10 +4,12 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import fs2.io.file.Path
 import org.mockito.ArgumentMatchers
+import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doReturn, times, verify}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatestplus.mockito.MockitoSugar
+import uk.gov.nationalarchives.DASQSClient
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.Main.IdWithSourceAndDestPaths
 import uk.gov.nationalarchives.custodialcopy.Message.{IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
@@ -15,6 +17,7 @@ import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, De
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Bitstream, Metadata, MetadataAndPotentialBitstreams}
 import uk.gov.nationalarchives.custodialcopy.Processor.Result.{Failure, Success}
 import uk.gov.nationalarchives.custodialcopy.testUtils.ExternalServicesTestUtils.*
+import uk.gov.nationalarchives.dp.client.EntityClient
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.IoMetadata
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
@@ -399,6 +402,14 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       repTypes = Nil,
       repIndexes = Nil
     )
+  }
+
+  "process" should "not download a file if there is no download url from Preservica" in {
+    val utils = ProcessorTestUtils(ContentObject, bitstreamUrl = "")
+
+    val response = utils.processMessage.unsafeRunSync()
+
+    verify(utils.entityClient, times(0)).streamBitstreamContent(any())(any(), any())
   }
 
   "process" should "return the ref of the message passed to it" in {

@@ -37,21 +37,23 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO
 
   def createObjects(paths: List[IdWithSourceAndDestPaths]): IO[Unit] = paths
     .traverse { path =>
-      semaphore.acquire >> IO.blocking {
-        ocflRepository.stageChanges(
-          path.id.toHeadVersion,
-          null,
-          { (updater: OcflObjectUpdater) =>
-            updater.addPath(
-              path.sourceNioFilePath,
-              path.destinationPath,
-              OcflOption.MOVE_SOURCE,
-              OcflOption.OVERWRITE
-            )
-            ()
-          }.asJava
-        )
-      } >> semaphore.release
+      IO.whenA(path.sourceNioFilePath.toFile.exists()) {
+        semaphore.acquire >> IO.blocking {
+          ocflRepository.stageChanges(
+            path.id.toHeadVersion,
+            null,
+            { (updater: OcflObjectUpdater) =>
+              updater.addPath(
+                path.sourceNioFilePath,
+                path.destinationPath,
+                OcflOption.MOVE_SOURCE,
+                OcflOption.OVERWRITE
+              )
+              ()
+            }.asJava
+          )
+        } >> semaphore.release
+      }
     }
     .onError(logErrorAndRelease)
     .void

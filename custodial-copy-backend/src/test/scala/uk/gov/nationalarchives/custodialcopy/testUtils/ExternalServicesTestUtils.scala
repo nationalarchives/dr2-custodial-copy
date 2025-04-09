@@ -267,7 +267,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         BitStreamInfo(
           "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           1,
-          "",
+          "https://example.com",
           List(Fixity("SHA256", "")),
           1,
           Original,
@@ -420,7 +420,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       parentRefExists: Boolean = true,
       urlsToRepresentations: Seq[String] = Seq("http://testurl/representations/Preservation/1"),
       pathsOfObjectsUnderIo: List[String] = Nil,
-      throwErrorInMissingAndChangedObjects: Boolean = false
+      throwErrorInMissingAndChangedObjects: Boolean = false,
+      bitstreamUrl: String = "url"
   ) {
     val workDir: String = Files.createTempDirectory("download").toString
     val config: Config = Config("", "", "queueUrl", "", workDir, Option(URI.create("https://example.com")), "", "topicArn")
@@ -449,7 +450,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val bitstreamFromApi: BitStreamInfo = BitStreamInfo(
       "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
       1,
-      "url",
+      bitstreamUrl,
       List(Fixity("sha256", "checksum")),
       genVersion,
       genType,
@@ -528,7 +529,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         entityType: EntityType,
         objectHasChanged: Option[Boolean],
         pathsOfObjects: List[String] = Nil,
-        throwErrorInMissingAndChangedObjects: Boolean = false
+        throwErrorInMissingAndChangedObjects: Boolean = false,
+        bitstreamUrl: String
     ): OcflService = {
       def generateObjects(entityType: EntityType, missingOrChanged: String): List[CustodialCopyObject] = {
         val (id, consolidatedMetadata, fileObject, tableItemIdentifier) = entityType match {
@@ -542,7 +544,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
                   coId,
                   missingOrChanged,
                   List(Checksum("sha256", "checksum")),
-                  "url",
+                  bitstreamUrl,
                   "destinationPath",
                   identifier
                 )
@@ -632,7 +634,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     when(sqsClient.deleteMessage(ArgumentMatchers.eq("queueUrl"), ArgumentMatchers.startsWith("receiptHandle")))
       .thenReturn(IO.pure(DeleteMessageResponse.builder.build))
 
-    val ocflService: OcflService = mockOcflService(entityType, objectHasChanged, pathsOfObjectsUnderIo, throwErrorInMissingAndChangedObjects)
+    val ocflService: OcflService = mockOcflService(entityType, objectHasChanged, pathsOfObjectsUnderIo, throwErrorInMissingAndChangedObjects, bitstreamUrl)
     val xmlValidator: ValidateXmlAgainstXsd[IO] = spy(ValidateXmlAgainstXsd[IO](XipXsdSchemaV7))
 
     val processor: Processor = new Processor(config, sqsClient, ocflService, entityClient, xmlValidator, snsClient)

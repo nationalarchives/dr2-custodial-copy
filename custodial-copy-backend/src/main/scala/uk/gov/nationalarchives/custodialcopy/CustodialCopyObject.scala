@@ -24,7 +24,7 @@ object CustodialCopyObject {
       checksums: List[Checksum],
       url: String,
       destinationFilePath: String,
-      tableItemIdentifier: UUID
+      tableItemIdentifier: String | UUID
   ) extends CustodialCopyObject
   case class MetadataObject(
       id: UUID,

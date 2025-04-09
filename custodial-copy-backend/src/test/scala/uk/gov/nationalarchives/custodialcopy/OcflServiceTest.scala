@@ -8,19 +8,19 @@ import io.ocfl.api.io.FixityCheckInputStream
 import io.ocfl.api.model.*
 import io.ocfl.api.{MutableOcflRepository, OcflFileRetriever, OcflObjectUpdater, OcflOption}
 import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito.{doNothing, times, verify, verifyNoInteractions, when}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
-import org.scalatestplus.mockito.MockitoSugar
-import org.mockito.Mockito.{doNothing, times, verify, when}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.prop.TableDrivenPropertyChecks
+import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.FileObject
 import uk.gov.nationalarchives.custodialcopy.Main.IdWithSourceAndDestPaths
 import uk.gov.nationalarchives.dp.client.Entities.Entity
 
 import java.io.{ByteArrayInputStream, InputStream}
 import java.lang
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path}
 import java.util.UUID
 import java.util.function.Consumer
 import scala.jdk.CollectionConverters.*
@@ -173,6 +173,15 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     objectIdCaptor.getValue should equal(id.toString)
   }
 
+  "createObjects" should "not create an object if the file path doesn't exist" in {
+    val ocflRepository = mock[MutableOcflRepository]
+    val service = new OcflService(ocflRepository, semaphore)
+
+    service.createObjects(List(IdWithSourceAndDestPaths(UUID.randomUUID, Path.of("not-exist"), "destination"))).unsafeRunSync()
+
+    verifyNoInteractions(ocflRepository)
+  }
+
   "createObjects" should "create DR objects in the OCFL repository" in {
     val id = UUID.randomUUID()
     val ocflRepository = mock[MutableOcflRepository]
@@ -183,6 +192,8 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     val optionMoveToAdd: ArgumentCaptor[OcflOption] = ArgumentCaptor.forClass(classOf[OcflOption])
     val optionOverwriteToAdd: ArgumentCaptor[OcflOption] = ArgumentCaptor.forClass(classOf[OcflOption])
 
+    val inputPath = Files.createTempFile("ocfl", "test")
+
     when(ocflRepository.stageChanges(objectVersionCaptor.capture, any[VersionInfo], any[Consumer[OcflObjectUpdater]]))
       .thenAnswer { invocation =>
         val consumer = invocation.getArgument[Consumer[OcflObjectUpdater]](2)
@@ -191,16 +202,16 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
       }
     val service = new OcflService(ocflRepository, semaphore)
 
-    service.createObjects(List(IdWithSourceAndDestPaths(id, Paths.get("test"), destinationPath))).unsafeRunSync()
+    service.createObjects(List(IdWithSourceAndDestPaths(id, inputPath, destinationPath))).unsafeRunSync()
 
     UUID.fromString(objectVersionCaptor.getValue.getObjectId) should equal(id)
     verify(updater, times(1)).addPath(
-      sourceNioFilePathToAdd.capture,
+      sourceNioFilePathToAdd.capture(),
       destinationPathToAdd.capture,
       optionMoveToAdd.capture,
       optionOverwriteToAdd.capture()
     )
-    sourceNioFilePathToAdd.getAllValues.asScala.toList should equal(List(Paths.get("test")))
+    sourceNioFilePathToAdd.getAllValues.asScala.toList should equal(List(inputPath))
     destinationPathToAdd.getAllValues.asScala.toList should equal(List(destinationPath))
     optionMoveToAdd.getAllValues.asScala.toList.head should equal(OcflOption.MOVE_SOURCE)
     optionOverwriteToAdd.getAllValues.asScala.toList.head should equal(OcflOption.OVERWRITE)

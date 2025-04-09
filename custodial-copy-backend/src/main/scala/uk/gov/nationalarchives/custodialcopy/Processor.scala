@@ -216,10 +216,12 @@ class Processor(
     case fo: FileObject =>
       for {
         writePath <- fo.sourceFilePath(config.workDir)
-        _ <- entityClient.streamBitstreamContent[Unit](Fs2Streams.apply)(
-          fo.url,
-          s => s.through(Files[IO].writeAll(writePath, Flags.Write)).compile.drain
-        )
+        _ <- IO.whenA(fo.url.nonEmpty) {
+          entityClient.streamBitstreamContent[Unit](Fs2Streams.apply)(
+            fo.url,
+            s => s.through(Files[IO].writeAll(writePath, Flags.Write)).compile.drain
+          )
+        }
       } yield IdWithSourceAndDestPaths(fo.id, writePath.toNioPath, fo.destinationFilePath)
     case mo: MetadataObject =>
       val metadataXmlAsString = mo.metadata.toString
@@ -233,9 +235,8 @@ class Processor(
       } yield IdWithSourceAndDestPaths(mo.id, writePath.toNioPath, mo.destinationFilePath)
   }
 
-  private def removeFileExtension(bitstreamName: String) = UUID.fromString {
+  private def removeFileExtension(bitstreamName: String) =
     if (bitstreamName.contains(".")) bitstreamName.split('.').dropRight(1).mkString(".") else bitstreamName
-  }
 
   private def getSourceIdFromIdentifierNodes(identifiers: Seq[Node]) = identifiers
     .collectFirst {
