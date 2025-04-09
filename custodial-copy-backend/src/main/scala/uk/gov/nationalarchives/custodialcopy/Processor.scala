@@ -234,15 +234,16 @@ class Processor(
 
   private def download(custodialCopyObject: CustodialCopyObject) = custodialCopyObject match {
     case fo: FileObject =>
-      for {
-        writePath <- fo.sourceFilePath(config.workDir)
-        _ <- IO.whenA(fo.url.nonEmpty) {
-          entityClient.streamBitstreamContent[Unit](Fs2Streams.apply)(
+      if fo.url.nonEmpty then
+        for {
+          writePath <- fo.sourceFilePath(config.workDir)
+          _ <- entityClient.streamBitstreamContent[Unit](Fs2Streams.apply)(
             fo.url,
             s => s.through(Files[IO].writeAll(writePath, Flags.Write)).compile.drain
           )
-        }
-      } yield IdWithSourceAndDestPaths(fo.id, writePath.toNioPath, fo.destinationFilePath)
+        } yield IdWithSourceAndDestPaths(fo.id, Option(writePath.toNioPath), fo.destinationFilePath)
+      else IO.pure(IdWithSourceAndDestPaths(fo.id, None, fo.destinationFilePath))
+
     case mo: MetadataObject =>
       val metadataXmlAsString = mo.metadata.toString
       for {
@@ -252,7 +253,7 @@ class Processor(
           .through(Files[IO].writeUtf8(writePath))
           .compile
           .drain
-      } yield IdWithSourceAndDestPaths(mo.id, writePath.toNioPath, mo.destinationFilePath)
+      } yield IdWithSourceAndDestPaths(mo.id, Option(writePath.toNioPath), mo.destinationFilePath)
   }
 
   private def removeFileExtension(bitstreamName: String) =

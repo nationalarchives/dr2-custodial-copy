@@ -200,7 +200,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     Files.write(fullSourceFilePath, bodyAsString.getBytes)
     val semaphore: Semaphore[IO] = Semaphore[IO](1).unsafeRunSync()
     new OcflService(repo, semaphore)
-      .createObjects(List(IdWithSourceAndDestPaths(id, fullSourceFilePath, destinationPath)))
+      .createObjects(List(IdWithSourceAndDestPaths(id, Option(fullSourceFilePath), destinationPath)))
       .unsafeRunSync()
   }
 
@@ -733,8 +733,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       idWithSourceAndDestPathsCaptor.getAllValues.asScala.toList.flatten.zipWithIndex.foreach { case (capturedIdWithSourceAndDestPath, index) =>
         val expectedIdWithSourceAndDestPath = expectedIdsWithSourceAndDestPath(index)
         capturedIdWithSourceAndDestPath.id should equal(expectedIdWithSourceAndDestPath.id)
-        capturedIdWithSourceAndDestPath.sourceNioFilePath.toString
-          .endsWith(expectedIdWithSourceAndDestPath.sourceNioFilePath.toString) should equal(true)
+        capturedIdWithSourceAndDestPath.sourceNioFilePath.get.toString
+          .endsWith(expectedIdWithSourceAndDestPath.sourceNioFilePath.get.toString) should equal(true)
         capturedIdWithSourceAndDestPath.destinationPath should equal(expectedIdWithSourceAndDestPath.destinationPath)
       }
       val capturedLookupDestinationPaths = droLookupCaptor.getAllValues.asScala.toList.map(_.map(_.destinationFilePath))

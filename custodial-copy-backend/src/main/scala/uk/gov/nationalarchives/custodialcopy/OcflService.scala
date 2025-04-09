@@ -37,14 +37,14 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO
 
   def createObjects(paths: List[IdWithSourceAndDestPaths]): IO[Unit] = paths
     .traverse { path =>
-      IO.whenA(path.sourceNioFilePath.toFile.exists()) {
+      IO.whenA(path.sourceNioFilePath.isDefined) {
         semaphore.acquire >> IO.blocking {
           ocflRepository.stageChanges(
             path.id.toHeadVersion,
             null,
             { (updater: OcflObjectUpdater) =>
               updater.addPath(
-                path.sourceNioFilePath,
+                path.sourceNioFilePath.get,
                 path.destinationPath,
                 OcflOption.MOVE_SOURCE,
                 OcflOption.OVERWRITE

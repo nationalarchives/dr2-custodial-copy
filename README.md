@@ -59,6 +59,7 @@ Once all messages are processed, we commit the changes to that OCFL object which
 * Get the metadata from the Preservica API
 * Create the destination path for this metadata file `{IO_REF}/{REP_TYPE}/{CO_REF}/{FILE_NAME}`
 * Use metadata information to create a `MetadataObject`
+* If the CO is an embedded file, this cannot be downloaded from Preservica. In this case, the url bitstream content url in the metadata will be empty, and we skip the final two steps. 
 * Create the destination path for the CO file `{IO_REF}/{REP_TYPE}/{CO_REF}/{GEN_TYPE}/g{GEN_VERSION}/{FILE_NAME}`
 * Use the path and bitstream information to create a `FileObject`
 

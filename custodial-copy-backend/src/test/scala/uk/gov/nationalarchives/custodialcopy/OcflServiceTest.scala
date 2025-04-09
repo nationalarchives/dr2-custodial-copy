@@ -177,7 +177,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     val ocflRepository = mock[MutableOcflRepository]
     val service = new OcflService(ocflRepository, semaphore)
 
-    service.createObjects(List(IdWithSourceAndDestPaths(UUID.randomUUID, Path.of("not-exist"), "destination"))).unsafeRunSync()
+    service.createObjects(List(IdWithSourceAndDestPaths(UUID.randomUUID, None, "destination"))).unsafeRunSync()
 
     verifyNoInteractions(ocflRepository)
   }
@@ -202,7 +202,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
       }
     val service = new OcflService(ocflRepository, semaphore)
 
-    service.createObjects(List(IdWithSourceAndDestPaths(id, inputPath, destinationPath))).unsafeRunSync()
+    service.createObjects(List(IdWithSourceAndDestPaths(id, Option(inputPath), destinationPath))).unsafeRunSync()
 
     UUID.fromString(objectVersionCaptor.getValue.getObjectId) should equal(id)
     verify(updater, times(1)).addPath(
