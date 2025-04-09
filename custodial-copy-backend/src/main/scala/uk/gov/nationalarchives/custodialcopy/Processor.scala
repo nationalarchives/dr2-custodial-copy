@@ -3,7 +3,7 @@ package uk.gov.nationalarchives.custodialcopy
 import cats.effect.IO
 import cats.implicits.*
 import fs2.Stream
-import fs2.io.file.{Files, Flags}
+import fs2.io.file.{Files, Flags, Path}
 import io.circe.Encoder
 import org.apache.commons.codec.digest.DigestUtils
 import org.typelevel.log4cats.slf4j.Slf4jLogger
@@ -323,6 +323,9 @@ class Processor(
       _ <- logger.info(s"${missingObjectsPaths.length} objects created")
       _ <- ocflService.createObjects(changedObjectsPaths)
       _ <- logger.info(s"${changedObjectsPaths.length} objects updated")
+
+      _ <- missingObjectsPaths.parTraverse(missingObjectPath => Files[IO].deleteIfExists(Path.fromNioPath(missingObjectPath.sourceNioFilePath)))
+      _ <- changedObjectsPaths.parTraverse(changedObjectPath => Files[IO].deleteIfExists(Path.fromNioPath(changedObjectPath.sourceNioFilePath)))
 
       createdObjsSnsMessages = missingAndChangedObjects.missingObjects.map(generateSnsMessage(_, Created))
       updatedObjsSnsMessages = missingAndChangedObjects.changedObjects.map(generateSnsMessage(_, Updated))
