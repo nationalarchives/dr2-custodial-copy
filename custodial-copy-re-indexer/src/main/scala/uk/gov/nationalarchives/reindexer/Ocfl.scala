@@ -34,24 +34,21 @@ object Ocfl:
     def repo(configuration: Configuration): OcflRepository = createOcflRepository(configuration.config.ocflRepoDir, configuration.config.ocflWorkDir)
 
     override def readValue(ioId: UUID, fileType: EntityType, xpath: XPathExpression)(using configuration: Configuration): F[List[ReIndexUpdate]] =
-      def isValidForIndexing(ocflFile: OcflObjectVersionFile): Boolean =
+      def isValidForIndexing(ocflFile: OcflObjectVersionFile): F[Boolean] =
         val logger = Slf4jLogger.getLogger[F]
         val fullPath = s"${configuration.config.ocflRepoDir}/${ocflFile.getStorageRelativePath}"
         val file = new File(fullPath)
 
         val isMetadataFile = ocflFile.getPath.endsWith(s"${fileType}_Metadata.xml")
+        val isValid = isMetadataFile && file.length == 0
 
-        if isMetadataFile && file.length == 0 then logger.info(s"Empty file found: $fullPath") // this may happen only on uat
-
-        isMetadataFile && file.length() > 0
+        Sync[F].whenA(isValid)(logger.info(s"Empty file found: $fullPath")).map(_ => isValid) // this may happen only on uat
 
       for {
         logger <- Slf4jLogger.create[F]
         ocflObject <- Sync[F].onError(Sync[F].blocking(repo(configuration).getObject(ioId.toHeadVersion)))(err => logger.error(err)(err.getMessage))
-        objectVersionFiles <- Sync[F].blocking(
-          ocflObject.getFiles.asScala.filter(ocflFile => isValidForIndexing(ocflFile))
-        )
-        xmlFiles <- objectVersionFiles.toList.traverse(objectVersionFile =>
+        objectVersionFiles <- ocflObject.getFiles.asScala.toList.filterA(ocflFile => isValidForIndexing(ocflFile))
+        xmlFiles <- objectVersionFiles.traverse(objectVersionFile =>
           fileToXml(s"${configuration.config.ocflRepoDir}/${objectVersionFile.getStorageRelativePath}")
         )
       } yield xmlFiles.map(xmlFile => fileType.getReindexUpdate(xpath, xmlFile))
