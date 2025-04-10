@@ -40,9 +40,9 @@ object Ocfl:
         val file = new File(fullPath)
 
         val isMetadataFile = ocflFile.getPath.endsWith(s"${fileType}_Metadata.xml")
-        val isValid = isMetadataFile && file.length == 0
+        val isValid = isMetadataFile && file.length > 0
 
-        Sync[F].whenA(isValid)(logger.info(s"Empty file found: $fullPath")).map(_ => isValid) // this may happen only on uat
+        Sync[F].whenA(file.length() == 0)(logger.info(s"Empty file found: $fullPath")).map(_ => isValid) // this may happen only on uat
 
       for {
         logger <- Slf4jLogger.create[F]
