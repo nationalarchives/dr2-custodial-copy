@@ -3,6 +3,7 @@ package uk.gov.nationalarchives.reindexer
 import cats.effect.Sync
 import cats.syntax.all.*
 import io.ocfl.api.OcflRepository
+import io.ocfl.api.model.OcflObjectVersionFile
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import org.w3c.dom.Document
 import uk.gov.nationalarchives.reindexer.Configuration.{EntityType, ReIndexUpdate}
@@ -33,15 +34,23 @@ object Ocfl:
     def repo(configuration: Configuration): OcflRepository = createOcflRepository(configuration.config.ocflRepoDir, configuration.config.ocflWorkDir)
 
     override def readValue(ioId: UUID, fileType: EntityType, xpath: XPathExpression)(using configuration: Configuration): F[List[ReIndexUpdate]] =
+      def isValidForIndexing(ocflFile: OcflObjectVersionFile): Boolean =
+        val logger = Slf4jLogger.getLogger[F]
+        val fullPath = s"${configuration.config.ocflRepoDir}/${ocflFile.getStorageRelativePath}"
+        val file = new File(fullPath)
+
+        val isMetadataFile = ocflFile.getPath.endsWith(s"${fileType}_Metadata.xml")
+
+        if isMetadataFile && file.length == 0 then logger.info(s"Empty file found: $fullPath") // this may happen only on uat
+
+        isMetadataFile && file.length() > 0
+
       for {
         logger <- Slf4jLogger.create[F]
         ocflObject <- Sync[F].onError(Sync[F].blocking(repo(configuration).getObject(ioId.toHeadVersion)))(err => logger.error(err)(err.getMessage))
         objectVersionFiles <- Sync[F].blocking(
-          ocflObject.getFiles.asScala.filter(ocflFile =>
-            ocflFile.getPath.endsWith(s"${fileType}_Metadata.xml") &&
-              new File(ocflFile.getPath).length() > 0
-          )
-        ) // due to our storage space saving, we have empty files in test repo, ignore them
+          ocflObject.getFiles.asScala.filter(ocflFile => isValidForIndexing(ocflFile))
+        )
         xmlFiles <- objectVersionFiles.toList.traverse(objectVersionFile =>
           fileToXml(s"${configuration.config.ocflRepoDir}/${objectVersionFile.getStorageRelativePath}")
         )
