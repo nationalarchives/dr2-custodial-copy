@@ -129,7 +129,7 @@ object Main extends IOApp {
           responses
             .filter(_.message.ref == ref)
             .map(_.receiptHandle)
-            .parTraverse(processor.deleteMessage)
+            .parTraverse(receiptHandle => logger.info(s"Deleting message with receipt handle $receiptHandle") >> processor.deleteMessage(receiptHandle))
       }
     } yield results
   }
