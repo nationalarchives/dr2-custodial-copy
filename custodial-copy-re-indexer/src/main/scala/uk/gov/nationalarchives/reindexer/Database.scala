@@ -30,11 +30,12 @@ object Database:
       logHandler = Option(LogHandler.jdkLogHandler)
     )
 
-    override def getIds: Stream[F, UUID] =
+    override def getIds: Stream[F, UUID] = Stream.evals {
       sql"select id from files group by 1"
         .query[UUID]
-        .stream
+        .to[List]
         .transact(xa)
+    }
 
     given Write[ReIndexUpdate] = Write[(String, UUID)].contramap(field => (field.value, field.id))
 
