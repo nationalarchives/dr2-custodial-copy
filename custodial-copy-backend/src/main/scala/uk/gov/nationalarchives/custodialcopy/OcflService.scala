@@ -26,7 +26,8 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO
 
   given Logger[IO] = Slf4jLogger.getLogger[IO]
 
-  private def logErrorAndRelease(err: Throwable): IO[Unit] = Logger[IO].error(err)(err.getMessage) >> semaphore.release
+  private def logErrorAndRelease: PartialFunction[Throwable, IO[Unit]] =
+    case err => Logger[IO].error(err)(err.getMessage) >> semaphore.release
 
   def commitStagedChanges(id: UUID): IO[Unit] =
     semaphore.acquire >> IO.whenA(ocflRepository.hasStagedChanges(id.toString)) {
