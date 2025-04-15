@@ -2,6 +2,8 @@ package uk.gov.nationalarchives.custodialcopy
 
 import cats.effect.IO
 import fs2.io.file.*
+import uk.gov.nationalarchives.dp.client.EntityClient.EntityType
+
 import java.util.UUID
 import scala.xml.Elem
 
@@ -11,7 +13,7 @@ sealed trait CustodialCopyObject {
   def checksums: List[Checksum]
   def name: String
   def sourceFilePath(workDir: String): IO[Path] = createDirectory(workDir).map(dir => Path(s"$dir/$name"))
-  def tableItemIdentifier: String | UUID
+  def tableItemIdentifier: String
   private def createDirectory(workDir: String): IO[Path] = {
     val path = Path(s"$workDir/downloads/${UUID.randomUUID()}/$id")
     Files[IO].createDirectories(path).map(_ => path)
@@ -24,16 +26,17 @@ object CustodialCopyObject {
       checksums: List[Checksum],
       url: String,
       destinationFilePath: String,
-      tableItemIdentifier: UUID
+      tableItemIdentifier: String
   ) extends CustodialCopyObject
   case class MetadataObject(
       id: UUID,
+      entityType: EntityType,
       repTypeGroup: Option[String],
       name: String,
       checksums: List[Checksum],
       metadata: Elem,
       destinationFilePath: String,
-      tableItemIdentifier: String | UUID
+      tableItemIdentifier: String
   ) extends CustodialCopyObject
 }
 

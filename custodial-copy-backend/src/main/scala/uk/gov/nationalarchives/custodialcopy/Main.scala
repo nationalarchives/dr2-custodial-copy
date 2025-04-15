@@ -54,7 +54,7 @@ object Main extends IOApp {
       }
     }
 
-  case class IdWithSourceAndDestPaths(id: UUID, sourceNioFilePath: file.Path, destinationPath: String)
+  case class IdWithSourceAndDestPaths(id: UUID, sourceNioFilePath: Option[file.Path], destinationPath: String)
 
   override def run(args: List[String]): IO[ExitCode] =
     for {
@@ -129,7 +129,7 @@ object Main extends IOApp {
           responses
             .filter(_.message.ref == ref)
             .map(_.receiptHandle)
-            .parTraverse(processor.deleteMessage)
+            .parTraverse(receiptHandle => logger.info(s"Deleting message with receipt handle $receiptHandle") >> processor.deleteMessage(receiptHandle))
       }
     } yield results
   }
