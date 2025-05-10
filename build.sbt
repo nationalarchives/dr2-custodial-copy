@@ -5,7 +5,7 @@ import uk.gov.nationalarchives.sbt.Log4j2MergePlugin.log4j2MergeStrategy
 import scala.sys.process.*
 
 ThisBuild / organization := "uk.gov.nationalarchives"
-ThisBuild / scalaVersion := "3.6.4"
+ThisBuild / scalaVersion := "3.7.0"
 
 lazy val tagImage = taskKey[Unit]("Sets a GitHub actions output for the latest tag")
 lazy val tagScannedImage = taskKey[Unit]("Tags the image with the Wiz CLI")
@@ -179,6 +179,9 @@ lazy val commonSettings = Seq(
     Cmd("COPY", s"2/opt/docker/lib/log4j2.properties", "/poduser/log-config/log4j2.properties"),
     Cmd("COPY", s"2/opt/docker/lib/${(assembly / assemblyJarName).value}", s"/opt/${(assembly / assemblyJarName).value}"),
     Cmd("USER", "1002"),
-    Cmd("CMD", s"rm -rf /poduser/work/downloads && java -Xmx2g -Dlog4j.configurationFile=/poduser/log-config/log4j2.properties -jar /opt/${(assembly / assemblyJarName).value}")
+    Cmd(
+      "CMD",
+      s"rm -rf /poduser/work/downloads && java -Xmx2g -Dlog4j.configurationFile=/poduser/log-config/log4j2.properties -jar /opt/${(assembly / assemblyJarName).value}"
+    )
   )
 )
