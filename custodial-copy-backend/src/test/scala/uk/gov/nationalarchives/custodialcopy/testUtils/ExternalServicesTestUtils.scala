@@ -48,7 +48,7 @@ import java.util.UUID
 import scala.jdk.CollectionConverters.ListHasAsScala
 import scala.util.{Failure, Success, Try}
 import scala.xml.Utility.trim
-import scala.xml.{Elem, NodeBuffer, Utility, XML}
+import scala.xml.{Elem, NodeBuffer, XML}
 
 object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
   private val ioType = InformationObject.entityTypeShort

@@ -7,7 +7,6 @@ import io.circe.Decoder
 import io.ocfl.api.MutableOcflRepository
 import io.ocfl.api.model.ObjectVersionId
 import org.apache.commons.codec.digest.DigestUtils
-import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.*
 import org.mockito.Mockito.{never, reset, times, verify, when}
 import org.scalatest.EitherValues
