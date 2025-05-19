@@ -1,12 +1,13 @@
 import sbt.*
 object Dependencies {
-  private lazy val daAwsClientsVersion = "0.1.115"
+  private lazy val daAwsClientsVersion = "0.1.116"
   private lazy val logbackVersion = "2.24.3"
   private lazy val log4CatsVersion = "2.7.0"
   private lazy val pureConfigVersion = "0.17.9"
   private lazy val scalaTestVersion = "3.2.18"
   private lazy val http4sVersion = "1.0.0-M44"
 
+  lazy val dynamoClient = "uk.gov.nationalarchives" %% "da-dynamodb-client" % daAwsClientsVersion
   lazy val fs2Core = "co.fs2" %% "fs2-core" % "3.12.0"
   lazy val log4Cats = "org.typelevel" %% "log4cats-core" % log4CatsVersion
   lazy val declineEffect = "com.monovore" %% "decline-effect" % "2.5.0"

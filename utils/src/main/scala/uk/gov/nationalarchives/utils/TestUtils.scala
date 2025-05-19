@@ -6,8 +6,11 @@ import cats.syntax.all.*
 import doobie.implicits.*
 import doobie.util.transactor.Transactor.Aux
 import doobie.{Fragment, Transactor}
+import io.circe.{Decoder, Encoder}
 import io.ocfl.api.model.{ObjectVersionId, VersionInfo}
 import io.ocfl.api.{OcflObjectUpdater, OcflOption}
+import software.amazon.awssdk.services.sqs.model.{DeleteMessageResponse, SendMessageResponse}
+import uk.gov.nationalarchives.DASQSClient
 import uk.gov.nationalarchives.utils.Utils.{OcflFile, createOcflRepository, given}
 
 import java.nio.file.Files
@@ -173,3 +176,16 @@ object TestUtils:
       )
     (repoDir.toString, workDir.toString)
   }
+
+  def notImplemented[T]: IO[T] = IO.raiseError(new Exception("Not implemented"))
+
+  class TestSqsClient extends DASQSClient[IO]:
+    override def sendMessage[T <: Product](
+        queueUrl: String
+    )(message: T, potentialFifoConfiguration: Option[DASQSClient.FifoQueueConfiguration], delaySeconds: Int)(using enc: Encoder[T]): IO[SendMessageResponse] =
+      notImplemented
+
+    override def receiveMessages[T](queueUrl: String, maxNumberOfMessages: Int)(using dec: Decoder[T]): IO[List[DASQSClient.MessageResponse[T]]] =
+      notImplemented
+
+    override def deleteMessage(queueUrl: String, receiptHandle: String): IO[DeleteMessageResponse] = notImplemented
