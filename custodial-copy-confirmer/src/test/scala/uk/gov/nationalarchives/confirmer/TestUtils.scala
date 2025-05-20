@@ -38,7 +38,7 @@ object TestUtils:
     deletedMessagesRef <- Ref.of[IO, List[String]](Nil)
     workDir = Files.createTempDirectory("work")
     repoDir = Files.createTempDirectory("repo")
-    config = Config("", URI.create("https://example.com"), repoDir.toString, workDir.toString)
+    config = Config("table", "attribute", "", URI.create("https://example.com"), repoDir.toString, workDir.toString)
     _ <- Main.runConfirmer(config, daSqsClient(messagesRef, deletedMessagesRef, errors, allowMultipleSqsCalls), daDynamoDbClient(dynamoRef, errors), ocfl(existingRefs, config)).compile.drain
     messages <- deletedMessagesRef.get
     dynamoRequests <- dynamoRef.get

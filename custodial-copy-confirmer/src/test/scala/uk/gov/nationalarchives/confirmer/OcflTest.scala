@@ -20,7 +20,7 @@ class OcflTest extends AnyFlatSpec:
     val nonExistingRef = UUID.randomUUID
     repository.putObject(ObjectVersionId.head(existingRef.toString), Files.createTempFile(existingRef.toString, ""), new VersionInfo())
 
-    val ocfl = Ocfl(Config("", URI.create("http://localhost"), repoDir, workDir))
+    val ocfl = Ocfl(Config("table", "attribute", "", URI.create("http://localhost"), repoDir, workDir))
     ocfl.checkObjectExists(existingRef) should equal(true)
     ocfl.checkObjectExists(nonExistingRef) should equal(false)
   }

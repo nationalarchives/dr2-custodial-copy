@@ -23,17 +23,14 @@ import java.util.UUID
 
 object Main extends IOApp {
 
-  case class Config(sqsUrl: String, proxyUrl: URI, ocflRepoDir: String, ocflWorkDir: String) derives ConfigReader
+  case class Config(dynamoTableName: String, dynamoAttributeName: String, sqsUrl: String, proxyUrl: URI, ocflRepoDir: String, ocflWorkDir: String) derives ConfigReader
 
   extension (s: String)
     private def toAttributeValue: AttributeValue = AttributeValue.builder.s(s).build
 
-  case class Message(dynamoKey: String, dynamoTable: String, ioRef: UUID, batchId: String) {
+  case class Message(ioRef: UUID, batchId: String) {
     def primaryKey: Map[String, AttributeValue] =
       Map("assetId" -> ioRef.toString.toAttributeValue, "batchId" -> batchId.toAttributeValue)
-
-    def toUpdate: Map[String, Option[AttributeValue]] =
-      Map(dynamoKey -> "true".toAttributeValue.some)
   }
 
 
@@ -70,9 +67,11 @@ object Main extends IOApp {
       _ <- logger.info(s"Processing message refs ${messages.map(_.message.ioRef).mkString(",")}")
       _ <- messages.parTraverse { sqsMessage =>
         val message = sqsMessage.message
-        val request = DADynamoDbRequest(message.dynamoTable, message.primaryKey, message.toUpdate)
-        IO.whenA(ocfl.checkObjectExists(message.ioRef))(dynamoClient.updateAttributeValues(request).void) >>
-          sqsClient.deleteMessage(config.sqsUrl, sqsMessage.receiptHandle)
+        val request = DADynamoDbRequest(config.dynamoTableName, message.primaryKey, Map(config.dynamoAttributeName -> "true".toAttributeValue.some))
+        IO.whenA(ocfl.checkObjectExists(message.ioRef)){
+          dynamoClient.updateAttributeValues(request) >> sqsClient.deleteMessage(config.sqsUrl, sqsMessage.receiptHandle).void
+        }
+
       }
     } yield ()
   }.handleErrorWith(err => Stream.eval(logError(err)))
