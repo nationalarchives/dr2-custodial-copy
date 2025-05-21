@@ -10,7 +10,7 @@ import java.util.UUID
 
 class MainTest extends AnyFlatSpec {
 
-  "runConfirmer" should "write to dynamo if the object exists and not write otherwise and delete the messages from the queue" in {
+  "runConfirmer" should "write to dynamo and delete the messages from the queue only if the object exists" in {
     val existingRef = UUID.randomUUID
     val nonExistingRef = UUID.randomUUID
     val inputMessages = List(

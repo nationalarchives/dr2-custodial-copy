@@ -1,6 +1,6 @@
 # DR2 Custodial Copy
 
-This repository contains three components which together make up the custodial copy service.
+This repository contains five components which together make up the custodial copy service.
 
 The principle of the Custodial Copy approach is described [here](https://zenodo.org/records/13647420)
 
@@ -250,7 +250,7 @@ database path environment variable.
 
 It can also be run using `sbt run`
 
-## Database re-indexer
+## 4. Database re-indexer
 
 This is built as a docker image but is intended to be run periodically. The program takes a subcommand and three
 mandatory arguments.
@@ -317,7 +317,7 @@ the environment variables. You will need to provide the arguments listed above a
 
 It can also be run using `sbt run`
 
-## OCFL Confirmer
+## 5. OCFL Confirmer
 
 This is a service which is intended to run in a long-running Docker container.
 
@@ -336,20 +336,20 @@ The queue sends messages in this format:
 }
 ```
 
-For each message, the confirmer checks to see if this object exists in the OCFL repository. 
+For each message, the Confirmer checks to see if this object exists in the OCFL repository. 
 
 If it does exist, it writes `true` to an attribute specified by `DYNAMO_ATTRIBUTE_NAME` in the table specified by `DYNAMO_TABLE_NAME`
 It then deletes the message from the queue. 
 
-If the object is not in the queue, nothing happens. The messae will eventually be resent after the visibility timeout has expired.
+If the object is not in the queue, nothing happens. The message will eventually be resent after the visibility timeout has expired.
 
 ### Environment Variables
 
-| Name                  | Description                                                                 |
-|-----------------------|-----------------------------------------------------------------------------|
-| DYNAMO_TABLE_NAME     | The DynamoDB table to update                                                |
-| DYNAMO_ATTRIBUTE_NAME | The attribute to update in the DynamoDB table                               |
-| SQS_QUEUE_URL         | The queue the service will poll                                             |
-| OCFL_REPO_DIR         | The directory for the OCFL repository                                       |
-| OCFL_WORK_DIR         | The directory for the OCFL work directory                                   |
-| HTTPS_PROXY           | An optional proxy. This is needed running in TNA's network but not locally. |
+| Name                  | Description                                                                |
+|-----------------------|----------------------------------------------------------------------------|
+| DYNAMO_TABLE_NAME     | The DynamoDB table to update                                               |
+| DYNAMO_ATTRIBUTE_NAME | The attribute to update in the DynamoDB table                              |
+| SQS_QUEUE_URL         | The queue the service will poll                                            |
+| OCFL_REPO_DIR         | The directory for the OCFL repository                                      |
+| OCFL_WORK_DIR         | The directory for the OCFL work directory                                  |
+| HTTPS_PROXY           | An optional proxy. This is needed running in TNA's network but not locally |
