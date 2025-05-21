@@ -17,12 +17,10 @@ import java.net.URI
 import java.nio.file.Files
 import java.util.UUID
 
-
 object TestUtils:
   def createError[T](msg: String): IO[T] = IO.raiseError(new Exception(msg))
 
   def notImplemented[T]: IO[T] = createError("Not implemented")
-
 
   case class Errors(dynamoUpdateError: Boolean = false, sqsReceiveError: Boolean = false, sqsDeleteError: Boolean = false) {
     def hasReceiveMessagesError: IO[Unit] = IO.whenA(sqsReceiveError)(createError[Unit]("Error receiving messages"))
@@ -32,30 +30,47 @@ object TestUtils:
     def hasDeleteError: IO[Unit] = IO.whenA(sqsDeleteError)(createError[Unit]("Error deleting from SQS"))
   }
 
-  def runConfirmer(messages: List[MessageResponse[Message]], existingRefs: List[UUID], errors: Errors, allowMultipleSqsCalls: Boolean = false): (List[String], List[DADynamoDbRequest]) = (for {
+  def runConfirmer(
+      messages: List[MessageResponse[Message]],
+      existingRefs: List[UUID],
+      errors: Errors,
+      allowMultipleSqsCalls: Boolean = false
+  ): (List[String], List[DADynamoDbRequest]) = (for {
     messagesRef <- Ref.of[IO, List[MessageResponse[Message]]](messages)
     dynamoRef <- Ref.of[IO, List[DADynamoDbRequest]](Nil)
     deletedMessagesRef <- Ref.of[IO, List[String]](Nil)
     workDir = Files.createTempDirectory("work")
     repoDir = Files.createTempDirectory("repo")
     config = Config("table", "attribute", "", URI.create("https://example.com"), repoDir.toString, workDir.toString)
-    _ <- Main.runConfirmer(config, daSqsClient(messagesRef, deletedMessagesRef, errors, allowMultipleSqsCalls), daDynamoDbClient(dynamoRef, errors), ocfl(existingRefs, config)).compile.drain
+    _ <- Main
+      .runConfirmer(
+        config,
+        daSqsClient(messagesRef, deletedMessagesRef, errors, allowMultipleSqsCalls),
+        daDynamoDbClient(dynamoRef, errors),
+        ocfl(existingRefs, config)
+      )
+      .compile
+      .drain
     messages <- deletedMessagesRef.get
     dynamoRequests <- dynamoRef.get
   } yield (messages, dynamoRequests)).unsafeRunSync()
 
-  def daSqsClient(ref: Ref[IO, List[MessageResponse[Message]]], deletedMessagesRef: Ref[IO, List[String]], errors: Errors, allowMultiplSqsCalls: Boolean): DASQSClient[IO] = new TestSqsClient {
+  def daSqsClient(
+      ref: Ref[IO, List[MessageResponse[Message]]],
+      deletedMessagesRef: Ref[IO, List[String]],
+      errors: Errors,
+      allowMultiplSqsCalls: Boolean
+  ): DASQSClient[IO] = new TestSqsClient {
     override def receiveMessages[T](queueUrl: String, maxNumberOfMessages: Int)(using dec: Decoder[T]): IO[List[MessageResponse[T]]] =
       errors.hasReceiveMessagesError >>
-        (if allowMultiplSqsCalls then
-          ref.get.asInstanceOf[IO[List[MessageResponse[T]]]]
-        else
-          ref.getAndUpdate(_ => Nil).asInstanceOf[IO[List[MessageResponse[T]]]])
+        (if allowMultiplSqsCalls then ref.get.asInstanceOf[IO[List[MessageResponse[T]]]]
+         else ref.getAndUpdate(_ => Nil).asInstanceOf[IO[List[MessageResponse[T]]]])
 
-
-    override def deleteMessage(queueUrl: String, receiptHandle: String): IO[DeleteMessageResponse] = errors.hasDeleteError >> deletedMessagesRef.update { deletedMessagesList =>
-      receiptHandle :: deletedMessagesList
-    }.map(_ => DeleteMessageResponse.builder.build)
+    override def deleteMessage(queueUrl: String, receiptHandle: String): IO[DeleteMessageResponse] = errors.hasDeleteError >> deletedMessagesRef
+      .update { deletedMessagesList =>
+        receiptHandle :: deletedMessagesList
+      }
+      .map(_ => DeleteMessageResponse.builder.build)
   }
 
   def daDynamoDbClient(ref: Ref[IO, List[DADynamoDbRequest]], errors: Errors): DADynamoDBClient[IO] = new DADynamoDBClient[IO] {
@@ -65,13 +80,18 @@ object TestUtils:
 
     override def writeItems[T](tableName: String, items: List[T])(using format: DynamoFormat[T]): IO[List[BatchWriteItemResponse]] = notImplemented
 
-    override def queryItems[U](tableName: String, requestCondition: RequestCondition, potentialGsiName: Option[String])(using returnTypeFormat: DynamoFormat[U]): IO[List[U]] = notImplemented
+    override def queryItems[U](tableName: String, requestCondition: RequestCondition, potentialGsiName: Option[String])(using
+        returnTypeFormat: DynamoFormat[U]
+    ): IO[List[U]] = notImplemented
 
-    override def getItems[T, K](primaryKeys: List[K], tableName: String)(using returnFormat: DynamoFormat[T], keyFormat: DynamoFormat[K]): IO[List[T]] = notImplemented
+    override def getItems[T, K](primaryKeys: List[K], tableName: String)(using returnFormat: DynamoFormat[T], keyFormat: DynamoFormat[K]): IO[List[T]] =
+      notImplemented
 
-    override def updateAttributeValues(dynamoDbRequest: DADynamoDBClient.DADynamoDbRequest): IO[Int] = errors.hasDynamoUpdateError >> ref.update { requests =>
-      dynamoDbRequest :: requests
-    }.map(_ => 1)
+    override def updateAttributeValues(dynamoDbRequest: DADynamoDBClient.DADynamoDbRequest): IO[Int] = errors.hasDynamoUpdateError >> ref
+      .update { requests =>
+        dynamoDbRequest :: requests
+      }
+      .map(_ => 1)
   }
 
   def ocfl(existingRefs: List[UUID], config: Config): Ocfl = new Ocfl(config) {

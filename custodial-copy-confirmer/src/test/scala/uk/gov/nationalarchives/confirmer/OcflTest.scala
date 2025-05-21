@@ -24,4 +24,3 @@ class OcflTest extends AnyFlatSpec:
     ocfl.checkObjectExists(existingRef) should equal(true)
     ocfl.checkObjectExists(nonExistingRef) should equal(false)
   }
-

@@ -32,9 +32,9 @@ class MainTest extends AnyFlatSpec {
   "runConfirmer" should "not delete the messages from the queue if there is an error" in {
     val existingRef = UUID.randomUUID()
     val inputMessages = List(MessageResponse("batchId", None, Message(existingRef, "batchId1")))
-    val (messagesInQueueOne, _) = runConfirmer(inputMessages, List(existingRef), Errors(dynamoUpdateError =  true))
-    val (messagesInQueueTwo, _) = runConfirmer(inputMessages, List(existingRef), Errors(sqsReceiveError =  true))
-    val (messagesInQueueThree, _) = runConfirmer(inputMessages, List(existingRef), Errors(sqsDeleteError =  true))
+    val (messagesInQueueOne, _) = runConfirmer(inputMessages, List(existingRef), Errors(dynamoUpdateError = true))
+    val (messagesInQueueTwo, _) = runConfirmer(inputMessages, List(existingRef), Errors(sqsReceiveError = true))
+    val (messagesInQueueThree, _) = runConfirmer(inputMessages, List(existingRef), Errors(sqsDeleteError = true))
 
     messagesInQueueOne.size should equal(0)
     messagesInQueueTwo.size should equal(0)
