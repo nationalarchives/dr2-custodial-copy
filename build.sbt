@@ -40,7 +40,7 @@ def setupDirectories(serviceName: String) =
   )
 
 lazy val root = (project in file("."))
-  .aggregate(custodialCopyBackend, webapp, builder, reIndexer, utils)
+  .aggregate(custodialCopyBackend, webapp, builder, confirmer, reIndexer, utils)
   .settings(
     publish / skip := true
   )
