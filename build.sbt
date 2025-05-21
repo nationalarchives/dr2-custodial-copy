@@ -79,7 +79,8 @@ lazy val utils = (project in file("utils"))
       pureConfig,
       scalaXml,
       doobieCore,
-      sqlite
+      sqlite,
+      sqsClient
     )
   )
 
@@ -106,6 +107,21 @@ lazy val builder = (project in file("custodial-copy-db-builder"))
     libraryDependencies ++= Seq(
       fs2Core,
       sqsClient
+    )
+  )
+  .dependsOn(utils)
+
+lazy val confirmer = (project in file("custodial-copy-confirmer"))
+  .enablePlugins(DockerPlugin)
+  .settings(commonSettings)
+  .settings(imageSettings)
+  .settings(
+    name := "custodial-copy-confirmer",
+    scalacOptions += "-Wunused:imports",
+    assembly / assemblyJarName := "custodial-copy-confirmer.jar",
+    libraryDependencies ++= Seq(
+      fs2Core,
+      dynamoClient
     )
   )
   .dependsOn(utils)

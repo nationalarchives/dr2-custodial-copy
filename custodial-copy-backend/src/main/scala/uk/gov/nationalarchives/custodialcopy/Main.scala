@@ -15,6 +15,7 @@ import uk.gov.nationalarchives.custodialcopy.Processor.Result.*
 import uk.gov.nationalarchives.DASNSClient
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.Processor.Result
+import uk.gov.nationalarchives.utils.Utils.*
 
 import java.net.URI
 import java.nio.file
@@ -33,11 +34,6 @@ object Main extends IOApp {
       versionPath: String,
       topicArn: String
   ) derives ConfigReader
-
-  private def sqsClient(config: Config): DASQSClient[IO] =
-    config.proxyUrl
-      .map(proxy => DASQSClient[IO](proxy))
-      .getOrElse(DASQSClient[IO]())
 
   given Decoder[ReceivedSnsMessage] = (c: HCursor) =>
     for {
@@ -66,7 +62,7 @@ object Main extends IOApp {
       )
       semaphore <- Semaphore[IO](1)
       service <- OcflService(config, semaphore)
-      sqs = sqsClient(config)
+      sqs = sqsClient[IO](config.proxyUrl)
       sns = DASNSClient[IO]()
       processor <- Processor(config, sqs, service, client, sns)
       _ <- {
@@ -77,24 +73,9 @@ object Main extends IOApp {
       }.compile.drain
     } yield ExitCode.Success
 
-  private def aggregateMessages(sqs: DASQSClient[IO], config: Config): IO[List[MessageResponse[ReceivedSnsMessage]]] = {
-    def collectMessages(messages: List[MessageResponse[ReceivedSnsMessage]]): IO[List[MessageResponse[ReceivedSnsMessage]]] = {
-      sqs
-        .receiveMessages[ReceivedSnsMessage](config.sqsQueueUrl)
-        .flatMap { newMessages =>
-          val allMessages = newMessages ++ messages
-          if newMessages.isEmpty || allMessages.size >= 50 then IO.pure(allMessages) else collectMessages(allMessages)
-        }
-        .handleErrorWith { err =>
-          logError(err) >> IO.pure[List[MessageResponse[ReceivedSnsMessage]]](messages)
-        }
-    }
-    collectMessages(Nil)
-  }
-
   def runCustodialCopy(sqs: DASQSClient[IO], config: Config, processor: Processor): Stream[IO, List[Result]] =
     Stream
-      .eval(aggregateMessages(sqs, config))
+      .eval(aggregateMessages(sqs, config.sqsQueueUrl))
       .filter(messageResponses => messageResponses.nonEmpty)
       .evalMap { messageResponses =>
         messageResponses
@@ -124,7 +105,7 @@ object Main extends IOApp {
       _ <- logger.info(s"${results.count(_.isError)} messages out of ${results.length} unique messages failed")
 
       _ <- results.parTraverse {
-        case Failure(e) => logError(e)
+        case Failure(e) => logError[IO](e)
         case Success(ref) =>
           responses
             .filter(_.message.ref == ref)
@@ -137,8 +118,4 @@ object Main extends IOApp {
   private def dedupeMessages(messages: List[MessageResponse[ReceivedSnsMessage]]): List[MessageResponse[ReceivedSnsMessage]] =
     messages.distinctBy(_.message.ref)
 
-  private def logError(err: Throwable) = for {
-    logger <- Slf4jLogger.create[IO]
-    _ <- logger.error(err)("Error running custodial copy")
-  } yield ()
 }
