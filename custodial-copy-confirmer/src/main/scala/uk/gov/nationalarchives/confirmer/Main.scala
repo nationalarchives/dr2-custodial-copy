@@ -23,16 +23,15 @@ import java.util.UUID
 
 object Main extends IOApp {
 
-  case class Config(dynamoTableName: String, dynamoAttributeName: String, sqsUrl: String, proxyUrl: URI, ocflRepoDir: String, ocflWorkDir: String) derives ConfigReader
+  case class Config(dynamoTableName: String, dynamoAttributeName: String, sqsUrl: String, proxyUrl: URI, ocflRepoDir: String, ocflWorkDir: String)
+      derives ConfigReader
 
-  extension (s: String)
-    private def toAttributeValue: AttributeValue = AttributeValue.builder.s(s).build
+  extension (s: String) private def toAttributeValue: AttributeValue = AttributeValue.builder.s(s).build
 
   case class Message(ioRef: UUID, batchId: String) {
     def primaryKey: Map[String, AttributeValue] =
       Map("assetId" -> ioRef.toString.toAttributeValue, "batchId" -> batchId.toAttributeValue)
   }
-
 
   private def dynamoClient(proxyUrl: URI): DADynamoDBClient[IO] = {
     val proxy = ProxyConfiguration
@@ -59,20 +58,21 @@ object Main extends IOApp {
       _ <- (Stream.fixedRateStartImmediately[IO](10.seconds) >> runConfirmer(config, sqs, dynamo, Ocfl(config))).compile.drain
     } yield ExitCode.Success
 
+  def runConfirmer(config: Config, sqsClient: DASQSClient[IO], dynamoClient: DADynamoDBClient[IO], ocfl: Ocfl): Stream[IO, Unit] = Stream
+    .eval {
+      for {
+        logger <- Slf4jLogger.create[IO]
+        messages <- aggregateMessages[IO, Message](sqsClient, config.sqsUrl)
+        _ <- logger.info(s"Processing message refs ${messages.map(_.message.ioRef).mkString(",")}")
+        _ <- messages.parTraverse { sqsMessage =>
+          val message = sqsMessage.message
+          val request = DADynamoDbRequest(config.dynamoTableName, message.primaryKey, Map(config.dynamoAttributeName -> "true".toAttributeValue.some))
+          IO.whenA(ocfl.checkObjectExists(message.ioRef)) {
+            dynamoClient.updateAttributeValues(request) >> sqsClient.deleteMessage(config.sqsUrl, sqsMessage.receiptHandle).void
+          }
 
-  def runConfirmer(config: Config, sqsClient: DASQSClient[IO], dynamoClient: DADynamoDBClient[IO], ocfl: Ocfl): Stream[IO, Unit] = Stream.eval {
-    for {
-      logger <- Slf4jLogger.create[IO]
-      messages <- aggregateMessages[IO, Message](sqsClient, config.sqsUrl)
-      _ <- logger.info(s"Processing message refs ${messages.map(_.message.ioRef).mkString(",")}")
-      _ <- messages.parTraverse { sqsMessage =>
-        val message = sqsMessage.message
-        val request = DADynamoDbRequest(config.dynamoTableName, message.primaryKey, Map(config.dynamoAttributeName -> "true".toAttributeValue.some))
-        IO.whenA(ocfl.checkObjectExists(message.ioRef)){
-          dynamoClient.updateAttributeValues(request) >> sqsClient.deleteMessage(config.sqsUrl, sqsMessage.receiptHandle).void
         }
-
-      }
-    } yield ()
-  }.handleErrorWith(err => Stream.eval(logError(err)))
+      } yield ()
+    }
+    .handleErrorWith(err => Stream.eval(logError(err)))
 }
