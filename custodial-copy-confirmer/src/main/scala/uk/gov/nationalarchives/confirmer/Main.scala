@@ -30,7 +30,7 @@ object Main extends IOApp {
 
   case class Message(ioRef: UUID, batchId: String) {
     def primaryKey: Map[String, AttributeValue] =
-      Map("assetId" -> ioRef.toString.toAttributeValue, "batchId" -> batchId.toAttributeValue)
+      Map("ioRef" -> ioRef.toString.toAttributeValue, "batchId" -> batchId.toAttributeValue)
   }
 
   private def dynamoClient(proxyUrl: URI): DADynamoDBClient[IO] = {
