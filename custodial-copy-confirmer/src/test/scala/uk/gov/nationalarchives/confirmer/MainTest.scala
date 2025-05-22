@@ -24,7 +24,7 @@ class MainTest extends AnyFlatSpec {
     dynamoUpdateItems.size should equal(1)
 
     val updateItem = dynamoUpdateItems.head
-    updateItem.primaryKeyAndItsValue("assetId").s() should equal(existingRef.toString)
+    updateItem.primaryKeyAndItsValue("ioRef").s() should equal(existingRef.toString)
     updateItem.primaryKeyAndItsValue("batchId").s() should equal("batchId1")
     updateItem.attributeNamesAndValuesToUpdate("attribute").get.s() should equal("true")
   }
