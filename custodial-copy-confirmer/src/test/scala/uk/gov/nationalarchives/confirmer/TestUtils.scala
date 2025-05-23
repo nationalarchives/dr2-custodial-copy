@@ -7,14 +7,22 @@ import org.scanamo.DynamoFormat
 import org.scanamo.request.RequestCondition
 import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
 import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
+import sttp.capabilities
+import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DADynamoDBClient.DADynamoDbRequest
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.confirmer.Main.{Config, Message}
+import uk.gov.nationalarchives.dp.client.Entities.{Entity, IdentifierResponse}
+import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.InformationObject
+import uk.gov.nationalarchives.dp.client.{Client, DataProcessor, Entities, EntityClient}
+import uk.gov.nationalarchives.dp.client.EntityClient.Identifier
 import uk.gov.nationalarchives.utils.TestUtils.TestSqsClient
 import uk.gov.nationalarchives.{DADynamoDBClient, DASQSClient}
 
 import java.net.URI
 import java.nio.file.Files
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 object TestUtils:
@@ -33,6 +41,7 @@ object TestUtils:
   def runConfirmer(
       messages: List[MessageResponse[Message]],
       existingRefs: List[UUID],
+      assetIdToEntityIds: Map[UUID, List[UUID]],
       errors: Errors,
       allowMultipleSqsCalls: Boolean = false
   ): (List[String], List[DADynamoDbRequest]) = (for {
@@ -41,19 +50,68 @@ object TestUtils:
     deletedMessagesRef <- Ref.of[IO, List[String]](Nil)
     workDir = Files.createTempDirectory("work")
     repoDir = Files.createTempDirectory("repo")
-    config = Config("table", "attribute", "", URI.create("https://example.com"), repoDir.toString, workDir.toString)
+    config = Config("table", "attribute", "", URI.create("https://example.com"), repoDir.toString, workDir.toString, "", "")
     _ <- Main
       .runConfirmer(
         config,
         daSqsClient(messagesRef, deletedMessagesRef, errors, allowMultipleSqsCalls),
         daDynamoDbClient(dynamoRef, errors),
-        ocfl(existingRefs, config)
+        ocfl(existingRefs, config),
+        preservicaClient(assetIdToEntityIds)
       )
       .compile
       .drain
     messages <- deletedMessagesRef.get
     dynamoRequests <- dynamoRef.get
   } yield (messages, dynamoRequests)).unsafeRunSync()
+
+  def preservicaClient(assetIdToEntityIds: Map[UUID, List[UUID]]) = new EntityClient[IO, Fs2Streams[IO]] {
+
+    override val dateFormatter: DateTimeFormatter = DateTimeFormatter.ISO_DATE_TIME
+
+    override def metadataForEntity(entity: Entities.Entity): IO[EntityClient.EntityMetadata] = notImplemented
+
+    override def getBitstreamInfo(contentRef: UUID): IO[Seq[Client.BitStreamInfo]] = notImplemented
+
+    override def getEntity(entityRef: UUID, entityType: EntityClient.EntityType): IO[Entities.Entity] = notImplemented
+
+    override def getEntityIdentifiers(entity: Entities.Entity): IO[Seq[IdentifierResponse]] = notImplemented
+
+    override def getUrlsToIoRepresentations(ioEntityRef: UUID, representationType: Option[EntityClient.RepresentationType]): IO[Seq[String]] = notImplemented
+
+    override def getContentObjectsFromRepresentation(
+        ioEntityRef: UUID,
+        representationType: EntityClient.RepresentationType,
+        repTypeIndex: Int
+    ): IO[Seq[Entities.Entity]] = notImplemented
+
+    override def addEntity(addEntityRequest: EntityClient.AddEntityRequest): IO[UUID] = notImplemented
+
+    override def updateEntity(updateEntityRequest: EntityClient.UpdateEntityRequest): IO[String] = notImplemented
+
+    override def updateEntityIdentifiers(entity: Entities.Entity, identifiers: Seq[Entities.IdentifierResponse]): IO[Seq[Entities.IdentifierResponse]] =
+      notImplemented
+
+    override def streamBitstreamContent[T](stream: capabilities.Streams[Fs2Streams[IO]])(url: String, streamFn: stream.BinaryStream => IO[T]): IO[T] =
+      notImplemented
+
+    override def entitiesUpdatedSince(dateTime: ZonedDateTime, startEntry: Int, maxEntries: Int): IO[Seq[Entities.Entity]] = notImplemented
+
+    override def entityEventActions(entity: Entities.Entity, startEntry: Int, maxEntries: Int): IO[Seq[DataProcessor.EventAction]] = notImplemented
+
+    override def entitiesPerIdentifier(identifiers: Seq[Identifier]): IO[Map[Identifier, Seq[Entities.Entity]]] = IO {
+      identifiers
+        .map(identifier => identifier -> assetIdToEntityIds.get(UUID.fromString(identifier.value)).toList.flatten)
+        .toMap
+        .map { case (identifier, entityIds) =>
+          identifier -> entityIds.map(entityId => Entity(Option(InformationObject), entityId, None, None, false, None))
+        }
+    }
+
+    override def addIdentifierForEntity(entityRef: UUID, entityType: EntityClient.EntityType, identifier: Identifier): IO[String] = notImplemented
+
+    override def getPreservicaNamespaceVersion(endpoint: String): IO[Float] = notImplemented
+  }
 
   def daSqsClient(
       ref: Ref[IO, List[MessageResponse[Message]]],

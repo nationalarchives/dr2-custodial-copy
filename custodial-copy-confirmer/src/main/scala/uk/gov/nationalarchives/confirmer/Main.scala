@@ -15,7 +15,11 @@ import software.amazon.awssdk.http.nio.netty.{NettyNioAsyncHttpClient, ProxyConf
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
+import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DADynamoDBClient.DADynamoDbRequest
+import uk.gov.nationalarchives.dp.client.EntityClient
+import uk.gov.nationalarchives.dp.client.EntityClient.Identifier
+import uk.gov.nationalarchives.dp.client.fs2.Fs2Client
 
 import java.net.URI
 import scala.concurrent.duration.*
@@ -23,14 +27,22 @@ import java.util.UUID
 
 object Main extends IOApp {
 
-  case class Config(dynamoTableName: String, dynamoAttributeName: String, sqsUrl: String, proxyUrl: URI, ocflRepoDir: String, ocflWorkDir: String)
-      derives ConfigReader
+  case class Config(
+      dynamoTableName: String,
+      dynamoAttributeName: String,
+      sqsUrl: String,
+      proxyUrl: URI,
+      ocflRepoDir: String,
+      ocflWorkDir: String,
+      preservicaUrl: String,
+      preservicaSecretName: String
+  ) derives ConfigReader
 
   extension (s: String) private def toAttributeValue: AttributeValue = AttributeValue.builder.s(s).build
 
-  case class Message(ioRef: UUID, batchId: String) {
+  case class Message(assetId: UUID, batchId: String) {
     def primaryKey: Map[String, AttributeValue] =
-      Map("ioRef" -> ioRef.toString.toAttributeValue, "batchId" -> batchId.toAttributeValue)
+      Map("assetId" -> assetId.toString.toAttributeValue, "batchId" -> batchId.toAttributeValue)
   }
 
   private def dynamoClient(proxyUrl: URI): DADynamoDBClient[IO] = {
@@ -55,24 +67,39 @@ object Main extends IOApp {
       config <- ConfigSource.default.loadF[IO, Config]()
       sqs = sqsClient[IO](config.proxyUrl.some)
       dynamo = dynamoClient(config.proxyUrl)
-      _ <- (Stream.fixedRateStartImmediately[IO](10.seconds) >> runConfirmer(config, sqs, dynamo, Ocfl(config))).compile.drain
+      preservicaClient <- Fs2Client.entityClient(config.preservicaUrl, config.preservicaSecretName, potentialProxyUrl = config.proxyUrl.some)
+      _ <- (Stream.fixedRateStartImmediately[IO](10.seconds) >> runConfirmer(config, sqs, dynamo, Ocfl(config), preservicaClient)).compile.drain
     } yield ExitCode.Success
 
-  def runConfirmer(config: Config, sqsClient: DASQSClient[IO], dynamoClient: DADynamoDBClient[IO], ocfl: Ocfl): Stream[IO, Unit] = Stream
+  def runConfirmer(
+      config: Config,
+      sqsClient: DASQSClient[IO],
+      dynamoClient: DADynamoDBClient[IO],
+      ocfl: Ocfl,
+      entityClient: EntityClient[IO, Fs2Streams[IO]]
+  ): Stream[IO, Unit] = Stream
     .eval {
       for {
         logger <- Slf4jLogger.create[IO]
         messages <- aggregateMessages[IO, Message](sqsClient, config.sqsUrl)
-        _ <- logger.info(s"Processing message refs ${messages.map(_.message.ioRef).mkString(",")}")
+        _ <- logger.info(s"Processing message refs ${messages.map(_.message.assetId).mkString(",")}")
         _ <- messages.parTraverse { sqsMessage =>
           val message = sqsMessage.message
           val request = DADynamoDbRequest(config.dynamoTableName, message.primaryKey, Map(config.dynamoAttributeName -> "true".toAttributeValue.some))
-          IO.whenA(ocfl.checkObjectExists(message.ioRef)) {
-            dynamoClient.updateAttributeValues(request) >> sqsClient.deleteMessage(config.sqsUrl, sqsMessage.receiptHandle).void
-          }
+          val identifier = Identifier("SourceId", message.assetId.toString)
+          for {
+            entities <- entityClient.entitiesPerIdentifier(Seq(identifier))
+            _ <- IO.raiseWhen(entities(identifier).size != 1)(
+              new RuntimeException(s"Expected 1 entity for SourceID ${message.assetId} but found ${entities.get(identifier).size}")
+            )
+            _ <- IO.whenA(ocfl.checkObjectExists(entities(identifier).head.ref)) {
+              dynamoClient.updateAttributeValues(request) >> sqsClient.deleteMessage(config.sqsUrl, sqsMessage.receiptHandle).void
+            }
+          } yield ()
 
         }
       } yield ()
     }
     .handleErrorWith(err => Stream.eval(logError(err)))
+
 }

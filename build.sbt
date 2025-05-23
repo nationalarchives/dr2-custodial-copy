@@ -120,6 +120,7 @@ lazy val confirmer = (project in file("custodial-copy-confirmer"))
     scalacOptions += "-Wunused:imports",
     assembly / assemblyJarName := "custodial-copy-confirmer.jar",
     libraryDependencies ++= Seq(
+      preservicaClient,
       fs2Core,
       dynamoClient
     )
