@@ -407,8 +407,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
 
     res.left.foreach(
       _.getMessage should equal(
-        """cvc-complex-type.2.4.a: Invalid content was found starting with element '{"http://preservica.com/XIP/v7.0":InvalidTag}'. """ +
-          """One of '{"http://preservica.com/XIP/v7.0":Parent}' is expected."""
+        """cvc-complex-type.2.4.a: Invalid content was found starting with element '{"http://preservica.com/XIP/v7.7":InvalidTag}'. """ +
+          """One of '{"http://preservica.com/XIP/v7.7":Parent}' is expected."""
       )
     )
 
@@ -417,7 +417,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       repIndexes = Nil,
       createdIdSourceAndDestinationPathAndId = Nil,
       xmlRequestsToValidate = List(
-        <XIP xmlns="http://preservica.com/XIP/v7.0">
+        <XIP xmlns="http://preservica.com/XIP/v7.7">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><InvalidTag/></InformationObject>
           <Representation><InformationObject/><Name/><Type/><ContentObjects/><RepresentationFormats/><RepresentationProperties/></Representation>
           <Identifier><ApiId/><Type>SourceID</Type><Value>SourceId</Value></Identifier>

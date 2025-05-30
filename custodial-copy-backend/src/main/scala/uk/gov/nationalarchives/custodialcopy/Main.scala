@@ -25,7 +25,6 @@ import scala.concurrent.duration.DurationInt
 object Main extends IOApp {
 
   case class Config(
-      preservicaUrl: String,
       preservicaSecretName: String,
       sqsQueueUrl: String,
       repoDir: String,
@@ -56,7 +55,6 @@ object Main extends IOApp {
     for {
       config <- ConfigSource.default.loadF[IO, Config]()
       client <- Fs2Client.entityClient(
-        config.preservicaUrl,
         config.preservicaSecretName,
         potentialProxyUrl = config.proxyUrl
       )
