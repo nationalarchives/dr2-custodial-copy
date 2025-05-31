@@ -24,7 +24,7 @@ object Dependencies {
   lazy val scalaCheck = "org.scalacheck" %% "scalacheck" % "1.18.1"
   lazy val scalaCheckPlus = "org.scalatestplus" %% "scalacheck-1-16" % "3.2.14.0"
   lazy val scalaTest = "org.scalatest" %% "scalatest" % scalaTestVersion
-  lazy val scalaXml = "org.scala-lang.modules" %% "scala-xml" % "2.3.0"
+  lazy val scalaXml = "org.scala-lang.modules" %% "scala-xml" % "2.4.0"
   lazy val snsClient = "uk.gov.nationalarchives" %% "da-sns-client" % daAwsClientsVersion
   lazy val sqsClient = "uk.gov.nationalarchives" %% "da-sqs-client" % daAwsClientsVersion
   lazy val wiremock = "com.github.tomakehurst" % "wiremock" % "3.0.1"
