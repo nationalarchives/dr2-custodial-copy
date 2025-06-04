@@ -280,7 +280,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       addAccessRepUrl: Boolean = false
   ) {
     val downloadDir: String = Files.createTempDirectory("downloads").toString
-    val config: Config = Config("", "", "", "", downloadDir, None, "", "")
+    val config: Config = Config("", "", "", downloadDir, None, "", "")
 
     val bitstreamInfoResponsesWithSameName: Seq[BitStreamInfo] = bitstreamInfo1Responses.flatMap { bitstreamInfo1Response =>
       bitstreamInfo2Responses.filter { bitstreamInfo2Response =>
@@ -334,7 +334,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     )
 
     private val ioMetadataInRepo =
-      <XIP xmlns="http://preservica.com/XIP/v7.0">
+      <XIP xmlns="http://preservica.com/XIP/v7.7">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
           <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>
@@ -357,7 +357,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       )
     }
     private val coMetadataInRepo =
-      <XIP xmlns="http://preservica.com/XIP/v7.0">
+      <XIP xmlns="http://preservica.com/XIP/v7.7">
           <ContentObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></ContentObject>
           <Generation original="true" active="true"><ContentObject>someContent</ContentObject></Generation>{
         bitstreamNodesInRepo
@@ -425,7 +425,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       bitstreamUrl: String = "url"
   ) {
     val workDir: String = Files.createTempDirectory("download").toString
-    val config: Config = Config("", "", "queueUrl", "", workDir, Option(URI.create("https://example.com")), "", "topicArn")
+    val config: Config = Config("", "queueUrl", "", workDir, Option(URI.create("https://example.com")), "", "topicArn")
     val ioId: UUID = UUID.randomUUID()
     val coId: UUID = UUID.randomUUID()
     val soId: UUID = UUID.randomUUID()
@@ -648,7 +648,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     }
 
     val ioXmlToValidate: Elem =
-      <XIP xmlns="http://preservica.com/XIP/v7.0">
+      <XIP xmlns="http://preservica.com/XIP/v7.7">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
           <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>
@@ -658,7 +658,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
           <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
         </XIP>
     val coXmlToValidate: Elem =
-      <XIP xmlns="http://preservica.com/XIP/v7.0">
+      <XIP xmlns="http://preservica.com/XIP/v7.7">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Generation original="true" active="true"><ContentObject/></Generation>
           <Bitstream><Filename>90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt</Filename><FileSize>1</FileSize><Fixities/></Bitstream>
