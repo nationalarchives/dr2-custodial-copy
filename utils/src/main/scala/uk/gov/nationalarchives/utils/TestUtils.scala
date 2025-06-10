@@ -9,7 +9,7 @@ import doobie.{Fragment, Transactor}
 import io.circe.{Decoder, Encoder}
 import io.ocfl.api.model.{ObjectVersionId, VersionInfo}
 import io.ocfl.api.{OcflObjectUpdater, OcflOption}
-import software.amazon.awssdk.services.sqs.model.{DeleteMessageResponse, SendMessageResponse}
+import software.amazon.awssdk.services.sqs.model.{DeleteMessageResponse, GetQueueAttributesResponse, QueueAttributeName, SendMessageResponse}
 import uk.gov.nationalarchives.DASQSClient
 import uk.gov.nationalarchives.utils.Utils.{OcflFile, createOcflRepository, given}
 
@@ -189,3 +189,5 @@ object TestUtils:
       notImplemented
 
     override def deleteMessage(queueUrl: String, receiptHandle: String): IO[DeleteMessageResponse] = notImplemented
+
+    override def getQueueAttributes(queueUrl: String, attributeNames: List[QueueAttributeName]): IO[GetQueueAttributesResponse] = notImplemented
