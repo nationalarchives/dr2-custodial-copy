@@ -1,8 +1,8 @@
 import sbt.*
 object Dependencies {
-  private lazy val daAwsClientsVersion = "0.1.117"
+  private lazy val daAwsClientsVersion = "0.1.120"
   private lazy val logbackVersion = "2.24.3"
-  private lazy val log4CatsVersion = "2.7.0"
+  private lazy val log4CatsVersion = "2.7.1"
   private lazy val pureConfigVersion = "0.17.9"
   private lazy val scalaTestVersion = "3.2.18"
   private lazy val http4sVersion = "1.0.0-M44"
@@ -24,12 +24,12 @@ object Dependencies {
   lazy val scalaCheck = "org.scalacheck" %% "scalacheck" % "1.18.1"
   lazy val scalaCheckPlus = "org.scalatestplus" %% "scalacheck-1-16" % "3.2.14.0"
   lazy val scalaTest = "org.scalatest" %% "scalatest" % scalaTestVersion
-  lazy val scalaXml = "org.scala-lang.modules" %% "scala-xml" % "2.3.0"
+  lazy val scalaXml = "org.scala-lang.modules" %% "scala-xml" % "2.4.0"
   lazy val snsClient = "uk.gov.nationalarchives" %% "da-sns-client" % daAwsClientsVersion
   lazy val sqsClient = "uk.gov.nationalarchives" %% "da-sqs-client" % daAwsClientsVersion
   lazy val wiremock = "com.github.tomakehurst" % "wiremock" % "3.0.1"
   lazy val http4sEmber = "org.http4s" %% "http4s-ember-server" % http4sVersion
   lazy val http4sDsl = "org.http4s" %% "http4s-dsl" % http4sVersion
   lazy val doobieCore = "org.tpolecat" %% "doobie-core" % "1.0.0-RC9"
-  lazy val sqlite = "org.xerial" % "sqlite-jdbc" % "3.49.1.0"
+  lazy val sqlite = "org.xerial" % "sqlite-jdbc" % "3.50.1.0"
 }
