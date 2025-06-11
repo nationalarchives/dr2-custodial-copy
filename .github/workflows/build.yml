@@ -6,9 +6,10 @@ permissions:
   contents: write
 jobs:
   deploy:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: sbt/setup-sbt@v1
       - name: Configure AWS credentials from management account
         uses: aws-actions/configure-aws-credentials@v4.0.2
         with:
