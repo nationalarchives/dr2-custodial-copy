@@ -4,7 +4,7 @@ import cats.effect.IO
 import cats.effect.std.Semaphore
 import cats.syntax.all.*
 import io.ocfl.api.exception.{CorruptObjectException, NotFoundException}
-import io.ocfl.api.model.DigestAlgorithm
+import io.ocfl.api.model.{DigestAlgorithm, OcflObjectVersionFile}
 import io.ocfl.api.{MutableOcflRepository, OcflConfig, OcflObjectUpdater, OcflOption}
 import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
@@ -120,9 +120,9 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO
     else checksums.forall(eachChecksum => fixitiesMap.get(DigestAlgorithm.fromOcflName(eachChecksum.algorithm.toLowerCase)).contains(eachChecksum.fingerprint))
   }
 
-  def getAllFilePathsOnAnObject(ioId: UUID): IO[List[String]] =
+  def getAllObjectFiles(ioId: UUID): IO[List[OcflObjectVersionFile]] =
     IO.blocking(ocflRepository.getObject(ioId.toHeadVersion))
-      .map(_.getFiles.asScala.toList.map(_.getPath))
+      .map(_.getFiles.asScala.toList)
       .handleErrorWith {
         case nfe: NotFoundException => IO.raiseError(new Exception(s"Object id $ioId does not exist"))
         case coe: CorruptObjectException =>

@@ -341,8 +341,9 @@ class Processor(
     messageResponse.message match {
       case IoReceivedSnsMessage(ref, _) =>
         for {
-          filePaths <- ocflService.getAllFilePathsOnAnObject(ref)
-          _ <- ocflService.deleteObjects(ref, filePaths)
+          objectFiles <- ocflService.getAllObjectFiles(ref)
+          objectFilePaths = objectFiles.map(_.getPath)
+          _ <- ocflService.deleteObjects(ref, objectFilePaths)
           deletedObjsSnsMessages = List(SendSnsMessage(InformationObject, ref, MetadataAndPotentialBitstreams, Deleted, ""))
         } yield deletedObjsSnsMessages
       case CoReceivedSnsMessage(ref, _) =>

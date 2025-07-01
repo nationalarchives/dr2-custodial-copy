@@ -217,7 +217,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     optionOverwriteToAdd.getAllValues.asScala.toList.head should equal(OcflOption.OVERWRITE)
   }
 
-  "getAllFilePathsOnAnObject" should "throw an exception if the object to be deleted does not exist" in {
+  "getAllObjectFiles" should "throw an exception if the object to be deleted does not exist" in {
     val id = UUID.randomUUID()
     val ocflRepository = mock[MutableOcflRepository]
     when(ocflRepository.getObject(any[ObjectVersionId])).thenThrow(new NotFoundException)
@@ -225,24 +225,25 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     val service = new OcflService(ocflRepository, semaphore)
 
     val err = intercept[Exception] {
-      service.getAllFilePathsOnAnObject(id).unsafeRunSync()
+      service.getAllObjectFiles(id).unsafeRunSync()
     }
 
     err.getMessage should equal(s"Object id $id does not exist")
   }
 
-  "getAllFilePathsOnAnObject" should "return a path if the repository contains the OCFL object" in {
+  "getAllObjectFiles" should "return an object with a path if the repository contains the OCFL object" in {
     val id = UUID.randomUUID()
     val ocflRepository = mock[MutableOcflRepository]
     mockGetObjectResponse(ocflRepository, id, checksums, destinationPath)
 
     val service = new OcflService(ocflRepository, semaphore)
 
-    val filePathsOnAnObject = service.getAllFilePathsOnAnObject(id).unsafeRunSync()
+    val objectFiles = service.getAllObjectFiles(id).unsafeRunSync()
+    val filePathsOnAnObject = objectFiles.map(_.getPath)
     filePathsOnAnObject.foreach(_ should equal(destinationPath))
   }
 
-  "getAllFilePathsOnAnObject" should "throw an exception if 'ocflRepository.getObject' returns an unexpected Exception" in {
+  "getAllObjectFiles" should "throw an exception if 'ocflRepository.getObject' returns an unexpected Exception" in {
     val id = UUID.randomUUID()
     val ocflRepository = mock[MutableOcflRepository]
     when(ocflRepository.getObject(any[ObjectVersionId])).thenThrow(new RuntimeException("unexpected Exception"))
@@ -250,7 +251,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     val service = new OcflService(ocflRepository, semaphore)
 
     val ex = intercept[Exception] {
-      service.getAllFilePathsOnAnObject(id).unsafeRunSync()
+      service.getAllObjectFiles(id).unsafeRunSync()
     }
 
     ex.getMessage should equal(
@@ -258,7 +259,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     )
   }
 
-  "getAllFilePathsOnAnObject" should "purge the failed object if there is a CorruptedObjectException and rethrow the error" in {
+  "getAllObjectFiles" should "purge the failed object if there is a CorruptedObjectException and rethrow the error" in {
     val id = UUID.randomUUID()
     val ocflRepository = mock[MutableOcflRepository]
     val objectIdCaptor: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
@@ -268,7 +269,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     val service = new OcflService(ocflRepository, semaphore)
 
     val ex = intercept[Exception] {
-      service.getAllFilePathsOnAnObject(id).unsafeRunSync()
+      service.getAllObjectFiles(id).unsafeRunSync()
     }
 
     ex.getMessage should equal(

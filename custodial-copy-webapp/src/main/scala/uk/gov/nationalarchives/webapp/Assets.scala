@@ -37,7 +37,10 @@ object Assets:
 
     override def filePath(id: UUID): F[String] = for {
       xa <- loadXa
-      potentialPath <- sql"SELECT path from files where fileId = $id".query[String].to[List].transact(xa)
+      potentialPath <- sql"SELECT path from files where fileId = $id"
+        .query[String]
+        .to[List]
+        .transact(xa)
       path <- Async[F].fromOption(potentialPath.headOption, new RuntimeException(s"Id $id not found in the database"))
     } yield path
 

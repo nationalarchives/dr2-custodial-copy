@@ -586,7 +586,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
             )
           )
       when(ocflService.createObjects(any[List[IdWithSourceAndDestPaths]])).thenReturn(IO.unit)
-      when(ocflService.getAllFilePathsOnAnObject(any[UUID])).thenReturn(IO.pure(pathsOfObjects))
+      when(ocflService.getAllObjectFiles(any[UUID])).thenReturn(IO.pure(pathsOfObjects))
       when(ocflService.deleteObjects(any[UUID], any[List[String]])).thenReturn(IO.unit)
       when(ocflService.commitStagedChanges(commitIdCaptor.capture)).thenReturn(IO.unit)
       ocflService
