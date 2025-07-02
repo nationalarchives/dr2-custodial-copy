@@ -1,4 +1,4 @@
-# DR2 Custodial Copy
+ # DR2 Custodial Copy
 
 This repository contains five components which together make up the custodial copy service.
 
