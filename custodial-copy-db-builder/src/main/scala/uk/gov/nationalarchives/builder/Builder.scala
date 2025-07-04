@@ -2,7 +2,7 @@ package uk.gov.nationalarchives.builder
 
 import cats.effect.Async
 import cats.implicits.*
-import uk.gov.nationalarchives.builder.Main.Message
+import Main.Message
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 
 import java.util.UUID

@@ -3,7 +3,7 @@ package uk.gov.nationalarchives.builder
 import cats.effect.kernel.Async
 import io.ocfl.api.OcflRepository
 import io.ocfl.api.model.{ObjectVersionId, OcflObjectVersionFile}
-import uk.gov.nationalarchives.builder.Main.Config
+import Main.Config
 import uk.gov.nationalarchives.utils.Utils.*
 
 import java.nio.file.{Files, Paths}
@@ -13,7 +13,7 @@ import scala.jdk.CollectionConverters.*
 import scala.xml.XML
 
 trait Ocfl[F[_]](val config: Config):
-  private[builder] val repo: OcflRepository = createOcflRepository(config.ocflRepoDir, config.ocflWorkDir)
+  private[reconciler] val repo: OcflRepository = createOcflRepository(config.ocflRepoDir, config.ocflWorkDir)
 
   def generateOcflObjects(id: UUID): F[List[OcflFile]]
 

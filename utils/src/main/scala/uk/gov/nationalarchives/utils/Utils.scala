@@ -83,3 +83,9 @@ object Utils:
     logger <- Slf4jLogger.create[F]
     _ <- logger.error(err)("There has been an error")
   } yield ()
+
+
+trait OcflServiceConfig:
+  val repoDir: String
+  val workDir: String
+  

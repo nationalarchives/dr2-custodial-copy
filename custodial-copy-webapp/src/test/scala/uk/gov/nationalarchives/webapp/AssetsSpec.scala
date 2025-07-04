@@ -23,7 +23,7 @@ class AssetsSpec extends AnyFlatSpec with BeforeAndAfterAll with ScalaCheckDrive
 
   private val ingestDateTime: Instant = Instant.now()
 
-  override def beforeAll(): Unit = createTable()
+  override def beforeAll(): Unit = createFiles()
 
   private def ocflFile(id: UUID, fileId: UUID, zref: String = "zref") =
     OcflFile(1, id, "name".some, fileId, zref.some, "path".some, "fileName".some, ingestDateTime.some, "sourceId".some, "citation".some, "TDR-2025-RNDM".some)

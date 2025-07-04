@@ -13,8 +13,9 @@ import io.ocfl.core.storage.OcflStorageBuilder
 import org.h2.jdbcx.JdbcDataSource
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
-import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
+import uk.gov.nationalarchives.custodialcopy.Main.IdWithSourceAndDestPaths
 import uk.gov.nationalarchives.custodialcopy.OcflService.*
+import uk.gov.nationalarchives.utils.OcflServiceConfig
 import uk.gov.nationalarchives.utils.Utils.*
 
 import java.nio.file.Paths
@@ -143,7 +144,7 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO
 }
 object OcflService {
 
-  def apply(config: Config, semaphore: Semaphore[IO]): IO[OcflService] = IO {
+  def apply(config: OcflServiceConfig, semaphore: Semaphore[IO]): IO[OcflService] = IO {
     val repoDir = Paths.get(config.repoDir)
     val workDir =
       Paths.get(

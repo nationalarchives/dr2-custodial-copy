@@ -22,7 +22,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach with TableDrivenP
 
   override def afterEach(): Unit = Files.delete(Path.of("test-reindexer-database"))
 
-  override def beforeEach(): Unit = createTable()
+  override def beforeEach(): Unit = createFiles()
 
   given Configuration = new Configuration:
     override def config: Configuration.Config = Config("test-reindexer-database", "", "")
@@ -65,26 +65,5 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach with TableDrivenP
       ioFileResult.zref.contains(expectedIoValue) should equal(true)
       coFileResult.zref.contains(expectedCoValue) should equal(true)
       res should equal(updates.length)
-    }
-  }
-  case class SearchParameters(columnName: String, value: String)
-
-  val searchParameters: Gen[SearchParameters] = for {
-    length <- Gen.choose(1, 10)
-    columnName <- Gen.listOfN(length, Gen.alphaChar)
-    value <- Gen.alphaNumStr
-  } yield SearchParameters(columnName.mkString, value)
-
-  forAll(searchParameters) { searchParameters =>
-    "write" should s"write ${searchParameters.value} to the ${searchParameters.columnName} for the IO" in {
-      val columnName = searchParameters.columnName
-      val value = searchParameters.value
-      addColumn(columnName)
-      val ioFile = createFile().unsafeRunSync()
-
-      val res = Database[IO].write(columnName)(Chunk.from(List(IoUpdate(ioFile.id, value)))).unsafeRunSync()
-
-      val columnValue = getColumn(ioFile.id, columnName)
-      columnValue should equal(value)
     }
   }

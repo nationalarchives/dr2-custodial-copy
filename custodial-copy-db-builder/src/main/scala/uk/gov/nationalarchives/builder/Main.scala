@@ -2,7 +2,7 @@ package uk.gov.nationalarchives.builder
 
 import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits.*
-import uk.gov.nationalarchives.builder.Configuration.impl
+import Configuration.impl
 import fs2.Stream
 import io.circe.{Decoder, HCursor}
 import org.typelevel.log4cats.slf4j.Slf4jLogger

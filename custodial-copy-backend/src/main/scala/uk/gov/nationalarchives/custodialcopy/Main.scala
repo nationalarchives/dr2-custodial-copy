@@ -15,6 +15,7 @@ import uk.gov.nationalarchives.custodialcopy.Processor.Result.*
 import uk.gov.nationalarchives.DASNSClient
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.Processor.Result
+import uk.gov.nationalarchives.utils.OcflServiceConfig
 import uk.gov.nationalarchives.utils.Utils.*
 
 import java.net.URI
@@ -32,7 +33,7 @@ object Main extends IOApp {
       proxyUrl: Option[URI],
       versionPath: String,
       topicArn: String
-  ) derives ConfigReader
+  ) extends OcflServiceConfig derives ConfigReader
 
   given Decoder[ReceivedSnsMessage] = (c: HCursor) =>
     for {

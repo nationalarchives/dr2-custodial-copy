@@ -2,7 +2,6 @@ package uk.gov.nationalarchives.reconciler
 
 import cats.effect.Async
 import pureconfig.ConfigSource
-import uk.gov.nationalarchives.reconciler.Configuration
 import uk.gov.nationalarchives.reconciler.Main.Config
 
 trait Configuration:

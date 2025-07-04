@@ -1,7 +1,7 @@
-package uk.gov.nationalarchives.builder
+package uk.gov.nationalarchives.reconciler
 
 import cats.effect.IO
-import uk.gov.nationalarchives.builder.Main.Config
+import uk.gov.nationalarchives.reconciler.Main.Config
 import uk.gov.nationalarchives.utils.TestUtils.*
 import com.github.tomakehurst.wiremock.WireMockServer
 import com.github.tomakehurst.wiremock.client.WireMock.{okJson, post, urlEqualTo}
@@ -16,7 +16,12 @@ import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.sqs.SqsAsyncClient
 import uk.gov.nationalarchives.DASQSClient
 import cats.effect.unsafe.implicits.global
+import fs2.Chunk
 import org.scalatest.matchers.should.Matchers.*
+import org.scalatestplus.mockito.MockitoSugar.mock
+import sttp.capabilities.fs2.Fs2Streams
+import uk.gov.nationalarchives.dp.client.Entities.EntityRef.{NoEntityRef, StructuralObjectRef}
+import uk.gov.nationalarchives.dp.client.EntityClient
 import uk.gov.nationalarchives.reconciler.Configuration
 
 import java.net.URI
@@ -31,7 +36,7 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
   val databaseUtils = new DatabaseUtils("test-database")
   import databaseUtils.*
 
-  override def beforeAll(): Unit = createTable()
+  override def beforeAll(): Unit = createFiles()
 
   override def beforeEach(): Unit = sqsServer.resetAll()
 
@@ -45,12 +50,9 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
   sqsServer.start()
 
   private lazy val httpClient: SdkAsyncHttpClient = NettyNioAsyncHttpClient.builder().build()
-  private val sqsClient: SqsAsyncClient = SqsAsyncClient.builder
-    .region(Region.EU_WEST_2)
-    .endpointOverride(URI.create("http://localhost:9001"))
-    .httpClient(httpClient)
-    .build()
-  val daSQSClient: DASQSClient[IO] = DASQSClient[IO](sqsClient)
+  private val preservicaClient = mock[EntityClient[IO, Fs2Streams[IO]]]
+
+  Chunk(StructuralObjectRef(coRef, Some(ioRef)), NoEntityRef)
 
   "runReconciler" should "write the correct items to the database for multiple content objects" in {
     val id = UUID.randomUUID
@@ -58,9 +60,9 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
     initialiseSqs(id)
 
     given config: Configuration = new Configuration:
-      override def config: Config = Config("test-database", "http://localhost:9001", repoDir, workDir)
+      override def config: Config = Config("test-database", "http://localhost:9001", 5 ,repoDir, workDir)
 
-    Main.runReconciler(daSQSClient).compile.drain.unsafeRunSync()
+    Main.runReconciler(preservicaClient).compile.drain.unsafeRunSync()
 
     val files = readFiles(id).unsafeRunSync()
     val firstFileOpt = files.find(_.fileId == coRef)

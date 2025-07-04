@@ -22,8 +22,7 @@ import scala.xml.Elem
 
 object TestUtils:
 
-  class DatabaseUtils(databaseName: String):
-
+  class DatabaseUtils(val databaseName: String):
     val xa: Aux[IO, Unit] = Transactor.fromDriverManager[IO](
       driver = "org.sqlite.JDBC",
       url = s"jdbc:sqlite:$databaseName",
@@ -35,7 +34,7 @@ object TestUtils:
         .transact(xa)
         .unsafeRunSync()
 
-    def createTable(): Unit = {
+    def createFilesTable(): Unit = {
       val transaction = for {
         _ <- sql"DROP TABLE IF EXISTS files".update.run
         _ <-
@@ -43,6 +42,23 @@ object TestUtils:
       } yield ()
       transaction.transact(xa).unsafeRunSync()
     }
+
+    def createExpectedInPsTable(): Unit = {
+      val transaction = for {
+        _ <- sql"DROP TABLE IF EXISTS ExpectedCosInPS".update.run
+        _ <- sql"CREATE TABLE ExpectedCosInPS(ioRef text, coRef text, representationType text, generationType text, sha256Checksum text, sha1Checksum text, md5Checksum);".update.run
+      } yield ()
+      transaction.transact(xa).unsafeRunSync()
+    }
+
+    def createActuallyInPsTable(): Unit = {
+      val transaction = for {
+        _ <- sql"DROP TABLE IF EXISTS ActualCosInPS".update.run
+        _ <- sql"CREATE TABLE ActualCosInPS(ioRef text, coRef text, generationType text, sha256Checksum text, sha1Checksum text, md5Checksum);".update.run
+      } yield ()
+      transaction.transact(xa).unsafeRunSync()
+    }
+
     def addColumn(columnName: String): Unit =
       (fr"ALTER TABLE files ADD COLUMN" ++ Fragment.const(columnName)).update.run.transact(xa).unsafeRunSync()
 
