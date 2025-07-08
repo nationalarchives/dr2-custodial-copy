@@ -7,7 +7,7 @@ import uk.gov.nationalarchives.utils.Utils.createOcflRepository
 import java.util.UUID
 
 trait Ocfl(val config: Config):
-  private[confirmer] val repo: OcflRepository = createOcflRepository(config.ocflRepoDir, config.ocflWorkDir)
+  private[confirmer] lazy val repo: OcflRepository = createOcflRepository(config.ocflRepoDir, config.ocflWorkDir)
 
   def checkObjectExists(id: UUID): Boolean
 
