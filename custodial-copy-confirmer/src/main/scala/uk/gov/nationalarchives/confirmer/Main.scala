@@ -77,9 +77,11 @@ object Main extends IOApp {
         _ <- messages.parTraverse { sqsMessage =>
           val message = sqsMessage.message
           val request = DADynamoDbRequest(config.dynamoTableName, message.primaryKey, Map(config.dynamoAttributeName -> "true".toAttributeValue.some))
-          IO.whenA(ocfl.checkObjectExists(message.payload.preservationSystemId)) {
-            dynamoClient.updateAttributeValues(request) >> sqsClient.deleteMessage(config.sqsUrl, sqsMessage.receiptHandle).void
-          }
+          val objectExists = ocfl.checkObjectExists(message.payload.preservationSystemId)
+          logger.info(s"Object with assetId ${message.assetId} and preservation system ref ${message.payload.preservationSystemId} ${if objectExists then "has been found" else "has not been found"}") >>
+            IO.whenA(objectExists) {
+              dynamoClient.updateAttributeValues(request) >> sqsClient.deleteMessage(config.sqsUrl, sqsMessage.receiptHandle).void
+            }
         }
       } yield ()
     }
