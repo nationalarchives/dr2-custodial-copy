@@ -44,7 +44,7 @@ object Main extends IOApp {
       .builder()
       .httpClient(NettyNioAsyncHttpClient.builder().proxyConfiguration(proxy).build())
       .region(Region.EU_WEST_2)
-      .credentialsProvider(DefaultCredentialsProvider.create())
+      .credentialsProvider(DefaultCredentialsProvider.builder.build)
       .build()
 
     DADynamoDBClient[IO](dynamoDBClient)
