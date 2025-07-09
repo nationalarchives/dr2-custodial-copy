@@ -9,7 +9,7 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
 import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
 import uk.gov.nationalarchives.DADynamoDBClient.DADynamoDbRequest
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
-import uk.gov.nationalarchives.confirmer.Main.{Config, Message}
+import uk.gov.nationalarchives.confirmer.Main.{Config, OutputQueueMessage}
 import uk.gov.nationalarchives.utils.TestUtils.TestSqsClient
 import uk.gov.nationalarchives.{DADynamoDBClient, DASQSClient}
 
@@ -31,12 +31,12 @@ object TestUtils:
   }
 
   def runConfirmer(
-      messages: List[MessageResponse[Message]],
+      messages: List[MessageResponse[OutputQueueMessage]],
       existingRefs: List[UUID],
       errors: Errors,
       allowMultipleSqsCalls: Boolean = false
   ): (List[String], List[DADynamoDbRequest]) = (for {
-    messagesRef <- Ref.of[IO, List[MessageResponse[Message]]](messages)
+    messagesRef <- Ref.of[IO, List[MessageResponse[OutputQueueMessage]]](messages)
     dynamoRef <- Ref.of[IO, List[DADynamoDbRequest]](Nil)
     deletedMessagesRef <- Ref.of[IO, List[String]](Nil)
     workDir = Files.createTempDirectory("work")
@@ -56,7 +56,7 @@ object TestUtils:
   } yield (messages, dynamoRequests)).unsafeRunSync()
 
   def daSqsClient(
-      ref: Ref[IO, List[MessageResponse[Message]]],
+      ref: Ref[IO, List[MessageResponse[OutputQueueMessage]]],
       deletedMessagesRef: Ref[IO, List[String]],
       errors: Errors,
       allowMultiplSqsCalls: Boolean
