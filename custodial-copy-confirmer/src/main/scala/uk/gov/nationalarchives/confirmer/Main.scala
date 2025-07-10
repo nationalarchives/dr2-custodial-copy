@@ -3,6 +3,8 @@ package uk.gov.nationalarchives.confirmer
 import cats.effect.{ExitCode, IO, IOApp}
 import cats.syntax.all.*
 import fs2.Stream
+import io.circe.{Decoder, DecodingFailure, HCursor}
+import io.circe.parser.decode
 import pureconfig.ConfigSource
 import uk.gov.nationalarchives.utils.Utils.*
 import pureconfig.*
@@ -28,10 +30,18 @@ object Main extends IOApp {
 
   extension (s: String) private def toAttributeValue: AttributeValue = AttributeValue.builder.s(s).build
 
-  case class Message(ioRef: UUID, batchId: String) {
-    def primaryKey: Map[String, AttributeValue] =
-      Map("ioRef" -> ioRef.toString.toAttributeValue, "batchId" -> batchId.toAttributeValue)
+  case class Payload(preservationSystemId: UUID)
+  case class OutputQueueMessage(assetId: UUID, batchId: String, payload: Payload) {
+    def primaryKey: Map[String, AttributeValue] = Map("assetId" -> assetId.toString.toAttributeValue, "batchId" -> batchId.toAttributeValue)
   }
+
+  given Decoder[OutputQueueMessage] = (c: HCursor) =>
+    for {
+      assetId <- c.downField("assetId").as[String]
+      batchId <- c.downField("batchId").as[String]
+      payload <- c.downField("payload").as[String]
+      decoded <- decode[Payload](payload).left.map(err => DecodingFailure.fromThrowable(err, Nil))
+    } yield OutputQueueMessage(UUID.fromString(assetId), batchId, decoded)
 
   private def dynamoClient(proxyUrl: URI): DADynamoDBClient[IO] = {
     val proxy = ProxyConfiguration
@@ -44,7 +54,7 @@ object Main extends IOApp {
       .builder()
       .httpClient(NettyNioAsyncHttpClient.builder().proxyConfiguration(proxy).build())
       .region(Region.EU_WEST_2)
-      .credentialsProvider(DefaultCredentialsProvider.create())
+      .credentialsProvider(DefaultCredentialsProvider.builder.build)
       .build()
 
     DADynamoDBClient[IO](dynamoDBClient)
@@ -55,22 +65,25 @@ object Main extends IOApp {
       config <- ConfigSource.default.loadF[IO, Config]()
       sqs = sqsClient[IO](config.proxyUrl.some)
       dynamo = dynamoClient(config.proxyUrl)
-      _ <- (Stream.fixedRateStartImmediately[IO](10.seconds) >> runConfirmer(config, sqs, dynamo, Ocfl(config))).compile.drain
+      _ <- (Stream.fixedRateStartImmediately[IO](60.seconds) >> runConfirmer(config, sqs, dynamo, Ocfl(config))).compile.drain
     } yield ExitCode.Success
 
   def runConfirmer(config: Config, sqsClient: DASQSClient[IO], dynamoClient: DADynamoDBClient[IO], ocfl: Ocfl): Stream[IO, Unit] = Stream
     .eval {
       for {
         logger <- Slf4jLogger.create[IO]
-        messages <- aggregateMessages[IO, Message](sqsClient, config.sqsUrl)
-        _ <- logger.info(s"Processing message refs ${messages.map(_.message.ioRef).mkString(",")}")
+        messages <- aggregateMessages[IO, OutputQueueMessage](sqsClient, config.sqsUrl)
+        _ <- IO.whenA(messages.nonEmpty)(logger.info(s"Processing message refs ${messages.map(_.message.payload.preservationSystemId).mkString(",")}"))
         _ <- messages.parTraverse { sqsMessage =>
           val message = sqsMessage.message
           val request = DADynamoDbRequest(config.dynamoTableName, message.primaryKey, Map(config.dynamoAttributeName -> "true".toAttributeValue.some))
-          IO.whenA(ocfl.checkObjectExists(message.ioRef)) {
-            dynamoClient.updateAttributeValues(request) >> sqsClient.deleteMessage(config.sqsUrl, sqsMessage.receiptHandle).void
-          }
-
+          val objectExists = ocfl.checkObjectExists(message.payload.preservationSystemId)
+          logger.info(s"Object with assetId ${message.assetId} and preservation system ref ${message.payload.preservationSystemId} ${
+              if objectExists then "has been found" else "has not been found"
+            }") >>
+            IO.whenA(objectExists) {
+              dynamoClient.updateAttributeValues(request) >> sqsClient.deleteMessage(config.sqsUrl, sqsMessage.receiptHandle).void
+            }
         }
       } yield ()
     }
