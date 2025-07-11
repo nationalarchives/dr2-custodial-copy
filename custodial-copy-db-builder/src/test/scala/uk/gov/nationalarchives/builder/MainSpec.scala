@@ -30,7 +30,7 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
   val databaseUtils = new DatabaseUtils("test-database")
   import databaseUtils.*
 
-  override def beforeAll(): Unit = createTable()
+  override def beforeAll(): Unit = createFilesTable()
 
   override def beforeEach(): Unit = sqsServer.resetAll()
 
