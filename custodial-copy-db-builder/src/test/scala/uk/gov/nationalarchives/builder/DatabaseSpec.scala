@@ -24,7 +24,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     override def config: Config = Config("test-database", "", "", "")
 
   "write" should "should write the values to the database" in {
-    createTable()
+    createFilesTable()
     val id = UUID.randomUUID
     val fileId = UUID.randomUUID()
     val initialResponse = readFiles(id).unsafeRunSync()
@@ -37,7 +37,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
   }
 
   "write" should "given an id, delete the row and write a new one with the updated values to the database" in {
-    createTable()
+    createFilesTable()
     val file = createFile().unsafeRunSync().copy(zref = "Another zref".some)
     val anotherFile = createFile().unsafeRunSync()
 
@@ -52,7 +52,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
   }
 
   "write" should "write nothing if an empty list is passed" in {
-    createTable()
+    createFilesTable()
     val id = UUID.randomUUID
     val fileId = UUID.randomUUID()
     val file = ocflFile(id, fileId)
