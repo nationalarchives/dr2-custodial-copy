@@ -22,7 +22,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach with TableDrivenP
 
   override def afterEach(): Unit = Files.delete(Path.of("test-reindexer-database"))
 
-  override def beforeEach(): Unit = createTable()
+  override def beforeEach(): Unit = createFilesTable()
 
   given Configuration = new Configuration:
     override def config: Configuration.Config = Config("test-reindexer-database", "", "")
