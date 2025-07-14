@@ -1,6 +1,6 @@
 # DR2 Custodial Copy
 
-This repository contains five components which together make up the custodial copy service.
+This repository contains six components which together make up the custodial copy service.
 
 The principle of the Custodial Copy approach is described [here](https://zenodo.org/records/13647420)
 
@@ -353,3 +353,50 @@ If the object is not in the queue, nothing happens. The message will eventually 
 | OCFL_REPO_DIR         | The directory for the OCFL repository                                      |
 | OCFL_WORK_DIR         | The directory for the OCFL work directory                                  |
 | HTTPS_PROXY           | An optional proxy. This is needed running in TNA's network but not locally |
+
+## 6. Custodial Copy Reconciler
+
+This is a service that which checks that all Content Objects (COs) that are currently in Preservica are in Custodial Copy and
+that, given an Information Object (IO) ref (id) from Preservica, Checks that all Content Objects under that Information
+Object are in Preservica.
+The reason is that there are events such as failures or deletions (intentional or unintentional) that could cause the
+two storage mediums to become out of sync. We are only concerned with original non-"Access" COs.
+
+### The process
+
+1. Make a call to Preservica to stream the refs of every entity we have stored
+2. It will filter out anything that is not an IO ref nor CO ref
+3. Splits the remaining object refs into Chunks:
+4. Run this process for each chunk:
+   1. if the object ref if an Information Object one, it will
+      1. get all the object files from OCFL
+      2. if the object is a CO content file
+         1. get the storage path and extract the representation type, CO ref, generation type
+         2. get the fixities (sha256, sha1 and md5) of the CO
+         3. add all of these values to an `OcflCoRow` object
+      3. if the object is not a CO content file, then skip it
+   2. if the object ref is a Content Object one, it will:
+      1. get the bitstream info from Preservica
+      2. filter it out if it's a non-Original CO
+      3. retrieve the IO ref, representation type and checksums
+      4. add all of these values to an `PreservicaCoRow` object
+   3. Return a `CoRows` object with a list of `OcflCoRow`s and a list of `PreservicaCoRow`s
+5. Join the chunks into one Stream
+6. for each `CoRows` object
+   1. write the list of `PreservicaCoRow`s to a table
+   2. write the list of `OcflCoRow`s to another table
+7. for each `CoRows` object
+   1. if list of `PreservicaCoRow`s, check if the checksum(s) belonging to the ref appear in the `OcflCoRow` table
+   2. if list of `OcflCoRow`s, check if the checksum(s) belonging to the ref appear in the `PreservicaCoRow` table
+   3. if there are any checksum mismatches in either table, return a message for each CO that mismatched
+8. Concatenate the "Preservica CO not in CC" messages into one and send it to Slack via EventBridge
+9. Concatenate the "CC CO not in Preservica" messages into one and send it to Slack via EventBridge
+
+| Name                   | Description                                                                 |
+|------------------------|-----------------------------------------------------------------------------|
+| PRESERVICA_SECRET_NAME | The Secrets Manager secret used to store the API credentials                |
+| DATABASE_PATH          | The path to the sqlite database                                             |
+| MAX_CONCURRENCY        | The maximum number of chunks to process concurrently                        |
+| OCFL_REPO_DIR          | The directory for the OCFL repository                                       |
+| OCFL_WORK_DIR          | The directory for the OCFL work directory                                   |
+| HTTPS_PROXY            | An optional proxy. This is needed running in TNA's network but not locally. |

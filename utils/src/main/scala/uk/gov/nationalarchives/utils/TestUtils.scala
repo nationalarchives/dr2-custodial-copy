@@ -22,8 +22,7 @@ import scala.xml.Elem
 
 object TestUtils:
 
-  class DatabaseUtils(databaseName: String):
-
+  class DatabaseUtils(val databaseName: String):
     val xa: Aux[IO, Unit] = Transactor.fromDriverManager[IO](
       driver = "org.sqlite.JDBC",
       url = s"jdbc:sqlite:$databaseName",
@@ -35,7 +34,7 @@ object TestUtils:
         .transact(xa)
         .unsafeRunSync()
 
-    def createTable(): Unit = {
+    def createFilesTable(): Unit = {
       val transaction = for {
         _ <- sql"DROP TABLE IF EXISTS files".update.run
         _ <-
@@ -43,6 +42,24 @@ object TestUtils:
       } yield ()
       transaction.transact(xa).unsafeRunSync()
     }
+
+    def createExpectedInPsTable(): Unit = {
+      val transaction = for {
+        _ <- sql"DROP TABLE IF EXISTS ExpectedCosInPS".update.run
+        _ <-
+          sql"CREATE TABLE ExpectedCosInPS(coRef text, ioRef text, representationType text, generationType text, sha256Checksum text, sha1Checksum text, md5Checksum);".update.run
+      } yield ()
+      transaction.transact(xa).unsafeRunSync()
+    }
+
+    def createActuallyInPsTable(): Unit = {
+      val transaction = for {
+        _ <- sql"DROP TABLE IF EXISTS ActualCosInPS".update.run
+        _ <- sql"CREATE TABLE ActualCosInPS(coRef text, ioRef text, generationType text, sha256Checksum text, sha1Checksum text, md5Checksum);".update.run
+      } yield ()
+      transaction.transact(xa).unsafeRunSync()
+    }
+
     def addColumn(columnName: String): Unit =
       (fr"ALTER TABLE files ADD COLUMN" ++ Fragment.const(columnName)).update.run.transact(xa).unsafeRunSync()
 
@@ -148,6 +165,7 @@ object TestUtils:
       ioMetadataContent: Elem = completeIoMetadataContent,
       coMetadataContent: List[Elem] = completeCoMetadataContentElements,
       addFilesToRepo: Boolean = true,
+      addContentFilesToRepo: Boolean = true,
       metadataFileSuffix: String = "_Metadata"
   ): (String, String) = {
     val repoDir = Files.createTempDirectory("repo")
@@ -168,9 +186,10 @@ object TestUtils:
           updater.addPath(ioMetadataFile, s"IO$metadataFileSuffix.xml", OcflOption.OVERWRITE)
           coMetadataContent.zipWithIndex.foreach { (elem, idx) =>
             val coMetadataFile = Files.createFile(metadataFileDirectory.resolve(s"$metadataFileSuffix$idx.xml"))
+            val coRef = (elem \ "ContentObject" \ "Ref").head.text
             Files.write(coMetadataFile, elem.toString.getBytes)
-            updater.addPath(coMetadataFile, s"subfolder$idx/CO$metadataFileSuffix.xml", OcflOption.OVERWRITE)
-            updater.addPath(contentFile, s"subfolder$idx/original/g1/content.file", OcflOption.OVERWRITE)
+            updater.addPath(coMetadataFile, s"Preservation_1/$coRef/CO$metadataFileSuffix.xml", OcflOption.OVERWRITE)
+            if addContentFilesToRepo then updater.addPath(contentFile, s"Preservation_1/$coRef/original/g1/content.file", OcflOption.OVERWRITE)
           }
         }.asJava
       )

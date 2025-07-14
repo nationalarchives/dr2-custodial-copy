@@ -40,7 +40,7 @@ def setupDirectories(serviceName: String) =
   )
 
 lazy val root = (project in file("."))
-  .aggregate(custodialCopyBackend, webapp, builder, confirmer, reIndexer, utils)
+  .aggregate(custodialCopyBackend, webapp, builder, confirmer, reconciler, reIndexer, utils)
   .settings(
     publish / skip := true
   )
@@ -136,6 +136,23 @@ lazy val webapp = (project in file("custodial-copy-webapp"))
     libraryDependencies ++= Seq(
       http4sEmber,
       http4sDsl
+    )
+  )
+  .dependsOn(utils)
+
+lazy val reconciler = (project in file("custodial-copy-reconciler"))
+  .enablePlugins(DockerPlugin)
+  .settings(commonSettings)
+  .settings(imageSettings)
+  .settings(
+    name := "custodial-copy-db-reconciler",
+    scalacOptions += "-Wunused:imports",
+    assembly / assemblyJarName := "custodial-copy-db-reconciler.jar",
+    libraryDependencies ++= Seq(
+      eventbridgeClient,
+      fs2Core,
+      h2,
+      preservicaClient
     )
   )
   .dependsOn(utils)
