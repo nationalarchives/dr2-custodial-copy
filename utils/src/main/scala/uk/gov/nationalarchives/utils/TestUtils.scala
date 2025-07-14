@@ -7,12 +7,15 @@ import doobie.implicits.*
 import doobie.util.transactor.Transactor.Aux
 import doobie.{Fragment, Transactor}
 import io.circe.{Decoder, Encoder}
-import io.ocfl.api.model.{ObjectVersionId, VersionInfo}
-import io.ocfl.api.{OcflObjectUpdater, OcflOption}
+import io.ocfl.api.io.FixityCheckInputStream
+import io.ocfl.api.model.{DigestAlgorithm, ObjectVersionId, VersionInfo}
+import io.ocfl.api.{OcflFileRetriever, OcflObjectUpdater, OcflOption}
 import software.amazon.awssdk.services.sqs.model.{DeleteMessageResponse, GetQueueAttributesResponse, QueueAttributeName, SendMessageResponse}
 import uk.gov.nationalarchives.DASQSClient
 import uk.gov.nationalarchives.utils.Utils.{OcflFile, createOcflRepository, given}
 
+import java.io.{ByteArrayInputStream, InputStream}
+import java.lang
 import java.nio.file.Files
 import java.time.Instant
 import java.time.temporal.ChronoField
@@ -210,3 +213,9 @@ object TestUtils:
     override def deleteMessage(queueUrl: String, receiptHandle: String): IO[DeleteMessageResponse] = notImplemented
 
     override def getQueueAttributes(queueUrl: String, attributeNames: List[QueueAttributeName]): IO[GetQueueAttributesResponse] = notImplemented
+
+val testOcflFileRetriever: OcflFileRetriever = new OcflFileRetriever:
+  override def retrieveFile(): FixityCheckInputStream =
+    new FixityCheckInputStream(new ByteArrayInputStream("".getBytes), DigestAlgorithm.fromOcflName("sha256"), "checksum")
+
+  override def retrieveRange(startPosition: lang.Long, endPosition: lang.Long): InputStream = new ByteArrayInputStream("".getBytes)

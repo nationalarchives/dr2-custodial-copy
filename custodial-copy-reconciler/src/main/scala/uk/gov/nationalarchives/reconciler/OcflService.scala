@@ -17,30 +17,12 @@ import java.util.UUID
 import scala.jdk.CollectionConverters.*
 import scala.jdk.FunctionConverters.*
 
-class OcflService(ocflRepository: MutableOcflRepository) {
-  def getAllObjectFiles(ioId: UUID): IO[List[OcflObjectVersionFile]] =
-    IO.blocking(ocflRepository.getObject(ioId.toHeadVersion))
-      .map(_.getFiles.asScala.toList)
-      .handleErrorWith {
-        case nfe: NotFoundException => IO.raiseError(new Exception(s"Object id $ioId does not exist"))
-        case coe: CorruptObjectException =>
-          IO.raiseError(
-            new Exception(
-              s"Object $ioId is corrupt. The object has been purged and the error will be rethrown so the process can try again",
-              coe
-            )
-          )
-        case e: Throwable =>
-          IO.raiseError(
-            new Exception(
-              s"'getObject' returned an unexpected error '$e' when called with object id $ioId"
-            )
-          )
-      }
+trait OcflService {
+  def getAllObjectFiles(ioId: UUID): IO[List[OcflObjectVersionFile]]
 }
 object OcflService {
 
-  def apply(config: OcflServiceConfig): IO[OcflService] = IO {
+  def apply(config: OcflServiceConfig): OcflService = {
     val repoDir = Paths.get(config.ocflRepoDir)
     val workDir =
       Paths.get(
@@ -62,6 +44,24 @@ object OcflService {
       .prettyPrintJson()
       .workDir(workDir)
       .buildMutable()
-    new OcflService(repo)
+    (ioId: UUID) =>
+      IO.blocking(repo.getObject(ioId.toHeadVersion))
+        .map(_.getFiles.asScala.toList)
+        .handleErrorWith {
+          case nfe: NotFoundException => IO.raiseError(new Exception(s"Object id $ioId does not exist"))
+          case coe: CorruptObjectException =>
+            IO.raiseError(
+              new Exception(
+                s"Object $ioId is corrupt. The object has been purged and the error will be rethrown so the process can try again",
+                coe
+              )
+            )
+          case e: Throwable =>
+            IO.raiseError(
+              new Exception(
+                s"'getObject' returned an unexpected error '$e' when called with object id $ioId"
+              )
+            )
+        }
   }
 }

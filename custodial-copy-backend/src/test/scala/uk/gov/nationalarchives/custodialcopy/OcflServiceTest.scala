@@ -4,11 +4,10 @@ import cats.effect.IO
 import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
 import io.ocfl.api.exception.{CorruptObjectException, NotFoundException}
-import io.ocfl.api.io.FixityCheckInputStream
 import io.ocfl.api.model.*
-import io.ocfl.api.{MutableOcflRepository, OcflFileRetriever, OcflObjectUpdater, OcflOption}
+import io.ocfl.api.{MutableOcflRepository, OcflObjectUpdater, OcflOption}
 import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.{doNothing, times, verify, verifyNoInteractions, when}
+import org.mockito.Mockito.*
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
@@ -17,9 +16,8 @@ import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.FileObject
 import uk.gov.nationalarchives.custodialcopy.Main.IdWithSourceAndDestPaths
 import uk.gov.nationalarchives.dp.client.Entities.Entity
+import uk.gov.nationalarchives.utils.testOcflFileRetriever
 
-import java.io.{ByteArrayInputStream, InputStream}
-import java.lang
 import java.nio.file.{Files, Path}
 import java.util.UUID
 import java.util.function.Consumer
@@ -33,12 +31,6 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
   private val destinationPath = "destinationPath"
   private val entity = mock[Entity]
   val semaphore: Semaphore[IO] = Semaphore[IO](1).unsafeRunSync()
-
-  val testOcflFileRetriever: OcflFileRetriever = new OcflFileRetriever:
-    override def retrieveFile(): FixityCheckInputStream =
-      new FixityCheckInputStream(new ByteArrayInputStream("".getBytes), DigestAlgorithm.fromOcflName("sha256"), "checksum")
-
-    override def retrieveRange(startPosition: lang.Long, endPosition: lang.Long): InputStream = new ByteArrayInputStream("".getBytes)
 
   def mockGetObjectResponse(
       ocflRepository: MutableOcflRepository,
