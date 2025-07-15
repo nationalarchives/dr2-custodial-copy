@@ -35,8 +35,7 @@ object Database:
 
     override def writeToExpectedInPsTable(expectedCosInPS: List[OcflCoRow]): F[Unit] = {
       val deleteSql = "delete from ExpectedCosInPS where coRef = ?"
-      val insertSql =
-        "insert into ExpectedCosInPS (coRef, ioRef, representationType, generationType, sha256Checksum, sha1Checksum, md5Checksum) values (?, ?, ?, ?, ?, ?, ?)"
+      val insertSql = "insert into ExpectedCosInPS (coRef, ioRef, sha256Checksum) values (?, ?, ?)"
 
       val deleteAndInsert: ConnectionIO[(Int, Int)] = for {
         deleteCount <- Update[UUID](deleteSql).updateMany(expectedCosInPS.map(_.coRef))
@@ -48,7 +47,7 @@ object Database:
 
     override def writeToActuallyInPsTable(cosInPS: List[PreservicaCoRow]): F[Unit] = {
       val deleteSql = s"delete from ActualCosInPS where coRef = ?"
-      val insertSql = "insert into ActualCosInPS (coRef, ioRef, generationType, sha256Checksum, sha1Checksum, md5Checksum) values (?, ?, ?, ?, ?, ?)"
+      val insertSql = "insert into ActualCosInPS (coRef, ioRef, sha256Checksum) values (?, ?, ?)"
 
       val deleteAndInsert: ConnectionIO[(Int, Int)] = for {
         deleteCount <- Update[UUID](deleteSql).updateMany(cosInPS.map(_.coRef))
@@ -88,11 +87,7 @@ object Database:
     private def checkIfChecksumInTableStatement(coRow: CoRow, table: TableName): String =
       s"""select * from $table coRef
          | where coRef = '${coRow.coRef}'
-         | and (
-         |   sha256Checksum = '${coRow.sha256Checksum.getOrElse("N/A")}'
-         |   or sha1Checksum = '${coRow.sha1Checksum.getOrElse("N/A")}'
-         |   or md5Checksum = '${coRow.md5Checksum.getOrElse("N/A")}'
-         | )""".stripMargin
+         | and sha256Checksum = '${coRow.sha256Checksum.getOrElse("N/A")}'""".stripMargin
 
     private def writeTransaction(tableName: TableName, connection: ConnectionIO[(Int, Int)]) = for {
       logger <- Slf4jLogger.create[F]
@@ -104,25 +99,15 @@ object Database:
 sealed trait CoRow:
   val coRef: UUID
   val ioRef: UUID
-  val generationType: String
   val sha256Checksum: Option[String]
-  val sha1Checksum: Option[String]
-  val md5Checksum: Option[String]
 
 case class PreservicaCoRow(
     coRef: UUID,
     ioRef: UUID,
-    generationType: String,
-    sha256Checksum: Option[String],
-    sha1Checksum: Option[String],
-    md5Checksum: Option[String]
+    sha256Checksum: Option[String]
 ) extends CoRow
 case class OcflCoRow(
     coRef: UUID,
     ioRef: UUID,
-    representationType: String,
-    generationType: String,
-    sha256Checksum: Option[String],
-    sha1Checksum: Option[String],
-    md5Checksum: Option[String]
+    sha256Checksum: Option[String]
 ) extends CoRow

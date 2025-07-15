@@ -371,14 +371,14 @@ two storage mediums to become out of sync. We are only concerned with original n
    1. if the object ref if an Information Object one, it will
       1. get all the object files from OCFL
       2. if the object is a CO content file
-         1. get the storage path and extract the representation type, CO ref, generation type
-         2. get the fixities (sha256, sha1 and md5) of the CO
-         3. add all of these values to an `OcflCoRow` object
+         1. get the storage path and extract the CO ref
+         2. get the sha256 fixity of the CO
+         3. add these values (including the IO ref) to an `OcflCoRow` object
       3. if the object is not a CO content file, then skip it
    2. if the object ref is a Content Object one, it will:
       1. get the bitstream info from Preservica
       2. filter it out if it's a non-Original CO
-      3. retrieve the IO ref, representation type and checksums
+      3. retrieve the IO ref and sha256 checksum
       4. add all of these values to an `PreservicaCoRow` object
    3. Return a `CoRows` object with a list of `OcflCoRow`s and a list of `PreservicaCoRow`s
 5. Join the chunks into one Stream

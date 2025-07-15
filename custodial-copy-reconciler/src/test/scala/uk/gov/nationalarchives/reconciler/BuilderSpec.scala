@@ -28,7 +28,7 @@ class BuilderSpec extends AnyFlatSpec:
     val co2Ref = UUID.randomUUID
     val co1File =
       createObjectVersionFile(s"$ref/Preservation_1/$co1Ref/original/g1/$co1Ref.testExt", Map(DigestAlgorithm.fromOcflName("sha256") -> "co1FileFixity"))
-    val co2File = createObjectVersionFile(s"$ref/Access_1/$co2Ref/original/g1/$co2Ref.testExt", Map(DigestAlgorithm.fromOcflName("sha1") -> "co2FileFixity"))
+    val co2File = createObjectVersionFile(s"$ref/Access_1/$co2Ref/original/g1/$co2Ref.testExt", Map(DigestAlgorithm.fromOcflName("sha256") -> "co2FileFixity"))
 
     val ocflService = testOcflService(List(co1File, co2File))
     val preservicaClient = testEntityClient(Map.empty)
@@ -37,15 +37,7 @@ class BuilderSpec extends AnyFlatSpec:
 
     val ocflCoRows = Builder[IO].run(preservicaClient, ocflService, entityChunks).unsafeRunSync()
     ocflCoRows should equal(
-      Chunk(
-        CoRows(
-          List(
-            OcflCoRow(co1Ref, ref, "Preservation_1", "Original", Some("co1FileFixity"), None, None),
-            OcflCoRow(co2Ref, ref, "Access_1", "Original", None, Some("co2FileFixity"), None)
-          ),
-          Nil
-        )
-      )
+      Chunk(CoRows(List(OcflCoRow(co1Ref, ref, Some("co1FileFixity")), OcflCoRow(co2Ref, ref, Some("co1FileFixity"))), Nil))
     )
   }
 
@@ -71,7 +63,7 @@ class BuilderSpec extends AnyFlatSpec:
         CoRows(
           Nil,
           List(
-            PreservicaCoRow(co1Ref, parentRef, "Original", Some("co1FileFixity"), None, None)
+            PreservicaCoRow(co1Ref, parentRef, Some("co1FileFixity"))
           )
         )
       )

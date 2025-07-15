@@ -50,7 +50,7 @@ object TestUtils:
       val transaction = for {
         _ <- sql"DROP TABLE IF EXISTS ExpectedCosInPS".update.run
         _ <-
-          sql"CREATE TABLE ExpectedCosInPS(coRef text, ioRef text, representationType text, generationType text, sha256Checksum text, sha1Checksum text, md5Checksum);".update.run
+          sql"CREATE TABLE ExpectedCosInPS(coRef text, ioRef text, sha256Checksum text);".update.run
       } yield ()
       transaction.transact(xa).unsafeRunSync()
     }
@@ -58,7 +58,7 @@ object TestUtils:
     def createActuallyInPsTable(): Unit = {
       val transaction = for {
         _ <- sql"DROP TABLE IF EXISTS ActualCosInPS".update.run
-        _ <- sql"CREATE TABLE ActualCosInPS(coRef text, ioRef text, generationType text, sha256Checksum text, sha1Checksum text, md5Checksum);".update.run
+        _ <- sql"CREATE TABLE ActualCosInPS(coRef text, ioRef text, sha256Checksum text);".update.run
       } yield ()
       transaction.transact(xa).unsafeRunSync()
     }

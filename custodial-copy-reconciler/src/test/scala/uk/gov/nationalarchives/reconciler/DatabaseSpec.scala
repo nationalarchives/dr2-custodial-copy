@@ -8,8 +8,8 @@ import org.scalatest.BeforeAndAfterEach
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.prop.TableDrivenPropertyChecks.forAll
+import org.scalatest.prop.TableFor3
 import org.scalatest.prop.Tables.Table
-import org.scalatest.prop.{TableFor4, TableFor5}
 import uk.gov.nationalarchives.reconciler.Main.Config
 import uk.gov.nationalarchives.reconciler.{Configuration, Database, OcflCoRow, PreservicaCoRow}
 import uk.gov.nationalarchives.utils.TestUtils.*
@@ -24,26 +24,22 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     def createOcflCoRow(
         coRef: UUID,
         ioRef: UUID = UUID.randomUUID(),
-        sha256Checksum: Option[String] = None,
-        sha1Checksum: Option[String] = None,
-        md5Checksum: Option[String] = None
+        sha256Checksum: Option[String] = None
     ): IO[OcflCoRow] =
-      sql"""INSERT INTO ExpectedCosInPS (coRef, ioRef, representationType, generationType, sha256Checksum, sha1Checksum, md5Checksum)
-                 VALUES (${coRef.toString}, ${ioRef.toString}, "Preservation_1", "Original", $sha256Checksum, $sha1Checksum, $md5Checksum)""".update.run
+      sql"""INSERT INTO ExpectedCosInPS (coRef, ioRef, sha256Checksum)
+                 VALUES (${coRef.toString}, ${ioRef.toString}, $sha256Checksum)""".update.run
         .transact(xa)
-        .map(_ => OcflCoRow(coRef, ioRef, "Preservation_1", "Original", sha256Checksum, sha1Checksum, md5Checksum))
+        .map(_ => OcflCoRow(coRef, ioRef, sha256Checksum))
 
     def createPSCoRow(
         coRef: UUID,
         ioRef: UUID = UUID.randomUUID(),
-        sha256Checksum: Option[String] = None,
-        sha1Checksum: Option[String] = None,
-        md5Checksum: Option[String] = None
+        sha256Checksum: Option[String] = None
     ): IO[PreservicaCoRow] =
-      sql"""INSERT INTO ActualCosInPS (coRef, ioRef, generationType, sha256Checksum, sha1Checksum, md5Checksum)
-               VALUES (${coRef.toString}, ${ioRef.toString}, "Original", $sha256Checksum, $sha1Checksum, $md5Checksum)""".update.run
+      sql"""INSERT INTO ActualCosInPS (coRef, ioRef, sha256Checksum)
+               VALUES (${coRef.toString}, ${ioRef.toString}, $sha256Checksum)""".update.run
         .transact(xa)
-        .map(_ => PreservicaCoRow(coRef, ioRef, "Original", sha256Checksum, sha1Checksum, md5Checksum))
+        .map(_ => PreservicaCoRow(coRef, ioRef, sha256Checksum))
 
     def getOcflCoRows(coRef: UUID): IO[List[OcflCoRow]] =
       sql"SELECT * FROM ExpectedCosInPS WHERE coRef = ${coRef.toString}"
@@ -73,7 +69,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
 
     val initialResponse = getOcflCoRows(coRef).unsafeRunSync()
     val ocflCoRows = List(
-      OcflCoRow(coRef, ioRef, "Preservation_1", "Original", Some("sha256Checksum1"), Some("sha1Checksum1"), Some("md5Checksum1"))
+      OcflCoRow(coRef, ioRef, Some("sha256Checksum1"))
     )
     Database[IO].writeToExpectedInPsTable(ocflCoRows).unsafeRunSync()
     val response = getOcflCoRows(coRef).unsafeRunSync()
@@ -88,7 +84,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     val coRef = UUID.randomUUID()
 
     val initialResponse = getPreservicaCoRows(coRef).unsafeRunSync()
-    val preservicaCoRows = List(PreservicaCoRow(coRef, ioRef, "Original", Some("sha256Checksum1"), None, None))
+    val preservicaCoRows = List(PreservicaCoRow(coRef, ioRef, Some("sha256Checksum1")))
 
     Database[IO].writeToActuallyInPsTable(preservicaCoRows).unsafeRunSync()
     val response = getPreservicaCoRows(coRef).unsafeRunSync()
@@ -104,18 +100,16 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     val coRef2 = UUID.randomUUID()
 
     val expectedAdditionalCoRow = List(createOcflCoRow(coRef2, ioRef).unsafeRunSync())
-    val updatedCoRow = List(createOcflCoRow(coRef, ioRef).unsafeRunSync().copy(representationType = "Access_1"))
+    val updatedCoRow = List(createOcflCoRow(coRef, ioRef).unsafeRunSync().copy(sha256Checksum = Some("newChecksum")))
 
     Database[IO].writeToExpectedInPsTable(updatedCoRow).unsafeRunSync()
     val response = getOcflCoRows(coRef).unsafeRunSync()
     val additionalRowResponse = getOcflCoRows(coRef2).unsafeRunSync()
 
     additionalRowResponse.length should equal(1)
-    additionalRowResponse.head.representationType should equal("Preservation_1")
     additionalRowResponse.head.coRef should equal(coRef2)
 
     response.length should equal(1)
-    response.head.representationType should equal("Access_1")
     response.head.coRef should equal(coRef)
   }
 
@@ -173,133 +167,53 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     ex.getMessage should equal("[SQLITE_ERROR] SQL error or missing database (no such table: ActualCosInPS)")
   }
 
-  val checksumMatchPossibilities
-      : TableFor5[String, Option[String], Option[String], Option[String], TableFor4[String, Option[String], Option[String], Option[String]]] = Table(
-    ("checksumMatch", "sha256Checksum", "sha1Checksum", "md5Checksum", "checksumMismatches"),
-    (
-      "sha256",
-      Some("sha256Checksum1"),
-      None,
-      None,
-      Table(
-        ("checksumMismatch", "sha256Checksum", "sha1Checksum", "md5Checksum"),
-        ("sha1", None, Some("sha1Checksum1"), None),
-        ("md5", None, None, Some("md5Checksum1")),
-        ("sha256, sha1 & md5", None, None, None)
-      )
-    ),
-    (
-      "sha1",
-      None,
-      Some("sha1Checksum1"),
-      None,
-      Table(
-        ("checksumMismatch", "sha256Checksum", "sha1Checksum", "md5Checksum"),
-        ("sha256", Some("sha256Checksum1"), None, None),
-        ("md5", None, None, Some("md5Checksum1")),
-        ("sha256, sha1 & md5", None, None, None)
-      )
-    ),
-    (
-      "md5",
-      None,
-      None,
-      Some("md5Checksum1"),
-      Table(
-        ("checksumMismatch", "sha256Checksum", "sha1Checksum", "md5Checksum"),
-        ("sha256", Some("sha256Checksum1"), None, None),
-        ("sha1", None, Some("sha1Checksum1"), None),
-        ("sha256, sha1 & md5", None, None, None)
-      )
-    ),
-    (
-      "sha256 & sha1",
-      Some("sha256Checksum1"),
-      Some("sha1Checksum1"),
-      None,
-      Table(
-        ("checksumMismatch", "sha256Checksum", "sha1Checksum", "md5Checksum"),
-        ("md5", None, None, Some("md5Checksum1")),
-        ("sha256, sha1 & md5", None, None, None)
-      )
-    ),
-    (
-      "sha1 & md5",
-      None,
-      Some("sha1Checksum1"),
-      Some("md5Checksum1"),
-      Table(
-        ("checksumMismatch", "sha256Checksum", "sha1Checksum", "md5Checksum"),
-        ("sha256", Some("sha256Checksum1"), None, None),
-        ("sha256, sha1 & md5", None, None, None)
-      )
-    ),
-    (
-      "sha256 & md5",
-      Some("sha256Checksum1"),
-      None,
-      Some("md5Checksum1"),
-      Table(
-        ("checksumMismatch", "sha256Checksum", "sha1Checksum", "md5Checksum"),
-        ("sha256", None, Some("sha1Checksum1"), None),
-        ("sha256, sha1 & md5", None, None, None)
-      )
-    ),
-    (
-      "sha256, sha1 & md5",
-      Some("sha256Checksum1"),
-      Some("sha1Checksum1"),
-      Some("md5Checksum1"),
-      Table(
-        ("checksumMismatch", "sha256Checksum", "sha1Checksum", "md5Checksum"),
-        ("sha256, sha1 & md5", None, None, None)
-      )
-    )
+  val checksumMismatchPossibilities: TableFor3[String, Option[String], Option[String]] = Table(
+    ("Mismatch", "ocflChecksum", "preservicaChecksum"),
+    ("checksums exist in both tables, but they're different", Some("checksum1"), Some("checksum2")),
+    ("checksums doesn't exist in OCFL but does in Preservica", None, Some("checksum1")),
+    ("checksums does exist in OCFL but doesn't in Preservica", Some("checksum1"), None),
+    ("checksums doesn't exist in both tables", None, None)
   )
 
-  forAll(checksumMatchPossibilities) { (checksumMatch, sha256Checksum, sha1Checksum, md5Checksum, _) =>
-    "checkIfPsCoInCc" should s"should return a message for each CO if it has the same ${checksumMatch} checksum in CC" in {
-      createExpectedInPsTable()
-      createOcflCoRow(coRef, ioRef, sha256Checksum, sha1Checksum, md5Checksum).unsafeRunSync()
+  "checkIfPsCoInCc" should s"should return a message for each CO if it has the same checksum in CC" in {
+    createExpectedInPsTable()
+    createOcflCoRow(coRef, ioRef, Some("checksum1")).unsafeRunSync()
 
-      val preservicaCoRow = PreservicaCoRow(coRef, ioRef, "Original", sha256Checksum, sha1Checksum, md5Checksum)
-      val coMessage = Database[IO].checkIfPsCoInCc(preservicaCoRow).unsafeRunSync()
+    val preservicaCoRow = PreservicaCoRow(coRef, ioRef, Some("checksum1"))
+    val coMessage = Database[IO].checkIfPsCoInCc(preservicaCoRow).unsafeRunSync()
 
-      coMessage should be(Nil)
-    }
-
-    "checkIfCcCoInPs" should s"should return a message for each CO if it has the same ${checksumMatch} checksum in PS" in {
-      createActuallyInPsTable()
-      createPSCoRow(coRef, ioRef, sha256Checksum, sha1Checksum, md5Checksum).unsafeRunSync()
-
-      val ocflCoRow = OcflCoRow(coRef, ioRef, "Preservica_1", "Original", sha256Checksum, sha1Checksum, md5Checksum)
-      val coMessage = Database[IO].checkIfCcCoInPs(ocflCoRow).unsafeRunSync()
-
-      coMessage should be(Nil)
-    }
+    coMessage should be(Nil)
   }
 
-  forAll(checksumMatchPossibilities) { (checksumMatch, sha256Checksum, sha1Checksum, md5Checksum, checksumMismatchPossibilities) =>
-    forAll(checksumMismatchPossibilities) { (checksumMismatch, sha256ChecksumMismatch, sha1ChecksumMismatch, md5ChecksumMismatch) =>
+  "checkIfCcCoInPs" should s"should return a message for each CO if it has the same checksum in PS" in {
+    createActuallyInPsTable()
+    createPSCoRow(coRef, ioRef, Some("checksum1")).unsafeRunSync()
 
-      "checkIfPsCoInCc" should s"should return a message for each CO if it has a ${checksumMatch} checksum in PS but a ${checksumMismatch} checksum in CC" in {
-        createExpectedInPsTable()
-        createOcflCoRow(coRef, ioRef, sha256Checksum, sha1Checksum, md5Checksum).unsafeRunSync()
+    val ocflCoRow = OcflCoRow(coRef, ioRef, Some("checksum1"))
+    val coMessage = Database[IO].checkIfCcCoInPs(ocflCoRow).unsafeRunSync()
 
-        val preservicaCoRow = PreservicaCoRow(coRef, ioRef, "Original", sha256ChecksumMismatch, sha1ChecksumMismatch, md5ChecksumMismatch)
-        val coMessage = Database[IO].checkIfPsCoInCc(preservicaCoRow).unsafeRunSync()
+    coMessage should be(Nil)
+  }
 
-        coMessage should be(List(s"CO $coRef (parent: $ioRef) is in Preservica, but its checksum could not be found in CC"))
-      }
 
-      "checkIfCcCoInPs" should s"should return a message for each CO if it has a ${checksumMatch} checksum in CC but a ${checksumMismatch} checksum in PS" in {
-        createActuallyInPsTable()
-        createPSCoRow(coRef, ioRef, sha256Checksum, sha1Checksum, md5Checksum).unsafeRunSync()
+  forAll(checksumMismatchPossibilities) { (mismatch, ocflChecksum, preservicaChecksum) =>
+    "checkIfPsCoInCc" should s"should return a message for each CO if $mismatch" in {
+      createExpectedInPsTable()
+      createOcflCoRow(coRef, ioRef, ocflChecksum).unsafeRunSync()
 
-        val ocflCoRow = OcflCoRow(coRef, ioRef, "Preservica_1", "Original", sha256ChecksumMismatch, sha1ChecksumMismatch, md5ChecksumMismatch)
-        val coMessage = Database[IO].checkIfCcCoInPs(ocflCoRow).unsafeRunSync()
+      val preservicaCoRow = PreservicaCoRow(coRef, ioRef, preservicaChecksum)
+      val coMessage = Database[IO].checkIfPsCoInCc(preservicaCoRow).unsafeRunSync()
 
-        coMessage should be(List(s"CO $coRef (parent: $ioRef) is in CC, but its checksum could not be found in Preservica"))
-      }
+      coMessage should be(List(s"CO $coRef (parent: $ioRef) is in Preservica, but its checksum could not be found in CC"))
+    }
+
+    "checkIfCcCoInPs" should s"should return a message for each CO if $mismatch" in {
+      createActuallyInPsTable()
+      createPSCoRow(coRef, ioRef, preservicaChecksum).unsafeRunSync()
+
+      val ocflCoRow = OcflCoRow(coRef, ioRef, ocflChecksum)
+      val coMessage = Database[IO].checkIfCcCoInPs(ocflCoRow).unsafeRunSync()
+
+      coMessage should be(List(s"CO $coRef (parent: $ioRef) is in CC, but its checksum could not be found in Preservica"))
     }
   }
