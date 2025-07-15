@@ -31,7 +31,7 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
   private lazy val httpClient: SdkAsyncHttpClient = NettyNioAsyncHttpClient.builder().build()
 
   private def configuration(repoDir: String, workDir: String) = new Configuration:
-    override def config: Config = Config("", "test-database", 5, repoDir, workDir)
+    override def config: Config = Config("", databaseName, 5, repoDir, workDir)
 
   given config: Configuration = new Configuration:
     override def config: Config = Config("", databaseName, 5, "ocflRepoDir", "ocflWorkDir")

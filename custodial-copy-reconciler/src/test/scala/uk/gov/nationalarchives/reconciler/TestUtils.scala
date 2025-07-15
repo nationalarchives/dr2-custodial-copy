@@ -20,18 +20,18 @@ import java.util.UUID
 object TestUtils:
 
   def testOcflService(objectVersionFiles: List[OcflObjectVersionFile]): OcflService = new OcflService() {
-    override def getAllObjectFiles(ioId: UUID): IO[List[OcflObjectVersionFile]] = IO(objectVersionFiles)
+    override def getAllObjectFiles(ioId: UUID): IO[List[OcflObjectVersionFile]] = IO.pure(objectVersionFiles)
   }
 
   def testEntityClient(idToBitstreams: Map[UUID, List[BitStreamInfo]]): EntityClient[IO, Fs2Streams[IO]] = new TestEntityClient {
-    override def getBitstreamInfo(contentRef: UUID): IO[Seq[BitStreamInfo]] = IO(idToBitstreams.getOrElse(contentRef, Nil))
+    override def getBitstreamInfo(contentRef: UUID): IO[Seq[BitStreamInfo]] = IO.pure(idToBitstreams.getOrElse(contentRef, Nil))
   }
 
   def testEntityClient(entities: List[Entities.EntityRef], bitstreams: List[BitStreamInfo]): EntityClient[IO, Fs2Streams[IO]] = new TestEntityClient {
     override def streamAllEntityRefs(repTypeFilter: Option[EntityClient.RepresentationType]): fs2.Stream[IO, Entities.EntityRef] =
       fs2.Stream.emits[IO, Entities.EntityRef](entities)
 
-    override def getBitstreamInfo(contentRef: UUID): IO[Seq[BitStreamInfo]] = IO(bitstreams)
+    override def getBitstreamInfo(contentRef: UUID): IO[Seq[BitStreamInfo]] = IO.pure(bitstreams)
   }
 
   def eventBridgeClient(ref: Ref[IO, List[Detail]]): DAEventBridgeClient[IO] = new DAEventBridgeClient[IO] {
