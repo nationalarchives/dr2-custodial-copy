@@ -8,22 +8,19 @@ import doobie.util.Write
 import doobie.util.log.LogHandler
 import doobie.util.transactor.Transactor
 import doobie.util.transactor.Transactor.Aux
-import doobie.{Query0, Update}
+import doobie.Update
+import fs2.Chunk
 import org.typelevel.log4cats.slf4j.Slf4jLogger
-import uk.gov.nationalarchives.reconciler.Database.TableName.{ActualCosInPS, ExpectedCosInPS}
 import uk.gov.nationalarchives.utils.Utils.given
 
 import java.util.UUID
 
 trait Database[F[_]]:
-  def writeToActuallyInPsTable(cosInPS: List[PreservicaCoRow]): F[Unit]
-  def writeToExpectedInPsTable(expectedCosInPS: List[OcflCoRow]): F[Unit]
-  def checkIfPsCoInCc(coInPS: PreservicaCoRow): F[List[String]]
-  def checkIfCcCoInPs(coInCC: OcflCoRow): F[List[String]]
+  def writeToPsTable(psCoRowChunk: Chunk[PreservicaCoRow]): F[Unit]
+  def writeToOcflTable(ocflCoRowChunk: Chunk[OcflCoRow]): F[Unit]
+  def findAllMissingFiles(): F[List[String]]
 
 object Database:
-  enum TableName:
-    case ExpectedCosInPS, ActualCosInPS
 
   def apply[F[_]: Async](using configuration: Configuration): Database[F] = new Database[F] {
 
@@ -33,96 +30,68 @@ object Database:
       logHandler = Option(LogHandler.jdkLogHandler)
     )
 
-    override def writeToExpectedInPsTable(expectedCosInPS: List[OcflCoRow]): F[Unit] = {
-      val deleteSql = "delete from ExpectedCosInPS where coRef = ?"
+    override def writeToOcflTable(ocflCoRowChunk: Chunk[OcflCoRow]): F[Unit] = {
       val insertSql =
-        "insert into ExpectedCosInPS (coRef, ioRef, representationType, generationType, sha256Checksum, sha1Checksum, md5Checksum) values (?, ?, ?, ?, ?, ?, ?)"
-
-      val deleteAndInsert: ConnectionIO[(Int, Int)] = for {
-        deleteCount <- Update[UUID](deleteSql).updateMany(expectedCosInPS.map(_.coRef))
-        updateCount <- Update[OcflCoRow](insertSql).updateMany(expectedCosInPS)
-      } yield (updateCount, deleteCount)
-
-      writeTransaction(ExpectedCosInPS, deleteAndInsert)
+        "insert into OcflRows (coRef, ioRef, sha256Checksum) values (?, ?, ?)"
+      writeTransaction("OcflRows", Update[OcflCoRow](insertSql).updateMany(ocflCoRowChunk))
     }
 
-    override def writeToActuallyInPsTable(cosInPS: List[PreservicaCoRow]): F[Unit] = {
-      val deleteSql = s"delete from ActualCosInPS where coRef = ?"
-      val insertSql = "insert into ActualCosInPS (coRef, ioRef, generationType, sha256Checksum, sha1Checksum, md5Checksum) values (?, ?, ?, ?, ?, ?)"
-
-      val deleteAndInsert: ConnectionIO[(Int, Int)] = for {
-        deleteCount <- Update[UUID](deleteSql).updateMany(cosInPS.map(_.coRef))
-        updateCount <- Update[PreservicaCoRow](insertSql).updateMany(cosInPS)
-      } yield (updateCount, deleteCount)
-
-      writeTransaction(ActualCosInPS, deleteAndInsert)
+    override def writeToPsTable(psCoRows: Chunk[PreservicaCoRow]): F[Unit] = {
+      val insertSql = "insert into PsRows (coRef, ioRef, sha256Checksum) values (?, ?, ?)"
+      writeTransaction("PsRows", Update[PreservicaCoRow](insertSql).updateMany(psCoRows))
     }
 
-    def checkIfPsCoInCc(coInPS: PreservicaCoRow): F[List[String]] = {
-      val selectSql = checkIfChecksumInTableStatement(coInPS, ExpectedCosInPS)
-      val selectCoRow: ConnectionIO[List[String]] = for {
-        ocflCoRows <- Query0[String](selectSql).to[List]
-      } yield
-        if ocflCoRows.isEmpty then
-          List(
-            s"CO ${coInPS.coRef} (parent: ${coInPS.ioRef}) is in Preservica, but its checksum could not be found in CC"
-          )
-        else Nil
+    override def findAllMissingFiles(): F[List[String]] =
+      for {
+        psMissingFromOcfl <- findPsFileMissingFromOcfl()
+        ocflMissingFromPs <- findOcflFileMissingFromPs()
+      } yield psMissingFromOcfl ++ ocflMissingFromPs
 
-      selectCoRow.transact(xa)
+    private def findPsFileMissingFromOcfl(): F[List[String]] = {
+      val selectSql = sql"select p.* from PsRows p LEFT JOIN OcflRows o on p.sha256checksum = o.sha256Checksum WHERE o.sha256Checksum is null;"
+      selectSql.query[PreservicaCoRow].to[List].transact(xa).flatMap { psRefs =>
+        for {
+          logger <- Slf4jLogger.create[F]
+          messages <- psRefs.traverse { row =>
+            val message = s"CO ${row.coRef} (parent: ${row.ioRef}) is in Preservica, but its checksum could not be found in CC"
+            logger.warn(message).map(_ => message)
+          }
+        } yield messages
+      }
     }
 
-    def checkIfCcCoInPs(coInCC: OcflCoRow): F[List[String]] = {
-      val selectSql = checkIfChecksumInTableStatement(coInCC, ActualCosInPS)
-      val selectCoRow: ConnectionIO[List[String]] = for {
-        preservicaCoRows <- Query0[PreservicaCoRow](selectSql).to[List]
-      } yield
-        if preservicaCoRows.isEmpty then
-          List(
-            s"CO ${coInCC.coRef} (parent: ${coInCC.ioRef}) is in CC, but its checksum could not be found in Preservica"
-          )
-        else Nil
-      selectCoRow.transact(xa)
+    private def findOcflFileMissingFromPs(): F[List[String]] = {
+      val selectSql = sql"select o.* from OcflRows o LEFT JOIN PsRows p on p.sha256checksum = o.sha256Checksum where p.sha256Checksum is null"
+      selectSql.query[OcflCoRow].to[List].transact(xa).flatMap { ocflRefs =>
+        for {
+          logger <- Slf4jLogger.create[F]
+          messages <- ocflRefs.traverse { row =>
+            val message = s"CO ${row.coRef} (parent: ${row.ioRef}) is in CC, but its checksum could not be found in Preservica"
+            logger.warn(message).map(_ => message)
+          }
+        } yield messages
+      }
     }
 
-    private def checkIfChecksumInTableStatement(coRow: CoRow, table: TableName): String =
-      s"""select * from $table coRef
-         | where coRef = '${coRow.coRef}'
-         | and (
-         |   sha256Checksum = '${coRow.sha256Checksum.getOrElse("N/A")}'
-         |   or sha1Checksum = '${coRow.sha1Checksum.getOrElse("N/A")}'
-         |   or md5Checksum = '${coRow.md5Checksum.getOrElse("N/A")}'
-         | )""".stripMargin
-
-    private def writeTransaction(tableName: TableName, connection: ConnectionIO[(Int, Int)]) = for {
+    private def writeTransaction(tableName: String, connection: ConnectionIO[Int]) = for {
       logger <- Slf4jLogger.create[F]
-      (updateCount, deleteCount) <- connection.transact(xa)
-      _ <- logger.info(s"$tableName: $updateCount rows updated. $deleteCount rows deleted")
+      updateCount <- connection.transact(xa)
+      _ <- logger.info(s"$tableName: $updateCount rows updated")
     } yield ()
   }
 
 sealed trait CoRow:
   val coRef: UUID
   val ioRef: UUID
-  val generationType: String
   val sha256Checksum: Option[String]
-  val sha1Checksum: Option[String]
-  val md5Checksum: Option[String]
 
 case class PreservicaCoRow(
     coRef: UUID,
     ioRef: UUID,
-    generationType: String,
-    sha256Checksum: Option[String],
-    sha1Checksum: Option[String],
-    md5Checksum: Option[String]
+    sha256Checksum: Option[String]
 ) extends CoRow
 case class OcflCoRow(
     coRef: UUID,
     ioRef: UUID,
-    representationType: String,
-    generationType: String,
-    sha256Checksum: Option[String],
-    sha1Checksum: Option[String],
-    md5Checksum: Option[String]
+    sha256Checksum: Option[String]
 ) extends CoRow

@@ -46,19 +46,19 @@ object TestUtils:
       transaction.transact(xa).unsafeRunSync()
     }
 
-    def createExpectedInPsTable(): Unit = {
+    def createOcflTable(): Unit = {
       val transaction = for {
-        _ <- sql"DROP TABLE IF EXISTS ExpectedCosInPS".update.run
+        _ <- sql"DROP TABLE IF EXISTS OcflRows".update.run
         _ <-
-          sql"CREATE TABLE ExpectedCosInPS(coRef text, ioRef text, representationType text, generationType text, sha256Checksum text, sha1Checksum text, md5Checksum);".update.run
+          sql"CREATE TABLE OcflRows(coRef text, ioRef text, sha256Checksum text);".update.run
       } yield ()
       transaction.transact(xa).unsafeRunSync()
     }
 
-    def createActuallyInPsTable(): Unit = {
+    def createPsTable(): Unit = {
       val transaction = for {
-        _ <- sql"DROP TABLE IF EXISTS ActualCosInPS".update.run
-        _ <- sql"CREATE TABLE ActualCosInPS(coRef text, ioRef text, generationType text, sha256Checksum text, sha1Checksum text, md5Checksum);".update.run
+        _ <- sql"DROP TABLE IF EXISTS PsRows".update.run
+        _ <- sql"CREATE TABLE PsRows(coRef text, ioRef text, sha256Checksum text);".update.run
       } yield ()
       transaction.transact(xa).unsafeRunSync()
     }
@@ -192,8 +192,8 @@ object TestUtils:
             val coRef = (elem \ "ContentObject" \ "Ref").head.text
             Files.write(coMetadataFile, elem.toString.getBytes)
             updater.addPath(coMetadataFile, s"Preservation_1/$coRef/CO$metadataFileSuffix.xml", OcflOption.OVERWRITE)
-            if addContentFilesToRepo then updater.addPath(contentFile, s"Preservation_1/$coRef/original/g1/content.file", OcflOption.OVERWRITE)
           }
+          if addContentFilesToRepo then updater.addPath(contentFile, s"Preservation_1/$coRef/original/g1/content.file", OcflOption.OVERWRITE)
         }.asJava
       )
     (repoDir.toString, workDir.toString)

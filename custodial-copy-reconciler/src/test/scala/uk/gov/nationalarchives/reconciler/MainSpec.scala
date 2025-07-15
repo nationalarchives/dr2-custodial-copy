@@ -3,7 +3,7 @@ package uk.gov.nationalarchives.reconciler
 import fs2.Chunk
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.{equal, should}
-import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
+import org.scalatest.BeforeAndAfterEach
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
@@ -15,17 +15,18 @@ import uk.gov.nationalarchives.reconciler.TestUtils.runTestReconciler
 import uk.gov.nationalarchives.utils.Detail
 import uk.gov.nationalarchives.utils.TestUtils.*
 
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 import java.util.UUID
 
-class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAll {
+class MainSpec extends AnyFlatSpec with BeforeAndAfterEach {
 
-  val databaseUtils = new DatabaseUtils("test-database")
-  import databaseUtils.*
+  val databaseName = "test-database"
 
-  override def beforeAll(): Unit = {
-    createActuallyInPsTable()
-    createExpectedInPsTable()
+  override def beforeEach(): Unit = {
+    Files.deleteIfExists(Path.of(databaseName))
+    val databaseUtils = new DatabaseUtils(databaseName)
+    databaseUtils.createPsTable()
+    databaseUtils.createOcflTable()
   }
 
   private lazy val httpClient: SdkAsyncHttpClient = NettyNioAsyncHttpClient.builder().build()
@@ -68,7 +69,7 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
       s"$coRef.testExt",
       1,
       "https://example.com",
-      List(),
+      List(Fixity("sha256", "mismatch")),
       1,
       Original,
       None,
@@ -79,10 +80,7 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
 
     eventBridgeEvents should equal(
       List(
-        Detail(
-          s"CO $coRef (parent: $ioRef) is in CC, but its checksum could not be found in Preservica\n" +
-            s"CO $coRef (parent: $ioRef) is in CC, but its checksum could not be found in Preservica"
-        ),
+        Detail(s"CO $coRef (parent: $ioRef) is in CC, but its checksum could not be found in Preservica"),
         Detail(s"CO $coRef (parent: $ioRef) is in Preservica, but its checksum could not be found in CC")
       )
     )

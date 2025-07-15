@@ -19,7 +19,7 @@ import java.util.UUID
 
 object TestUtils:
 
-  def testOcflService(objectVersionFiles: List[OcflObjectVersionFile]): OcflService = new OcflService() {
+  def testOcflService(objectVersionFiles: List[OcflObjectVersionFile]): OcflService[IO] = new OcflService[IO]() {
     override def getAllObjectFiles(ioId: UUID): IO[List[OcflObjectVersionFile]] = IO(objectVersionFiles)
   }
 
@@ -41,8 +41,8 @@ object TestUtils:
 
   def runTestReconciler(entities: List[Entities.EntityRef], bitstreams: List[BitStreamInfo])(using configuration: Configuration): List[Detail] = (for {
     detailRef <- Ref.of[IO, List[Detail]](Nil)
-    ocflService = OcflService(configuration.config)
-    result <- Main.runReconciler(testEntityClient(entities, bitstreams), ocflService, eventBridgeClient(detailRef)).compile.drain
+    ocflService = OcflService[IO](configuration.config)
+    _ <- Main.runReconciler(testEntityClient(entities, bitstreams), ocflService, eventBridgeClient(detailRef))
     eventBridgeDetails <- detailRef.get
   } yield eventBridgeDetails).unsafeRunSync()
 
