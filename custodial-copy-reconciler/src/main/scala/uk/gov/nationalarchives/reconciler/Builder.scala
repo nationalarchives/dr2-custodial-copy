@@ -13,12 +13,12 @@ import uk.gov.nationalarchives.dp.client.{Entities, EntityClient}
 import java.util.UUID
 import scala.jdk.CollectionConverters.*
 
-trait Builder[IO[_]]:
+trait Builder[F[_]]:
   def run(
-      client: EntityClient[IO, Fs2Streams[IO]],
+      client: EntityClient[F, Fs2Streams[F]],
       ocflService: OcflService,
       entityRefChunks: Chunk[InformationObjectRef | ContentObjectRef]
-  ): IO[Chunk[CoRows]]
+  ): F[Chunk[CoRows]]
 
 object Builder:
   def apply[F[_]: Async]: Builder[IO] =
