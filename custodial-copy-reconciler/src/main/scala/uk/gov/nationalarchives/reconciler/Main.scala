@@ -6,8 +6,8 @@ import fs2.Stream
 import io.circe.generic.auto.*
 import io.circe.{Decoder, HCursor}
 import org.typelevel.log4cats.slf4j.Slf4jLogger
-import pureconfig.module.catseffect.syntax.*
 import pureconfig.*
+import pureconfig.module.catseffect.syntax.*
 import software.amazon.awssdk.services.eventbridge.model.PutEventsResponse
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DAEventBridgeClient
@@ -16,8 +16,8 @@ import uk.gov.nationalarchives.dp.client.EntityClient
 import uk.gov.nationalarchives.dp.client.fs2.Fs2Client
 import uk.gov.nationalarchives.reconciler.Configuration.impl
 import uk.gov.nationalarchives.reconciler.OcflService
+import uk.gov.nationalarchives.utils.Detail
 import uk.gov.nationalarchives.utils.DetailType.DR2DevMessage
-import uk.gov.nationalarchives.utils.{Detail, OcflServiceConfig}
 
 import java.net.URI
 import java.util.UUID
@@ -30,7 +30,7 @@ object Main extends IOApp {
       ocflRepoDir: String,
       ocflWorkDir: String,
       proxyUrl: Option[URI] = None
-  ) extends OcflServiceConfig derives ConfigReader
+  ) derives ConfigReader
   case class Message(id: UUID)
 
   given Decoder[Message] = (c: HCursor) =>
