@@ -24,8 +24,8 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
   import databaseUtils.*
 
   override def beforeAll(): Unit = {
-    createActuallyInPsTable()
-    createExpectedInPsTable()
+    createPreservicaCOsTable()
+    createOcflCOsTable()
   }
 
   private lazy val httpClient: SdkAsyncHttpClient = NettyNioAsyncHttpClient.builder().build()

@@ -26,7 +26,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
         ioRef: UUID = UUID.randomUUID(),
         sha256Checksum: Option[String] = None
     ): IO[OcflCoRow] =
-      sql"""INSERT INTO ExpectedCosInPS (coRef, ioRef, sha256Checksum)
+      sql"""INSERT INTO OcflCOs (coRef, ioRef, sha256Checksum)
                  VALUES (${coRef.toString}, ${ioRef.toString}, $sha256Checksum)""".update.run
         .transact(xa)
         .map(_ => OcflCoRow(coRef, ioRef, sha256Checksum))
@@ -36,19 +36,19 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
         ioRef: UUID = UUID.randomUUID(),
         sha256Checksum: Option[String] = None
     ): IO[PreservicaCoRow] =
-      sql"""INSERT INTO ActualCosInPS (coRef, ioRef, sha256Checksum)
+      sql"""INSERT INTO PreservicaCOs (coRef, ioRef, sha256Checksum)
                VALUES (${coRef.toString}, ${ioRef.toString}, $sha256Checksum)""".update.run
         .transact(xa)
         .map(_ => PreservicaCoRow(coRef, ioRef, sha256Checksum))
 
     def getOcflCoRows(coRef: UUID): IO[List[OcflCoRow]] =
-      sql"SELECT * FROM ExpectedCosInPS WHERE coRef = ${coRef.toString}"
+      sql"SELECT * FROM OcflCOs WHERE coRef = ${coRef.toString}"
         .query[OcflCoRow]
         .to[List]
         .transact(xa)
 
     def getPreservicaCoRows(coRef: UUID): IO[List[PreservicaCoRow]] =
-      sql"SELECT * FROM ActualCosInPS WHERE coRef = ${coRef.toString}"
+      sql"SELECT * FROM PreservicaCOs WHERE coRef = ${coRef.toString}"
         .query[PreservicaCoRow]
         .to[List]
         .transact(xa)
@@ -62,8 +62,8 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
   given Configuration = new Configuration:
     override def config: Config = Config("", databaseName, 5, "", "", Some(URI.create("http://localhost")))
 
-  "writeToExpectedInPsTable" should "should write the values to the ExpectedInPs table" in {
-    createExpectedInPsTable()
+  "writeToOcflCOsTable" should "should write the values to the OcflCOs table" in {
+    createOcflCOsTable()
     val ioRef = UUID.randomUUID()
     val coRef = UUID.randomUUID()
 
@@ -71,58 +71,58 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     val ocflCoRows = List(
       OcflCoRow(coRef, ioRef, Some("sha256Checksum1"))
     )
-    Database[IO].writeToExpectedInPsTable(ocflCoRows).unsafeRunSync()
+    Database[IO].writeToOcflCOsTable(ocflCoRows).unsafeRunSync()
     val response = getOcflCoRows(coRef).unsafeRunSync()
 
     initialResponse should equal(Nil)
     response should equal(ocflCoRows)
   }
 
-  "writeToActuallyInPsTable" should "should write the values to the ActualCosInPS table" in {
-    createActuallyInPsTable()
+  "writeToPreservicaCOsTable" should "should write the values to the PreservicaCOs table" in {
+    createPreservicaCOsTable()
     val ioRef = UUID.randomUUID()
     val coRef = UUID.randomUUID()
 
     val initialResponse = getPreservicaCoRows(coRef).unsafeRunSync()
     val preservicaCoRows = List(PreservicaCoRow(coRef, ioRef, Some("sha256Checksum1")))
 
-    Database[IO].writeToActuallyInPsTable(preservicaCoRows).unsafeRunSync()
+    Database[IO].writeToPreservicaCOsTable(preservicaCoRows).unsafeRunSync()
     val response = getPreservicaCoRows(coRef).unsafeRunSync()
 
     initialResponse should equal(Nil)
     response should equal(preservicaCoRows)
   }
 
-  "writeToExpectedInPsTable" should "should write nothing to the ExpectedInPs table if no CoRows were passed in" in {
-    createExpectedInPsTable()
+  "writeToOcflCOsTable" should "should write nothing to the OcflCOs table if no CoRows were passed in" in {
+    createOcflCOsTable()
     val initialResponse = getOcflCoRows(coRef).unsafeRunSync()
 
-    Database[IO].writeToExpectedInPsTable(Nil).unsafeRunSync()
+    Database[IO].writeToOcflCOsTable(Nil).unsafeRunSync()
     val response = getOcflCoRows(coRef).unsafeRunSync()
 
     initialResponse should equal(Nil)
     response should equal(Nil)
   }
 
-  "writeToActuallyInPsTable" should "should write nothing to the ActualCosInPS table if no CoRows were passed in" in {
-    createActuallyInPsTable()
+  "writeToPreservicaCOsTable" should "should write nothing to the PreservicaCOs table if no CoRows were passed in" in {
+    createPreservicaCOsTable()
     val initialResponse = getPreservicaCoRows(coRef).unsafeRunSync()
 
-    Database[IO].writeToActuallyInPsTable(Nil).unsafeRunSync()
+    Database[IO].writeToPreservicaCOsTable(Nil).unsafeRunSync()
     val response = getPreservicaCoRows(coRef).unsafeRunSync()
 
     initialResponse should equal(Nil)
     response should equal(Nil)
   }
 
-  "writeToExpectedInPsTable" should "return an error if there is an error with the ExpectedInPs table or DB" in {
-    val ex = intercept[Exception](Database[IO].writeToExpectedInPsTable(Nil).unsafeRunSync())
-    ex.getMessage should equal("[SQLITE_ERROR] SQL error or missing database (no such table: ExpectedCosInPS)")
+  "writeToOcflCOsTable" should "return an error if there is an error with the OcflCOs table or DB" in {
+    val ex = intercept[Exception](Database[IO].writeToOcflCOsTable(Nil).unsafeRunSync())
+    ex.getMessage should equal("[SQLITE_ERROR] SQL error or missing database (no such table: OcflCOs)")
   }
 
-  "writeToActuallyInPsTable" should "return an error if there is an error with the ActualCosInPS table or DB" in {
-    val ex = intercept[Exception](Database[IO].writeToActuallyInPsTable(Nil).unsafeRunSync())
-    ex.getMessage should equal("[SQLITE_ERROR] SQL error or missing database (no such table: ActualCosInPS)")
+  "writeToPreservicaCOsTable" should "return an error if there is an error with the PreservicaCOs table or DB" in {
+    val ex = intercept[Exception](Database[IO].writeToPreservicaCOsTable(Nil).unsafeRunSync())
+    ex.getMessage should equal("[SQLITE_ERROR] SQL error or missing database (no such table: PreservicaCOs)")
   }
 
   val checksumMismatchPossibilities: TableFor3[String, Option[String], Option[String]] = Table(
@@ -134,7 +134,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
   )
 
   "checkIfPsCoInCc" should s"should return a message for each CO if it has the same checksum in CC" in {
-    createExpectedInPsTable()
+    createOcflCOsTable()
     createOcflCoRow(coRef, ioRef, Some("checksum1")).unsafeRunSync()
 
     val preservicaCoRow = PreservicaCoRow(coRef, ioRef, Some("checksum1"))
@@ -144,7 +144,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
   }
 
   "checkIfCcCoInPs" should s"should return a message for each CO if it has the same checksum in PS" in {
-    createActuallyInPsTable()
+    createPreservicaCOsTable()
     createPSCoRow(coRef, ioRef, Some("checksum1")).unsafeRunSync()
 
     val ocflCoRow = OcflCoRow(coRef, ioRef, Some("checksum1"))
@@ -155,7 +155,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
 
   forAll(checksumMismatchPossibilities) { (mismatch, ocflChecksum, preservicaChecksum) =>
     "checkIfPsCoInCc" should s"should return a message for each CO if $mismatch" in {
-      createExpectedInPsTable()
+      createOcflCOsTable()
       createOcflCoRow(coRef, ioRef, ocflChecksum).unsafeRunSync()
 
       val preservicaCoRow = PreservicaCoRow(coRef, ioRef, preservicaChecksum)
@@ -165,7 +165,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     }
 
     "checkIfCcCoInPs" should s"should return a message for each CO if $mismatch" in {
-      createActuallyInPsTable()
+      createPreservicaCOsTable()
       createPSCoRow(coRef, ioRef, preservicaChecksum).unsafeRunSync()
 
       val ocflCoRow = OcflCoRow(coRef, ioRef, ocflChecksum)

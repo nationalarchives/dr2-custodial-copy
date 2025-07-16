@@ -46,19 +46,19 @@ object TestUtils:
       transaction.transact(xa).unsafeRunSync()
     }
 
-    def createExpectedInPsTable(): Unit = {
+    def createOcflCOsTable(): Unit = {
       val transaction = for {
-        _ <- sql"DROP TABLE IF EXISTS ExpectedCosInPS".update.run
+        _ <- sql"DROP TABLE IF EXISTS OcflCOs".update.run
         _ <-
-          sql"CREATE TABLE ExpectedCosInPS(coRef text, ioRef text, sha256Checksum text);".update.run
+          sql"CREATE TABLE OcflCOs(coRef text, ioRef text, sha256Checksum text);".update.run
       } yield ()
       transaction.transact(xa).unsafeRunSync()
     }
 
-    def createActuallyInPsTable(): Unit = {
+    def createPreservicaCOsTable(): Unit = {
       val transaction = for {
-        _ <- sql"DROP TABLE IF EXISTS ActualCosInPS".update.run
-        _ <- sql"CREATE TABLE ActualCosInPS(coRef text, ioRef text, sha256Checksum text);".update.run
+        _ <- sql"DROP TABLE IF EXISTS PreservicaCOs".update.run
+        _ <- sql"CREATE TABLE PreservicaCOs(coRef text, ioRef text, sha256Checksum text);".update.run
       } yield ()
       transaction.transact(xa).unsafeRunSync()
     }

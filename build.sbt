@@ -145,9 +145,9 @@ lazy val reconciler = (project in file("custodial-copy-reconciler"))
   .settings(commonSettings)
   .settings(imageSettings)
   .settings(
-    name := "custodial-copy-db-reconciler",
+    name := "custodial-copy-reconciler",
     scalacOptions += "-Wunused:imports",
-    assembly / assemblyJarName := "custodial-copy-db-reconciler.jar",
+    assembly / assemblyJarName := "custodial-copy-reconciler.jar",
     libraryDependencies ++= Seq(
       eventbridgeClient,
       fs2Core,

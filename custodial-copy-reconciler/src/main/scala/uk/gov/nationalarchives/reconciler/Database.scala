@@ -10,20 +10,20 @@ import doobie.util.transactor.Transactor
 import doobie.util.transactor.Transactor.Aux
 import doobie.{Query0, Update}
 import org.typelevel.log4cats.slf4j.Slf4jLogger
-import uk.gov.nationalarchives.reconciler.Database.TableName.{ActualCosInPS, ExpectedCosInPS}
+import uk.gov.nationalarchives.reconciler.Database.TableName.{PreservicaCOs, OcflCOs}
 import uk.gov.nationalarchives.utils.Utils.given
 
 import java.util.UUID
 
 trait Database[F[_]]:
-  def writeToActuallyInPsTable(cosInPS: List[PreservicaCoRow]): F[Unit]
-  def writeToExpectedInPsTable(expectedCosInPS: List[OcflCoRow]): F[Unit]
+  def writeToPreservicaCOsTable(cosInPS: List[PreservicaCoRow]): F[Unit]
+  def writeToOcflCOsTable(expectedCosInPS: List[OcflCoRow]): F[Unit]
   def checkIfPsCoInCc(coInPS: PreservicaCoRow): F[List[String]]
   def checkIfCcCoInPs(coInCC: OcflCoRow): F[List[String]]
 
 object Database:
   enum TableName:
-    case ExpectedCosInPS, ActualCosInPS
+    case OcflCOs, PreservicaCOs
 
   def apply[F[_]: Async](using configuration: Configuration): Database[F] = new Database[F] {
 
@@ -33,18 +33,18 @@ object Database:
       logHandler = Option(LogHandler.jdkLogHandler)
     )
 
-    override def writeToExpectedInPsTable(expectedCosInPS: List[OcflCoRow]): F[Unit] = {
-      val insertSql = "insert into ExpectedCosInPS (coRef, ioRef, sha256Checksum) values (?, ?, ?)"
-      writeTransaction(ExpectedCosInPS, Update[OcflCoRow](insertSql).updateMany(expectedCosInPS))
+    override def writeToOcflCOsTable(expectedCosInPS: List[OcflCoRow]): F[Unit] = {
+      val insertSql = s"insert into OcflCOs (coRef, ioRef, sha256Checksum) values (?, ?, ?)"
+      writeTransaction(OcflCOs, Update[OcflCoRow](insertSql).updateMany(expectedCosInPS))
     }
 
-    override def writeToActuallyInPsTable(cosInPS: List[PreservicaCoRow]): F[Unit] = {
-      val insertSql = "insert into ActualCosInPS (coRef, ioRef, sha256Checksum) values (?, ?, ?)"
-      writeTransaction(ActualCosInPS, Update[PreservicaCoRow](insertSql).updateMany(cosInPS))
+    override def writeToPreservicaCOsTable(cosInPS: List[PreservicaCoRow]): F[Unit] = {
+      val insertSql = s"insert into PreservicaCOs (coRef, ioRef, sha256Checksum) values (?, ?, ?)"
+      writeTransaction(PreservicaCOs, Update[PreservicaCoRow](insertSql).updateMany(cosInPS))
     }
 
     def checkIfPsCoInCc(coInPS: PreservicaCoRow): F[List[String]] = {
-      val selectSql = checkIfChecksumInTableStatement(coInPS, ExpectedCosInPS)
+      val selectSql = checkIfChecksumInTableStatement(coInPS, OcflCOs)
       val selectCoRow: ConnectionIO[List[String]] = for {
         ocflCoRows <- Query0[String](selectSql).to[List]
       } yield
@@ -58,7 +58,7 @@ object Database:
     }
 
     def checkIfCcCoInPs(coInCC: OcflCoRow): F[List[String]] = {
-      val selectSql = checkIfChecksumInTableStatement(coInCC, ActualCosInPS)
+      val selectSql = checkIfChecksumInTableStatement(coInCC, PreservicaCOs)
       val selectCoRow: ConnectionIO[List[String]] = for {
         preservicaCoRows <- Query0[PreservicaCoRow](selectSql).to[List]
       } yield

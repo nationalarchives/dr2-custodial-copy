@@ -74,8 +74,8 @@ object Main extends IOApp {
       }
       .parJoin(configuration.config.maxConcurrency)
       .evalTap { coRows =>
-        database.writeToActuallyInPsTable(coRows.listOfPreservicaCoRows) >>
-          database.writeToExpectedInPsTable(coRows.listOfOcflCoRows)
+        database.writeToPreservicaCOsTable(coRows.listOfPreservicaCoRows) >>
+          database.writeToOcflCOsTable(coRows.listOfOcflCoRows)
       }
       .evalMap { coRows =>
         for {
