@@ -16,13 +16,13 @@ import scala.jdk.CollectionConverters.*
 trait Builder[F[_]]:
   def run(
       client: EntityClient[F, Fs2Streams[F]],
-      ocflService: OcflService,
+      ocflService: OcflService[F],
       entityRefChunks: Chunk[InformationObjectRef | ContentObjectRef]
   ): F[Chunk[CoRows]]
 
 object Builder:
   def apply[F[_]: Async]: Builder[IO] =
-    (client: EntityClient[IO, Fs2Streams[IO]], ocflService: OcflService, entityRefChunks: Chunk[InformationObjectRef | ContentObjectRef]) => {
+    (client: EntityClient[IO, Fs2Streams[IO]], ocflService: OcflService[IO], entityRefChunks: Chunk[InformationObjectRef | ContentObjectRef]) => {
       val (ioRefChunks: Chunk[InformationObjectRef], coRefChunks: Chunk[ContentObjectRef]) =
         entityRefChunks.partitionEither {
           case informationObjectRef: InformationObjectRef => Left(informationObjectRef)

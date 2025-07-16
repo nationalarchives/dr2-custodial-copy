@@ -17,12 +17,12 @@ import java.util.UUID
 import scala.jdk.CollectionConverters.*
 import scala.jdk.FunctionConverters.*
 
-trait OcflService {
-  def getAllObjectFiles(ioId: UUID): IO[List[OcflObjectVersionFile]]
+trait OcflService[F[_]] {
+  def getAllObjectFiles(ioId: UUID): F[List[OcflObjectVersionFile]]
 }
 object OcflService {
 
-  def apply(config: Config): OcflService = {
+  def apply[F[_]](config: Config): OcflService[F] = {
     val repoDir = Paths.get(config.ocflRepoDir)
     val workDir =
       Paths.get(

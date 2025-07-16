@@ -54,7 +54,7 @@ object Main extends IOApp {
       _ <- IO(runReconciler(client, OcflService(config), eventBridgeClient).handleErrorWith(err => Stream.eval(logError(err))))
     } yield ExitCode.Success
 
-  def runReconciler(client: EntityClient[IO, Fs2Streams[IO]], ocflService: OcflService, eventBridgeClient: DAEventBridgeClient[IO])(using
+  def runReconciler(client: EntityClient[IO, Fs2Streams[IO]], ocflService: OcflService[IO], eventBridgeClient: DAEventBridgeClient[IO])(using
       configuration: Configuration
   ): Stream[IO, Unit] = {
     val database = Database[IO]
