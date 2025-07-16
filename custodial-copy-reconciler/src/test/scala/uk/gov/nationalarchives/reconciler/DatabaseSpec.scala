@@ -153,7 +153,6 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     coMessage should be(Nil)
   }
 
-
   forAll(checksumMismatchPossibilities) { (mismatch, ocflChecksum, preservicaChecksum) =>
     "checkIfPsCoInCc" should s"should return a message for each CO if $mismatch" in {
       createExpectedInPsTable()

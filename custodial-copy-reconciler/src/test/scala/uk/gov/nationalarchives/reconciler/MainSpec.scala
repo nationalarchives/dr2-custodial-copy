@@ -48,6 +48,16 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
     eventBridgeEvents.size should equal(0)
   }
 
+  "runReconciler" should "not throw an error or send any messages to EventBridge if there are no files in OCFL that match the IO ref" in {
+    val id = UUID.randomUUID
+    val (repoDir, workDir) = initialiseRepo(ioRef, addFilesToRepo = false)
+    given Configuration = configuration(repoDir, workDir)
+
+    val eventBridgeEvents = runTestReconciler(List(InformationObjectRef(ioRef, id), ContentObjectRef(coRef, ioRef)), Nil)
+
+    eventBridgeEvents.size should equal(0)
+  }
+
   "runReconciler" should "filter out non-CO files and non-original CO files returned from OCFL" in {
     val id = UUID.randomUUID
     val (repoDir, workDir) = initialiseRepo(ioRef, addContentFilesToRepo = false)

@@ -1,7 +1,8 @@
 package uk.gov.nationalarchives.reconciler
 
-import cats.effect.IO
-import io.ocfl.api.exception.{CorruptObjectException, NotFoundException}
+import cats.effect.Async
+import cats.syntax.all.*
+import io.ocfl.api.exception.NotFoundException
 import io.ocfl.api.model.{DigestAlgorithm, OcflObjectVersionFile}
 import io.ocfl.api.{MutableOcflRepository, OcflConfig}
 import io.ocfl.core.OcflRepositoryBuilder
@@ -22,7 +23,7 @@ trait OcflService[F[_]] {
 }
 object OcflService {
 
-  def apply[F[_]](config: Config): OcflService[F] = {
+  def apply[F[_]: Async](config: Config): OcflService[F] = {
     val repoDir = Paths.get(config.ocflRepoDir)
     val workDir =
       Paths.get(
@@ -45,23 +46,9 @@ object OcflService {
       .workDir(workDir)
       .buildMutable()
     (ioId: UUID) =>
-      IO.blocking(repo.getObject(ioId.toHeadVersion))
+      Async[F]
+        .blocking(repo.getObject(ioId.toHeadVersion))
         .map(_.getFiles.asScala.toList)
-        .handleErrorWith {
-          case nfe: NotFoundException => IO.raiseError(new Exception(s"Object id $ioId does not exist"))
-          case coe: CorruptObjectException =>
-            IO.raiseError(
-              new Exception(
-                s"Object $ioId is corrupt. The object has been purged and the error will be rethrown so the process can try again",
-                coe
-              )
-            )
-          case e: Throwable =>
-            IO.raiseError(
-              new Exception(
-                s"'getObject' returned an unexpected error '$e' when called with object id $ioId"
-              )
-            )
-        }
+        .handleErrorWith { case nfe: NotFoundException => Async[F].pure(Nil) }
   }
 }
