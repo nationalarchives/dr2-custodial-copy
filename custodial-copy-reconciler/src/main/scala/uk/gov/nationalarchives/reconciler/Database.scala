@@ -34,27 +34,13 @@ object Database:
     )
 
     override def writeToExpectedInPsTable(expectedCosInPS: List[OcflCoRow]): F[Unit] = {
-      val deleteSql = "delete from ExpectedCosInPS where coRef = ?"
       val insertSql = "insert into ExpectedCosInPS (coRef, ioRef, sha256Checksum) values (?, ?, ?)"
-
-      val deleteAndInsert: ConnectionIO[(Int, Int)] = for {
-        deleteCount <- Update[UUID](deleteSql).updateMany(expectedCosInPS.map(_.coRef))
-        updateCount <- Update[OcflCoRow](insertSql).updateMany(expectedCosInPS)
-      } yield (updateCount, deleteCount)
-
-      writeTransaction(ExpectedCosInPS, deleteAndInsert)
+      writeTransaction(ExpectedCosInPS, Update[OcflCoRow](insertSql).updateMany(expectedCosInPS))
     }
 
     override def writeToActuallyInPsTable(cosInPS: List[PreservicaCoRow]): F[Unit] = {
-      val deleteSql = s"delete from ActualCosInPS where coRef = ?"
       val insertSql = "insert into ActualCosInPS (coRef, ioRef, sha256Checksum) values (?, ?, ?)"
-
-      val deleteAndInsert: ConnectionIO[(Int, Int)] = for {
-        deleteCount <- Update[UUID](deleteSql).updateMany(cosInPS.map(_.coRef))
-        updateCount <- Update[PreservicaCoRow](insertSql).updateMany(cosInPS)
-      } yield (updateCount, deleteCount)
-
-      writeTransaction(ActualCosInPS, deleteAndInsert)
+      writeTransaction(ActualCosInPS, Update[PreservicaCoRow](insertSql).updateMany(cosInPS))
     }
 
     def checkIfPsCoInCc(coInPS: PreservicaCoRow): F[List[String]] = {
@@ -89,10 +75,10 @@ object Database:
          | where coRef = '${coRow.coRef}'
          | and sha256Checksum = '${coRow.sha256Checksum.getOrElse("N/A")}'""".stripMargin
 
-    private def writeTransaction(tableName: TableName, connection: ConnectionIO[(Int, Int)]) = for {
+    private def writeTransaction(tableName: TableName, connection: ConnectionIO[Int]) = for {
       logger <- Slf4jLogger.create[F]
-      (updateCount, deleteCount) <- connection.transact(xa)
-      _ <- logger.info(s"$tableName: $updateCount rows updated. $deleteCount rows deleted")
+      updateCount <- connection.transact(xa)
+      _ <- logger.info(s"$tableName: $updateCount rows updated.")
     } yield ()
   }
 

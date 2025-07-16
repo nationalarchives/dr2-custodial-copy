@@ -93,48 +93,6 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     response should equal(preservicaCoRows)
   }
 
-  "writeToExpectedInPsTable" should "given a coRef, delete the row and write a new one with the updated values to the ExpectedInPs table" in {
-    createExpectedInPsTable()
-    val ioRef = UUID.randomUUID()
-    val coRef = UUID.randomUUID()
-    val coRef2 = UUID.randomUUID()
-
-    val expectedAdditionalCoRow = List(createOcflCoRow(coRef2, ioRef).unsafeRunSync())
-    val updatedCoRow = List(createOcflCoRow(coRef, ioRef).unsafeRunSync().copy(sha256Checksum = Some("newChecksum")))
-
-    Database[IO].writeToExpectedInPsTable(updatedCoRow).unsafeRunSync()
-    val response = getOcflCoRows(coRef).unsafeRunSync()
-    val additionalRowResponse = getOcflCoRows(coRef2).unsafeRunSync()
-
-    additionalRowResponse.length should equal(1)
-    additionalRowResponse.head.coRef should equal(coRef2)
-
-    response.length should equal(1)
-    response.head.coRef should equal(coRef)
-  }
-
-  "writeToActuallyInPsTable" should "given a coRef, delete the row and write a new one with the updated values to the ActualCosInPS table" in {
-    createActuallyInPsTable()
-    val ioRef = UUID.randomUUID()
-    val coRef = UUID.randomUUID()
-    val coRef2 = UUID.randomUUID()
-
-    val updatedCoRow = List(createPSCoRow(coRef, ioRef).unsafeRunSync().copy(sha256Checksum = Some("sha256Checksum1")))
-    val expectedAdditionalCoRow = List(createPSCoRow(coRef2, ioRef).unsafeRunSync())
-
-    Database[IO].writeToActuallyInPsTable(updatedCoRow).unsafeRunSync()
-    val response = getPreservicaCoRows(coRef).unsafeRunSync()
-    val additionalRowResponse = getPreservicaCoRows(coRef2).unsafeRunSync()
-
-    additionalRowResponse.length should equal(1)
-    additionalRowResponse.head.sha256Checksum should equal(None)
-    additionalRowResponse.head.coRef should equal(coRef2)
-
-    response.length should equal(1)
-    response.head.coRef should equal(coRef)
-    response.head.sha256Checksum should equal(Some("sha256Checksum1"))
-  }
-
   "writeToExpectedInPsTable" should "should write nothing to the ExpectedInPs table if no CoRows were passed in" in {
     createExpectedInPsTable()
     val initialResponse = getOcflCoRows(coRef).unsafeRunSync()
