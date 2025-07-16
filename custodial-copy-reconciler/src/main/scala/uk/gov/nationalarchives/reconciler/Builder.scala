@@ -29,16 +29,17 @@ object Builder:
           case contentObjectRef: ContentObjectRef         => Right(contentObjectRef)
         }
 
-      def isCoFile(storageRelativePath: String) = storageRelativePath.contains("/original/")
+      def isOriginalAndPreservation(storageRelativePath: String) =
+        storageRelativePath.contains("/original/") && storageRelativePath.contains("/Preservation_")
 
       val ocflCoRetrieval =
         for {
           ocflCoRows <- ioRefChunks.parTraverse { ioRef =>
             ocflService.getAllObjectFiles(ioRef.ref).map {
               _.collect {
-                case coFile if isCoFile(coFile.getStorageRelativePath) =>
+                case coFile if isOriginalAndPreservation(coFile.getStorageRelativePath) =>
                   val pathAsList = coFile.getStorageRelativePath.split("/")
-                  val pathStartingFromRepType = pathAsList.dropWhile(pathPart => !pathPart.startsWith("Preservation_") && !pathPart.startsWith("Access_"))
+                  val pathStartingFromRepType = pathAsList.dropWhile(pathPart => !pathPart.startsWith("Preservation_"))
                   val coRef = UUID.fromString(pathStartingFromRepType(1))
 
                   val fixities = coFile.getFixity.asScala.toMap.map { case (digestAlgo, value) => (digestAlgo.getOcflName, value) }
