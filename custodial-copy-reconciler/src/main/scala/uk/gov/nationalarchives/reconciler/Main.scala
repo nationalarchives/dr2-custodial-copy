@@ -51,7 +51,7 @@ object Main extends IOApp {
         potentialProxyUrl = config.proxyUrl
       )
       eventBridgeClient = DAEventBridgeClient[IO]()
-      _ <- IO(runReconciler(client, OcflService(config), eventBridgeClient).handleErrorWith(err => Stream.eval(logError(err))))
+      _ <- runReconciler(client, OcflService(config), eventBridgeClient).handleErrorWith(err => Stream.eval(logError(err))).compile.drain
     } yield ExitCode.Success
 
   def runReconciler(client: EntityClient[IO, Fs2Streams[IO]], ocflService: OcflService[IO], eventBridgeClient: DAEventBridgeClient[IO])(using

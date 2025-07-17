@@ -2,6 +2,7 @@ package uk.gov.nationalarchives.reconciler
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import doobie.Put
 import doobie.implicits.*
 import doobie.util.Get
 import org.scalatest.BeforeAndAfterEach
@@ -20,6 +21,8 @@ import java.util.UUID
 
 class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
   given Get[UUID] = Get[String].map(UUID.fromString)
+  given Put[UUID] = Put[String].contramap(_.toString)
+
   case class ReconcilerDatabaseUtils() extends DatabaseUtils("test-database") {
     def createOcflCoRow(
         coRef: UUID,
@@ -27,7 +30,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
         sha256Checksum: Option[String] = None
     ): IO[OcflCoRow] =
       sql"""INSERT INTO OcflCOs (coRef, ioRef, sha256Checksum)
-                 VALUES (${coRef.toString}, ${ioRef.toString}, $sha256Checksum)""".update.run
+                 VALUES ($coRef, $ioRef, $sha256Checksum)""".update.run
         .transact(xa)
         .map(_ => OcflCoRow(coRef, ioRef, sha256Checksum))
 
@@ -37,18 +40,18 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
         sha256Checksum: Option[String] = None
     ): IO[PreservicaCoRow] =
       sql"""INSERT INTO PreservicaCOs (coRef, ioRef, sha256Checksum)
-               VALUES (${coRef.toString}, ${ioRef.toString}, $sha256Checksum)""".update.run
+               VALUES ($coRef, $ioRef, $sha256Checksum)""".update.run
         .transact(xa)
         .map(_ => PreservicaCoRow(coRef, ioRef, sha256Checksum))
 
     def getOcflCoRows(coRef: UUID): IO[List[OcflCoRow]] =
-      sql"SELECT * FROM OcflCOs WHERE coRef = ${coRef.toString}"
+      sql"SELECT * FROM OcflCOs WHERE coRef = $coRef"
         .query[OcflCoRow]
         .to[List]
         .transact(xa)
 
     def getPreservicaCoRows(coRef: UUID): IO[List[PreservicaCoRow]] =
-      sql"SELECT * FROM PreservicaCOs WHERE coRef = ${coRef.toString}"
+      sql"SELECT * FROM PreservicaCOs WHERE coRef = $coRef"
         .query[PreservicaCoRow]
         .to[List]
         .transact(xa)

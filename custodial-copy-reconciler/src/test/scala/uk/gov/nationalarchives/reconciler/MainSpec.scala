@@ -1,9 +1,9 @@
 package uk.gov.nationalarchives.reconciler
 
 import fs2.Chunk
+import org.scalatest.BeforeAndAfterEach
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.{equal, should}
-import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
@@ -15,17 +15,18 @@ import uk.gov.nationalarchives.reconciler.TestUtils.runTestReconciler
 import uk.gov.nationalarchives.utils.Detail
 import uk.gov.nationalarchives.utils.TestUtils.*
 
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 import java.util.UUID
 
-class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAll {
+class MainSpec extends AnyFlatSpec with BeforeAndAfterEach {
 
-  val databaseUtils = new DatabaseUtils("test-database")
-  import databaseUtils.*
+  val databaseName = "test-database"
 
-  override def beforeAll(): Unit = {
-    createPreservicaCOsTable()
-    createOcflCOsTable()
+  override def beforeEach(): Unit = {
+    Files.deleteIfExists(Path.of(databaseName))
+    val databaseUtils = new DatabaseUtils(databaseName)
+    databaseUtils.createPreservicaCOsTable()
+    databaseUtils.createOcflCOsTable()
   }
 
   private lazy val httpClient: SdkAsyncHttpClient = NettyNioAsyncHttpClient.builder().build()
