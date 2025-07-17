@@ -79,7 +79,7 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach {
       s"$coRef.testExt",
       1,
       "https://example.com",
-      List(),
+      List(Fixity("sha256", "mismatch")),
       1,
       Original,
       None,
@@ -90,10 +90,8 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach {
 
     eventBridgeEvents should equal(
       List(
-        Detail(
-          s"CO $coRef (parent: $ioRef) is in CC, but its checksum could not be found in Preservica\n" +
-            s"CO $coRef (parent: $ioRef) is in CC, but its checksum could not be found in Preservica"
-        ),
+        Detail(s"CO $coRef (parent: $ioRef) is in CC, but its checksum could not be found in Preservica"),
+        Detail(s"CO $coRef (parent: $ioRef) is in CC, but its checksum could not be found in Preservica"),
         Detail(s"CO $coRef (parent: $ioRef) is in Preservica, but its checksum could not be found in CC")
       )
     )

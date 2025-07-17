@@ -8,7 +8,6 @@ import io.circe.{Decoder, HCursor}
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import pureconfig.*
 import pureconfig.module.catseffect.syntax.*
-import software.amazon.awssdk.services.eventbridge.model.PutEventsResponse
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DAEventBridgeClient
 import uk.gov.nationalarchives.dp.client.Entities.EntityRef.{ContentObjectRef, InformationObjectRef}
@@ -51,12 +50,15 @@ object Main extends IOApp {
         potentialProxyUrl = config.proxyUrl
       )
       eventBridgeClient = DAEventBridgeClient[IO]()
-      _ <- runReconciler(client, OcflService(config), eventBridgeClient).handleErrorWith(err => Stream.eval(logError(err))).compile.drain
+      _ <- runReconciler(client, OcflService(config), eventBridgeClient).handleErrorWith(logError)
     } yield ExitCode.Success
 
   def runReconciler(client: EntityClient[IO, Fs2Streams[IO]], ocflService: OcflService[IO], eventBridgeClient: DAEventBridgeClient[IO])(using
       configuration: Configuration
-  ): Stream[IO, Unit] = {
+  ): IO[Unit] = {
+    def sendMissingCosToSlack(missingCoMessages: List[String]): IO[Unit] =
+      missingCoMessages.traverse(message => eventBridgeClient.publishEventToEventBridge(getClass.getName, DR2DevMessage, Detail(message))).void
+
     val database = Database[IO]
 
     client
@@ -66,28 +68,19 @@ object Main extends IOApp {
         case ioRef: InformationObjectRef => ioRef
       }
       .chunkN(configuration.config.maxConcurrency)
-      .parEvalMap(configuration.config.maxConcurrency) { entityRefChunks =>
-        for {
-          coRowChunks <- Builder[IO].run(client, ocflService, entityRefChunks)
-        } yield Stream.chunk(coRowChunks)
+      .parEvalMap(configuration.config.maxConcurrency) { entityRefChunks => Builder[IO].run(client, ocflService, entityRefChunks) }
+      .evalTap { coRowChunks =>
+        val psCoRowChunks = coRowChunks.collect { case psCoRow: PreservicaCoRow => psCoRow }
+        val ocflCoRowChunks = coRowChunks.collect { case ocflCoRow: OcflCoRow => ocflCoRow }
+        database.writeToPreservicaCOsTable(psCoRowChunks) >> database.writeToOcflCOsTable(ocflCoRowChunks)
       }
-      .parJoin(configuration.config.maxConcurrency)
-      .evalTap { coRows =>
-        database.writeToPreservicaCOsTable(coRows.listOfPreservicaCoRows) >>
-          database.writeToOcflCOsTable(coRows.listOfOcflCoRows)
+      .compile
+      .drain *> database.findAllMissingCOs().flatMap { missingCOs =>
+      IO.whenA(missingCOs.nonEmpty) {
+        if missingCOs.size > 10 then
+          sendMissingCosToSlack(List("More than 10 missing Content Objects have been detected. Check the CC Reconciler logs for details."))
+        else sendMissingCosToSlack(missingCOs)
       }
-      .evalMap { coRows =>
-        for {
-          psCosMissingInCc <- coRows.listOfPreservicaCoRows.flatTraverse(database.checkIfPsCoInCc)
-          _ <- IO.whenA(psCosMissingInCc.nonEmpty) { sendCosToSlack(psCosMissingInCc, eventBridgeClient).void }
-          ccCosMissingInPs <- coRows.listOfOcflCoRows.flatTraverse(database.checkIfCcCoInPs)
-          _ <- IO.whenA(ccCosMissingInPs.nonEmpty) { sendCosToSlack(ccCosMissingInPs, eventBridgeClient).void }
-        } yield ()
-      }
-  }
-
-  private def sendCosToSlack(missingCoMessages: List[String], eventBridgeClient: DAEventBridgeClient[IO]): IO[PutEventsResponse] = {
-    val combinedMessages = missingCoMessages.mkString("\n")
-    eventBridgeClient.publishEventToEventBridge(getClass.getName, DR2DevMessage, Detail(combinedMessages))
+    }
   }
 }

@@ -42,7 +42,7 @@ object TestUtils:
   def runTestReconciler(entities: List[Entities.EntityRef], bitstreams: List[BitStreamInfo])(using configuration: Configuration): List[Detail] = (for {
     detailRef <- Ref.of[IO, List[Detail]](Nil)
     ocflService = OcflService[IO](configuration.config)
-    result <- Main.runReconciler(testEntityClient(entities, bitstreams), ocflService, eventBridgeClient(detailRef)).compile.drain
+    _ <- Main.runReconciler(testEntityClient(entities, bitstreams), ocflService, eventBridgeClient(detailRef))
     eventBridgeDetails <- detailRef.get
   } yield eventBridgeDetails).unsafeRunSync()
 
