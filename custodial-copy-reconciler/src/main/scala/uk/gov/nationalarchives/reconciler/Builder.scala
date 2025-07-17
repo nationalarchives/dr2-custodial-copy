@@ -1,14 +1,14 @@
 package uk.gov.nationalarchives.reconciler
 
-import cats.effect.{Async, IO}
+import cats.effect.Async
 import cats.implicits.*
 import fs2.Chunk
 import sttp.capabilities.fs2.Fs2Streams
-import uk.gov.nationalarchives.reconciler.OcflService
 import uk.gov.nationalarchives.dp.client.Entities.EntityRef
 import uk.gov.nationalarchives.dp.client.Entities.EntityRef.{ContentObjectRef, InformationObjectRef}
+import uk.gov.nationalarchives.dp.client.EntityClient
 import uk.gov.nationalarchives.dp.client.EntityClient.GenerationType.Original
-import uk.gov.nationalarchives.dp.client.{Entities, EntityClient}
+import uk.gov.nationalarchives.reconciler.OcflService
 
 import java.util.UUID
 import scala.jdk.CollectionConverters.*
@@ -17,57 +17,36 @@ trait Builder[F[_]]:
   def run(
       client: EntityClient[F, Fs2Streams[F]],
       ocflService: OcflService[F],
-      entityRefChunks: Chunk[InformationObjectRef | ContentObjectRef]
-  ): F[Chunk[CoRows]]
+      entityRefChunks: Chunk[EntityRef]
+  ): F[Chunk[CoRow]]
 
 object Builder:
-  def apply[F[_]: Async]: Builder[IO] =
-    (client: EntityClient[IO, Fs2Streams[IO]], ocflService: OcflService[IO], entityRefChunks: Chunk[InformationObjectRef | ContentObjectRef]) => {
-      val (ioRefChunks: Chunk[InformationObjectRef], coRefChunks: Chunk[ContentObjectRef]) =
-        entityRefChunks.partitionEither {
-          case informationObjectRef: InformationObjectRef => Left(informationObjectRef)
-          case contentObjectRef: ContentObjectRef         => Right(contentObjectRef)
-        }
-
+  def apply[F[_]: Async]: Builder[F] =
+    (client: EntityClient[F, Fs2Streams[F]], ocflService: OcflService[F], entityRefChunks: Chunk[EntityRef]) => {
       def isOriginalAndPreservation(storageRelativePath: String) =
         storageRelativePath.contains("/original/") && storageRelativePath.contains("/Preservation_")
 
-      val ocflCoRetrieval =
-        for {
-          ocflCoRows <- ioRefChunks.parTraverse { ioRef =>
-            ocflService.getAllObjectFiles(ioRef.ref).map {
-              _.collect {
-                case coFile if isOriginalAndPreservation(coFile.getStorageRelativePath) =>
-                  val pathAsList = coFile.getStorageRelativePath.split("/")
-                  val pathStartingFromRepType = pathAsList.dropWhile(pathPart => !pathPart.startsWith("Preservation_"))
-                  val coRef = UUID.fromString(pathStartingFromRepType(1))
-
-                  val fixities = coFile.getFixity.asScala.toMap.map { case (digestAlgo, value) => (digestAlgo.getOcflName, value) }
-                  val potentialSha256 = fixities.get("sha256")
-
-                  OcflCoRow(coRef, ioRef.ref, potentialSha256)
-              }
+      entityRefChunks.flatTraverse {
+        case EntityRef.InformationObjectRef(ioRef, parentRef) =>
+          ocflService.getAllObjectFiles(ioRef).map { files =>
+            Chunk.iterator(files.iterator).collect {
+              case coFile if isOriginalAndPreservation(coFile.getStorageRelativePath) =>
+                val pathAsList = coFile.getStorageRelativePath.split("/")
+                val pathStartingFromRepType = pathAsList.dropWhile(pathPart => !pathPart.startsWith("Preservation_"))
+                val coRef = UUID.fromString(pathStartingFromRepType(1))
+                val fixities = coFile.getFixity.asScala.toMap.map { case (digestAlgo, value) => (digestAlgo.getOcflName, value) }
+                val potentialSha256 = fixities.get("sha256")
+                OcflCoRow(coRef, ioRef, potentialSha256)
             }
           }
-        } yield ocflCoRows
-      val preservicaCoRetrieval =
-        for {
-          chunkOfPreservicaCoRows <- coRefChunks.traverse { coRef =>
-            client.getBitstreamInfo(coRef.ref).map { bitstreamInfoForCo =>
-              bitstreamInfoForCo.toList.collect { // We're only concerned with original COs
-                case bitstreamInfo if bitstreamInfo.generationType == Original && bitstreamInfo.generationVersion == 1 =>
-                  val potentialSha256 = bitstreamInfo.fixities.collectFirst { case fixity if fixity.algorithm.toLowerCase == "sha256" => fixity.value }
-
-                  PreservicaCoRow(coRef.ref, bitstreamInfo.parentRef.get, potentialSha256)
-              }
+        case EntityRef.ContentObjectRef(ref, parentRef) =>
+          client.getBitstreamInfo(ref).map { bitstreamInfoForCo =>
+            Chunk.iterator(bitstreamInfoForCo.iterator).collect { // We're only concerned with original COs
+              case bitstreamInfo if bitstreamInfo.generationType == Original && bitstreamInfo.generationVersion == 1 =>
+                val potentialSha256 = bitstreamInfo.fixities.collectFirst { case fixity if fixity.algorithm.toLowerCase == "sha256" => fixity.value }
+                PreservicaCoRow(ref, parentRef, potentialSha256)
             }
           }
-        } yield chunkOfPreservicaCoRows
-      ocflCoRetrieval.parProduct(preservicaCoRetrieval).map { (listOfOcflCoRowsChunk, listOfPreservicaCoRowsChunk) =>
-        Chunk(
-          CoRows(listOfOcflCoRowsChunk.head.getOrElse(Nil), listOfPreservicaCoRowsChunk.head.getOrElse(Nil))
-        )
+        case _ => Async[F].pure(Chunk.empty)
       }
     }
-
-case class CoRows(listOfOcflCoRows: List[OcflCoRow], listOfPreservicaCoRows: List[PreservicaCoRow])

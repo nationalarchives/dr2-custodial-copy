@@ -61,11 +61,10 @@ object Main extends IOApp {
 
     client
       .streamAllEntityRefs()
-      .filter {
-        case _: InformationObjectRef | _: ContentObjectRef => true
-        case _                                             => false
+      .collect {
+        case coRef: ContentObjectRef     => coRef
+        case ioRef: InformationObjectRef => ioRef
       }
-      .asInstanceOf[Stream[IO, InformationObjectRef | ContentObjectRef]]
       .chunkN(configuration.config.maxConcurrency)
       .parEvalMap(configuration.config.maxConcurrency) { entityRefChunks =>
         for {
