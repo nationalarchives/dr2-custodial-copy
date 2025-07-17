@@ -356,9 +356,11 @@ If the object is not in the queue, nothing happens. The message will eventually 
 
 ## 6. Custodial Copy Reconciler
 
-This is a service that which checks that all Content Objects (COs) that are currently in Preservica are in Custodial Copy and
-that, given an Information Object (IO) ref (id) from Preservica, Checks that all Content Objects under that Information
-Object are in Preservica.
+This is a service that retrieves all Content Object (CO) refs (ids), their checksums and parent Information Object (IO) refs that are 
+currently in Preservica. Using each CO's parent (IO) ref, it then gets the corresponding CO refs
+and checksum in OCFL. Once we have both lists, it writes each of them to a Preservica CO and an OCFL CO table respectively; it
+then compares the checksums and sends a message to Slack if there are any mismatches.
+
 The reason is that there are events such as failures or deletions (intentional or unintentional) that could cause the
 two storage mediums to become out of sync. We are only concerned with original non-"Access" COs.
 
@@ -367,30 +369,41 @@ two storage mediums to become out of sync. We are only concerned with original n
 1. Make a call to Preservica to stream the refs of every entity we have stored
 2. It will filter out anything that is not an IO ref nor CO ref
 3. Splits the remaining object refs into Chunks:
-4. Run this process for each chunk:
+4. Run this process for each Chunk:
    1. if the object ref if an Information Object one, it will
       1. get all the object files from OCFL
       2. if the object is a CO content file
          1. get the storage path and extract the CO ref
          2. get the sha256 fixity of the CO
-         3. add these values (including the IO ref) to an `OcflCoRow` object
-      3. if the object is not a CO content file, then skip it
+         3. add each of these values (including the IO ref) to an `OcflCoRow` object
    2. if the object ref is a Content Object one, it will:
       1. get the bitstream info from Preservica
-      2. filter it out if it's a non-Original CO
+      2. filter it out if it's a non-Original and non-Preservation CO (The opposite of "Preservation" is "Access")
       3. retrieve the IO ref and sha256 checksum
-      4. add all of these values to an `PreservicaCoRow` object
-   3. Return a `CoRows` object with a list of `OcflCoRow`s and a list of `PreservicaCoRow`s
-5. Join the chunks into one Stream
-6. for each `CoRows` object
-   1. write the list of `PreservicaCoRow`s to a table
-   2. write the list of `OcflCoRow`s to another table
-7. for each `CoRows` object
-   1. if list of `PreservicaCoRow`s, check if the checksum(s) belonging to the ref appear in the `OcflCoRow` table
-   2. if list of `OcflCoRow`s, check if the checksum(s) belonging to the ref appear in the `PreservicaCoRow` table
-   3. if there are any checksum mismatches in either table, return a message for each CO that mismatched
-8. Concatenate the "Preservica CO not in CC" messages into one and send it to Slack via EventBridge
-9. Concatenate the "CC CO not in Preservica" messages into one and send it to Slack via EventBridge
+      4. add each of these values to an `PreservicaCoRow` object
+   3. Return these `CoRow`s in a Chunk
+5. For each `CoRow` object
+   1. gather all `PreservicaCoRow`s into a Chunk
+   2. gather all `OcflCoRow`s into a Chunk
+   3. write the Chunk of `PreservicaCoRow`s to a table
+   4. write the Chunk of `OcflCoRow`s to another table
+6. Now that they have been saved to the tables, the stream can be drained (in order to discard anything returned)
+7. Find the missing COs in each table
+   1. first parse the `PreservicaCOs` table and check if the checksum(s) appear in the `OcflCos` table
+      1. if not, for each missing CO
+         1. generate an informative message
+         2. log that message
+         3. return the message
+   2. next parse the `OcflCos` table and check if the checksum(s) appear in the `PreservicaCOs` table
+      1. if not, for each missing CO
+          1. generate an informative message
+          2. log that message
+          3. return the message
+   3. return both sets of messages concatenated
+8. If there are messages, send them to Slack via EventBridge
+   1. if the number of messages is 10 or fewer, then send the messages one by one to EventBridge
+   2. if the number of messages is greater than 10, then send a general message to EventBridge informing clients that
+      there are more than 10 messages and to check the logs for more details
 
 | Name                   | Description                                                                 |
 |------------------------|-----------------------------------------------------------------------------|
