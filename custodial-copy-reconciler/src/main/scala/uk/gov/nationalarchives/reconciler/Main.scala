@@ -75,7 +75,7 @@ object Main extends IOApp {
         database.writeToPreservicaCOsTable(psCoRowChunks) >> database.writeToOcflCOsTable(ocflCoRowChunks)
       }
       .compile
-      .drain *> database.findAllMissingCOs().flatMap { missingCOs =>
+      .drain >> database.findAllMissingCOs().flatMap { missingCOs =>
       IO.whenA(missingCOs.nonEmpty) {
         if missingCOs.size > 10 then
           sendMissingCosToSlack(List("More than 10 missing Content Objects have been detected. Check the CC Reconciler logs for details."))
