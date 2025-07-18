@@ -7,12 +7,15 @@ import doobie.implicits.*
 import doobie.util.transactor.Transactor.Aux
 import doobie.{Fragment, Transactor}
 import io.circe.{Decoder, Encoder}
-import io.ocfl.api.model.{ObjectVersionId, VersionInfo}
-import io.ocfl.api.{OcflObjectUpdater, OcflOption}
+import io.ocfl.api.io.FixityCheckInputStream
+import io.ocfl.api.model.{DigestAlgorithm, ObjectVersionId, VersionInfo}
+import io.ocfl.api.{OcflFileRetriever, OcflObjectUpdater, OcflOption}
 import software.amazon.awssdk.services.sqs.model.{DeleteMessageResponse, GetQueueAttributesResponse, QueueAttributeName, SendMessageResponse}
 import uk.gov.nationalarchives.DASQSClient
 import uk.gov.nationalarchives.utils.Utils.{OcflFile, createOcflRepository, given}
 
+import java.io.{ByteArrayInputStream, InputStream}
+import java.lang
 import java.nio.file.Files
 import java.time.Instant
 import java.time.temporal.ChronoField
@@ -22,8 +25,7 @@ import scala.xml.Elem
 
 object TestUtils:
 
-  class DatabaseUtils(databaseName: String):
-
+  class DatabaseUtils(val databaseName: String):
     val xa: Aux[IO, Unit] = Transactor.fromDriverManager[IO](
       driver = "org.sqlite.JDBC",
       url = s"jdbc:sqlite:$databaseName",
@@ -35,7 +37,7 @@ object TestUtils:
         .transact(xa)
         .unsafeRunSync()
 
-    def createTable(): Unit = {
+    def createFilesTable(): Unit = {
       val transaction = for {
         _ <- sql"DROP TABLE IF EXISTS files".update.run
         _ <-
@@ -43,6 +45,24 @@ object TestUtils:
       } yield ()
       transaction.transact(xa).unsafeRunSync()
     }
+
+    def createOcflCOsTable(): Unit = {
+      val transaction = for {
+        _ <- sql"DROP TABLE IF EXISTS OcflCOs".update.run
+        _ <-
+          sql"CREATE TABLE OcflCOs(coRef text, ioRef text, sha256Checksum text);".update.run
+      } yield ()
+      transaction.transact(xa).unsafeRunSync()
+    }
+
+    def createPreservicaCOsTable(): Unit = {
+      val transaction = for {
+        _ <- sql"DROP TABLE IF EXISTS PreservicaCOs".update.run
+        _ <- sql"CREATE TABLE PreservicaCOs(coRef text, ioRef text, sha256Checksum text);".update.run
+      } yield ()
+      transaction.transact(xa).unsafeRunSync()
+    }
+
     def addColumn(columnName: String): Unit =
       (fr"ALTER TABLE files ADD COLUMN" ++ Fragment.const(columnName)).update.run.transact(xa).unsafeRunSync()
 
@@ -148,6 +168,7 @@ object TestUtils:
       ioMetadataContent: Elem = completeIoMetadataContent,
       coMetadataContent: List[Elem] = completeCoMetadataContentElements,
       addFilesToRepo: Boolean = true,
+      addContentFilesToRepo: Boolean = true,
       metadataFileSuffix: String = "_Metadata"
   ): (String, String) = {
     val repoDir = Files.createTempDirectory("repo")
@@ -168,9 +189,10 @@ object TestUtils:
           updater.addPath(ioMetadataFile, s"IO$metadataFileSuffix.xml", OcflOption.OVERWRITE)
           coMetadataContent.zipWithIndex.foreach { (elem, idx) =>
             val coMetadataFile = Files.createFile(metadataFileDirectory.resolve(s"$metadataFileSuffix$idx.xml"))
+            val coRef = (elem \ "ContentObject" \ "Ref").head.text
             Files.write(coMetadataFile, elem.toString.getBytes)
-            updater.addPath(coMetadataFile, s"subfolder$idx/CO$metadataFileSuffix.xml", OcflOption.OVERWRITE)
-            updater.addPath(contentFile, s"subfolder$idx/original/g1/content.file", OcflOption.OVERWRITE)
+            updater.addPath(coMetadataFile, s"Preservation_1/$coRef/CO$metadataFileSuffix.xml", OcflOption.OVERWRITE)
+            if addContentFilesToRepo then updater.addPath(contentFile, s"Preservation_1/$coRef/original/g1/content.file", OcflOption.OVERWRITE)
           }
         }.asJava
       )
@@ -191,3 +213,9 @@ object TestUtils:
     override def deleteMessage(queueUrl: String, receiptHandle: String): IO[DeleteMessageResponse] = notImplemented
 
     override def getQueueAttributes(queueUrl: String, attributeNames: List[QueueAttributeName]): IO[GetQueueAttributesResponse] = notImplemented
+
+val testOcflFileRetriever: OcflFileRetriever = new OcflFileRetriever:
+  override def retrieveFile(): FixityCheckInputStream =
+    new FixityCheckInputStream(new ByteArrayInputStream("".getBytes), DigestAlgorithm.fromOcflName("sha256"), "checksum")
+
+  override def retrieveRange(startPosition: lang.Long, endPosition: lang.Long): InputStream = new ByteArrayInputStream("".getBytes)
