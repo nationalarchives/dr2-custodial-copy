@@ -46,7 +46,7 @@ jobs:
           DOCKER_TAG: ${{ github.event.inputs.to-deploy }}
           ENVIRONMENT_TAG: ${{ github.event.inputs.environment }}
       - name: Send success message
-        uses: nationalarchives/tdr-github-actions/.github/actions/slack-send@7f44edae156f1bfa890749bed3bcfa20a26d439a
+        uses: nationalarchives/dr2-github-actions/.github/actions/slack-send@917201e254f112ff041b952dae76ef767cae7378
         with:
           message: "*custodial-copy-backend*, *custodial-copy-db-builder*, *custodial-copy-webapp* :whale: The '${{ github.event.inputs.to-deploy }}' image has been tagged with '${{ github.event.inputs.environment }}' in ECR"
           slack-url: ${{ secrets.SLACK_WEBHOOK }}
