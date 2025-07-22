@@ -83,3 +83,12 @@ object Utils:
     logger <- Slf4jLogger.create[F]
     _ <- logger.error(err)("There has been an error")
   } yield ()
+
+trait OcflServiceConfig:
+  val ocflRepoDir: String
+  val ocflWorkDir: String
+
+enum DetailType:
+  case DR2Message, DR2DevMessage
+
+case class Detail(slackMessage: String)
