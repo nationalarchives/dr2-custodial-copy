@@ -24,16 +24,16 @@ jobs:
     environment: ${{ github.event.inputs.environment }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-      - uses: sbt/setup-sbt@v1
+        uses: actions/checkout@09d2acae674a48949e3602304ab46fd20ae0c42f
+      - uses: sbt/setup-sbt@3c1652372d153b35a30472b3e5b2f1f204eff746
       - name: Configure AWS credentials for ECR
-        uses: aws-actions/configure-aws-credentials@v4.0.2
+        uses: aws-actions/configure-aws-credentials@a159d7bb5354cf786f855f2f5d1d8d768d9a08d1
         with:
           role-to-assume: arn:aws:iam::${{ secrets.MANAGEMENT_ACCOUNT }}:role/MgmtDPGithubImageDeploy
           aws-region: eu-west-2
           role-session-name: ECRLogin
       - name: Login to ECR
-        uses: docker/login-action@v3
+        uses: docker/login-action@3d100841f68d4548bf57e52eb27bd33ec5069f55
         with:
           registry: ${{ secrets.MANAGEMENT_ACCOUNT }}.dkr.ecr.eu-west-2.amazonaws.com
       - name: Tag image
@@ -46,12 +46,12 @@ jobs:
           DOCKER_TAG: ${{ github.event.inputs.to-deploy }}
           ENVIRONMENT_TAG: ${{ github.event.inputs.environment }}
       - name: Send success message
-        uses: nationalarchives/tdr-github-actions/.github/actions/slack-send@main
+        uses: nationalarchives/dr2-github-actions/.github/actions/slack-send@917201e254f112ff041b952dae76ef767cae7378
         with:
           message: "*custodial-copy-backend*, *custodial-copy-db-builder*, *custodial-copy-webapp* :whale: The '${{ github.event.inputs.to-deploy }}' image has been tagged with '${{ github.event.inputs.environment }}' in ECR"
           slack-url: ${{ secrets.SLACK_WEBHOOK }}
       - name: Send failure message
-        uses: nationalarchives/dr2-github-actions/.github/actions/slack-send@main
+        uses: nationalarchives/dr2-github-actions/.github/actions/slack-send@917201e254f112ff041b952dae76ef767cae7378
         if: failure()
         with:
           message: ":warning: Build failed for custodial copy <https://github.com/nationalarchives/dr2-custodial-copy/actions/runs/${{ github.run_id }}|View the failed workflow>"
