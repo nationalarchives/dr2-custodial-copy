@@ -1,6 +1,6 @@
 import sbt.*
 object Dependencies {
-  private lazy val daAwsClientsVersion = "0.1.124"
+  private lazy val daAwsClientsVersion = "0.1.125"
   private lazy val logbackVersion = "2.25.1"
   private lazy val log4CatsVersion = "2.7.1"
   private lazy val pureConfigVersion = "0.17.9"
@@ -19,7 +19,7 @@ object Dependencies {
   lazy val log4jTemplateJson = "org.apache.logging.log4j" % "log4j-layout-template-json" % logbackVersion
   lazy val mockito = "org.scalatestplus" %% "mockito-5-10" % s"$scalaTestVersion.0"
   lazy val ocfl = "io.ocfl" % "ocfl-java-core" % "2.2.2"
-  lazy val preservicaClient = "uk.gov.nationalarchives" %% "preservica-client-fs2" % "0.0.140"
+  lazy val preservicaClient = "uk.gov.nationalarchives" %% "preservica-client-fs2" % "0.0.141"
   lazy val pureConfigCatsEffect = "com.github.pureconfig" %% "pureconfig-cats-effect" % pureConfigVersion
   lazy val pureConfig = "com.github.pureconfig" %% "pureconfig-core" % pureConfigVersion
   lazy val scalaCheck = "org.scalacheck" %% "scalacheck" % "1.18.1"
@@ -32,5 +32,5 @@ object Dependencies {
   lazy val http4sEmber = "org.http4s" %% "http4s-ember-server" % http4sVersion
   lazy val http4sDsl = "org.http4s" %% "http4s-dsl" % http4sVersion
   lazy val doobieCore = "org.tpolecat" %% "doobie-core" % "1.0.0-RC10"
-  lazy val sqlite = "org.xerial" % "sqlite-jdbc" % "3.50.2.0"
+  lazy val sqlite = "org.xerial" % "sqlite-jdbc" % "3.50.3.0"
 }
