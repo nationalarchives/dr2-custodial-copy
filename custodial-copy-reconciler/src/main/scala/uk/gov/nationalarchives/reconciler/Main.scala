@@ -1,5 +1,6 @@
 package uk.gov.nationalarchives.reconciler
 
+import cats.effect.kernel.Outcome.Succeeded
 import cats.effect.{ExitCode, IO, IOApp}
 import cats.syntax.all.*
 import fs2.Stream
@@ -10,7 +11,6 @@ import pureconfig.*
 import pureconfig.module.catseffect.syntax.*
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DAEventBridgeClient
-import uk.gov.nationalarchives.dp.client.Entities.EntityRef.{ContentObjectRef, InformationObjectRef}
 import uk.gov.nationalarchives.dp.client.EntityClient
 import uk.gov.nationalarchives.dp.client.fs2.Fs2Client
 import uk.gov.nationalarchives.reconciler.Configuration.impl
@@ -20,6 +20,7 @@ import uk.gov.nationalarchives.utils.DetailType.DR2DevMessage
 
 import java.net.URI
 import java.util.UUID
+import scala.concurrent.duration.DurationInt
 
 object Main extends IOApp {
   case class Config(
@@ -61,21 +62,27 @@ object Main extends IOApp {
 
     val database = Database[IO]
 
-    client
-      .streamAllEntityRefs()
-      .collect {
-        case coRef: ContentObjectRef     => coRef
-        case ioRef: InformationObjectRef => ioRef
-      }
-      .chunkN(configuration.config.maxConcurrency)
-      .parEvalMap(configuration.config.maxConcurrency) { entityRefChunks => Builder[IO].run(client, ocflService, entityRefChunks) }
-      .evalTap { coRowChunks =>
-        val psCoRowChunks = coRowChunks.collect { case psCoRow: PreservicaCoRow => psCoRow }
-        val ocflCoRowChunks = coRowChunks.collect { case ocflCoRow: OcflCoRow => ocflCoRow }
-        database.writeToPreservicaCOsTable(psCoRowChunks) >> database.writeToOcflCOsTable(ocflCoRowChunks)
-      }
+    val ocfl = ocflService.getAllObjectFiles.chunkN(configuration.config.maxConcurrency)
+      .evalTap(database.writeToOcflCOsTable)
       .compile
-      .drain >> database.findAllMissingCOs().flatMap { missingCOs =>
+      .drain
+
+    val ps =
+      for
+        latestEntities <- database.getLatestEntity
+        ps <- client
+          .streamAllEntityRefs(potentialEntities = latestEntities.toSeq)
+          .chunkN(configuration.config.maxConcurrency)
+          .parEvalMap(configuration.config.maxConcurrency) { entityRefChunks => Builder[IO].run(client, entityRefChunks) }
+          .evalTap(database.writeToPreservicaCOsTable)
+          .compile
+          .drain
+      yield ps
+      
+    IO.bothOutcome(ocfl, ps).map {
+      case (Succeeded(ocfl), Succeeded(ps)) => IO.unit
+      case _ => IO.sleep(5.minutes) >> runReconciler(client, ocflService, eventBridgeClient)
+    } >> database.findAllMissingCOs().flatMap { missingCOs =>
       IO.whenA(missingCOs.nonEmpty) {
         if missingCOs.size > 10 then
           sendMissingCosToSlack(List("More than 10 missing Content Objects have been detected. Check the CC Reconciler logs for details."))
