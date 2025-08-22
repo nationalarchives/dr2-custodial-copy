@@ -214,7 +214,7 @@ lazy val commonSettings = Seq(
     Cmd("USER", "1002"),
     Cmd(
       "CMD",
-      s"rm -rf $$DOWNLOAD_DIR && java -Xmx2g -Dlog4j.configurationFile=/poduser/log-config/log4j2.properties -jar /opt/${(assembly / assemblyJarName).value}"
+      s"[ -z $$DOWNLOAD_DIR ] || rm -rf $$DOWNLOAD_DIR && java -Xmx2g -Dlog4j.configurationFile=/poduser/log-config/log4j2.properties -jar /opt/${(assembly / assemblyJarName).value}"
     )
   )
 )
