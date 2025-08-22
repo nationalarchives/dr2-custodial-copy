@@ -12,10 +12,10 @@ sealed trait CustodialCopyObject {
   def id: UUID
   def checksums: List[Checksum]
   def name: String
-  def sourceFilePath(workDir: String): IO[Path] = createDirectory(workDir).map(dir => Path(s"$dir/$name"))
+  def sourceFilePath(downloadDir: String): IO[Path] = createDirectory(downloadDir).map(dir => Path(s"$dir/$name"))
   def tableItemIdentifier: String
-  private def createDirectory(workDir: String): IO[Path] = {
-    val path = Path(s"$workDir/downloads/${UUID.randomUUID()}/$id")
+  private def createDirectory(downloadDir: String): IO[Path] = {
+    val path = Path(s"$downloadDir/${UUID.randomUUID()}/$id")
     Files[IO].createDirectories(path).map(_ => path)
   }
 }
