@@ -1,13 +1,14 @@
 package uk.gov.nationalarchives.reconciler
 
-import fs2.Chunk
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.{equal, should}
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
-import uk.gov.nationalarchives.dp.client.Entities.EntityRef.{ContentObjectRef, InformationObjectRef, NoEntityRef, StructuralObjectRef}
+import uk.gov.nationalarchives.dp.client.Entities.Entity
+import uk.gov.nationalarchives.dp.client.EntityClient.EntityType
+import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.GenerationType.Original
 import uk.gov.nationalarchives.reconciler.Configuration
 import uk.gov.nationalarchives.reconciler.Main.Config
@@ -37,12 +38,15 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach {
   given config: Configuration = new Configuration:
     override def config: Config = Config("", databaseName, 5, "ocflRepoDir", "ocflWorkDir")
 
-  Chunk(StructuralObjectRef(coRef, Some(ioRef)), NoEntityRef)
+  def createEntity(ref: UUID, entityType: EntityType) = Entity(Option(entityType), ref, None, None, false, None, None)
+  def createSO(ref: UUID): Entity = createEntity(ref, StructuralObject)
+  def createIO(ref: UUID): Entity = createEntity(ref, InformationObject)
+  def createCO(ref: UUID): Entity = createEntity(ref, ContentObject)
 
   "runReconciler" should "not process non-InformationObjectRefs nor non-ContentObjectRefs" in {
     val id = UUID.randomUUID()
     given Configuration = configuration(Files.createTempDirectory("repo").toString, Files.createTempDirectory("work").toString)
-    val entities = List(StructuralObjectRef(coRef, Some(ioRef)), NoEntityRef)
+    val entities = List(createSO(id))
 
     val eventBridgeEvents = runTestReconciler(entities, Nil)
 
@@ -54,18 +58,18 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach {
     val (repoDir, workDir) = initialiseRepo(ioRef, addFilesToRepo = false)
     given Configuration = configuration(repoDir, workDir)
 
-    val eventBridgeEvents = runTestReconciler(List(InformationObjectRef(ioRef, id), ContentObjectRef(coRef, ioRef)), Nil)
+    val eventBridgeEvents = runTestReconciler(List(createIO(ioRef), createCO(coRef)), Nil)
 
     eventBridgeEvents.size should equal(0)
   }
 
-  "runReconciler" should "filter out non-CO files and non-original CO files returned from OCFL" in {
+  "runReconciler" should "filter out non-CO files returned from OCFL" in {
     val id = UUID.randomUUID
     val (repoDir, workDir) = initialiseRepo(ioRef, addContentFilesToRepo = false)
 
     given Configuration = configuration(repoDir, workDir)
 
-    val eventBridgeEvents = runTestReconciler(List(InformationObjectRef(ioRef, id), ContentObjectRef(coRef, ioRef)), Nil)
+    val eventBridgeEvents = runTestReconciler(List(createIO(ioRef), createCO(coRef)), Nil)
 
     eventBridgeEvents.size should equal(0)
   }
@@ -85,14 +89,13 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach {
       None,
       Some(ioRef)
     )
-    val entities = List(InformationObjectRef(ioRef, id), ContentObjectRef(coRef, ioRef))
+    val entities = List(createCO(coRef))
     val eventBridgeEvents = runTestReconciler(entities, List(bitStreamInfo))
 
     eventBridgeEvents should equal(
       List(
-        Detail(s"CO $coRef (parent: $ioRef) is in CC, but its checksum could not be found in Preservica"),
-        Detail(s"CO $coRef (parent: $ioRef) is in CC, but its checksum could not be found in Preservica"),
-        Detail(s"CO $coRef (parent: $ioRef) is in Preservica, but its checksum could not be found in CC")
+        Detail(s"CO $coRef is in CC, but its checksum could not be found in Preservica"),
+        Detail(s"CO $coRef is in Preservica, but its checksum could not be found in CC")
       )
     )
   }
@@ -113,7 +116,7 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach {
     )
 
     given Configuration = configuration(repoDir, workDir)
-    val entities = List(InformationObjectRef(ioRef, id), ContentObjectRef(coRef, ioRef))
+    val entities = List(createIO(ioRef), createCO(coRef))
 
     val eventBridgeEvents = runTestReconciler(entities, List(bitStreamInfo))
 

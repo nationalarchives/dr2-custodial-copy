@@ -3,12 +3,12 @@ package uk.gov.nationalarchives.reconciler
 import cats.effect.{IO, Ref}
 import cats.effect.unsafe.implicits.global
 import io.circe.Encoder
-import io.ocfl.api.model.OcflObjectVersionFile
 import software.amazon.awssdk.services.eventbridge.model.PutEventsResponse
 import sttp.capabilities
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DAEventBridgeClient
 import uk.gov.nationalarchives.dp.client.Client.BitStreamInfo
+import uk.gov.nationalarchives.dp.client.Entities.Entity
 import uk.gov.nationalarchives.dp.client.{DataProcessor, Entities, EntityClient}
 import uk.gov.nationalarchives.utils.Detail
 import uk.gov.nationalarchives.utils.TestUtils.notImplemented
@@ -19,17 +19,25 @@ import java.util.UUID
 
 object TestUtils:
 
-  def testOcflService(objectVersionFiles: List[OcflObjectVersionFile]): OcflService[IO] = new OcflService[IO]() {
-    override def getAllObjectFiles(ioId: UUID): IO[List[OcflObjectVersionFile]] = IO.pure(objectVersionFiles)
+  def testOcflService(ocflRows: List[CoRow]): OcflService[IO] = new OcflService[IO]() {
+    override def getAllObjectFiles: fs2.Stream[IO, CoRow] = fs2.Stream.emits(ocflRows)
   }
 
   def testEntityClient(idToBitstreams: Map[UUID, List[BitStreamInfo]]): EntityClient[IO, Fs2Streams[IO]] = new TestEntityClient {
     override def getBitstreamInfo(contentRef: UUID): IO[Seq[BitStreamInfo]] = IO.pure(idToBitstreams.getOrElse(contentRef, Nil))
   }
 
-  def testEntityClient(entities: List[Entities.EntityRef], bitstreams: List[BitStreamInfo]): EntityClient[IO, Fs2Streams[IO]] = new TestEntityClient {
-    override def streamAllEntityRefs(repTypeFilter: Option[EntityClient.RepresentationType]): fs2.Stream[IO, Entities.EntityRef] =
-      fs2.Stream.emits[IO, Entities.EntityRef](entities)
+  def testEntityClient(entitiesRef: Ref[IO, List[Entity]], bitstreams: List[BitStreamInfo]): EntityClient[IO, Fs2Streams[IO]] = new TestEntityClient {
+
+    override def entitiesUpdatedSince(
+        dateTime: ZonedDateTime,
+        startEntry: Int,
+        maxEntries: Int,
+        potentialEndDate: Option[ZonedDateTime]
+    ): IO[Seq[Entities.Entity]] = entitiesRef.getAndUpdate {
+      case Nil          => Nil
+      case head :: tail => tail
+    }
 
     override def getBitstreamInfo(contentRef: UUID): IO[Seq[BitStreamInfo]] = IO.pure(bitstreams)
   }
@@ -39,10 +47,11 @@ object TestUtils:
       ref.update(existing => detail.asInstanceOf[Detail] :: existing).map(_ => PutEventsResponse.builder.build)
   }
 
-  def runTestReconciler(entities: List[Entities.EntityRef], bitstreams: List[BitStreamInfo])(using configuration: Configuration): List[Detail] = (for {
+  def runTestReconciler(entities: List[Entity], bitstreams: List[BitStreamInfo])(using configuration: Configuration): List[Detail] = (for {
     detailRef <- Ref.of[IO, List[Detail]](Nil)
     ocflService = OcflService[IO](configuration.config)
-    _ <- Main.runReconciler(testEntityClient(entities, bitstreams), ocflService, eventBridgeClient(detailRef))
+    entitiesRef <- Ref.of[IO, List[Entity]](entities)
+    _ <- Main.runReconciler(testEntityClient(entitiesRef, bitstreams), ocflService, eventBridgeClient(detailRef))
     eventBridgeDetails <- detailRef.get
   } yield eventBridgeDetails).unsafeRunSync()
 
@@ -78,7 +87,12 @@ object TestUtils:
     override def streamBitstreamContent[T](stream: capabilities.Streams[Fs2Streams[IO]])(url: String, streamFn: stream.BinaryStream => IO[T]): IO[T] =
       notImplemented
 
-    override def entitiesUpdatedSince(dateTime: ZonedDateTime, startEntry: Int, maxEntries: Int): IO[Seq[Entities.Entity]] = notImplemented
+    override def entitiesUpdatedSince(
+        dateTime: ZonedDateTime,
+        startEntry: Int,
+        maxEntries: Int,
+        potentialEndDate: Option[ZonedDateTime]
+    ): IO[Seq[Entities.Entity]] = notImplemented
 
     override def entityEventActions(entity: Entities.Entity, startEntry: Int, maxEntries: Int): IO[Seq[DataProcessor.EventAction]] = notImplemented
 
