@@ -63,7 +63,7 @@ class BuilderSpec extends AnyFlatSpec:
 
     val preservicaCoRows = Builder[IO].run(preservicaClient, ocflService, entityChunks).unsafeRunSync()
     preservicaCoRows should equal(
-      Chunk(PreservicaCoRow(co1Ref, parentRef, Some("co1FileFixity")))
+      Chunk(CoRow(co1Ref, parentRef, Some("co1FileFixity")))
     )
   }
 

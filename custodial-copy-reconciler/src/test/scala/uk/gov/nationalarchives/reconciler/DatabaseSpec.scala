@@ -13,7 +13,7 @@ import org.scalatest.prop.TableDrivenPropertyChecks.forAll
 import org.scalatest.prop.TableFor3
 import org.scalatest.prop.Tables.Table
 import uk.gov.nationalarchives.reconciler.Main.Config
-import uk.gov.nationalarchives.reconciler.{Configuration, Database, OcflCoRow, PreservicaCoRow}
+import uk.gov.nationalarchives.reconciler.{Configuration, Database, OcflCoRow, CoRow}
 import uk.gov.nationalarchives.utils.TestUtils.*
 
 import java.net.URI
@@ -39,11 +39,11 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
         coRef: UUID,
         ioRef: UUID = UUID.randomUUID(),
         sha256Checksum: Option[String] = None
-    ): IO[PreservicaCoRow] =
+    ): IO[CoRow] =
       sql"""INSERT INTO PreservicaCOs (coRef, ioRef, sha256Checksum)
                VALUES ($coRef, $ioRef, $sha256Checksum)""".update.run
         .transact(xa)
-        .map(_ => PreservicaCoRow(coRef, ioRef, sha256Checksum))
+        .map(_ => CoRow(coRef, ioRef, sha256Checksum))
 
     def getOcflCoRows(coRef: UUID): IO[List[OcflCoRow]] =
       sql"SELECT * FROM OcflCOs WHERE coRef = $coRef"
@@ -51,9 +51,9 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
         .to[List]
         .transact(xa)
 
-    def getPreservicaCoRows(coRef: UUID): IO[List[PreservicaCoRow]] =
+    def getPreservicaCoRows(coRef: UUID): IO[List[CoRow]] =
       sql"SELECT * FROM PreservicaCOs WHERE coRef = $coRef"
-        .query[PreservicaCoRow]
+        .query[CoRow]
         .to[List]
         .transact(xa)
   }
@@ -88,7 +88,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     val coRef = UUID.randomUUID()
 
     val initialResponse = getPreservicaCoRows(coRef).unsafeRunSync()
-    val preservicaCoRows = Chunk(PreservicaCoRow(coRef, ioRef, Some("sha256Checksum1")))
+    val preservicaCoRows = Chunk(CoRow(coRef, ioRef, Some("sha256Checksum1")))
 
     Database[IO].writeToPreservicaCOsTable(preservicaCoRows).unsafeRunSync()
     val response = getPreservicaCoRows(coRef).unsafeRunSync()

@@ -3,6 +3,7 @@ package uk.gov.nationalarchives.reconciler
 import cats.effect.Async
 import cats.effect.implicits.*
 import cats.syntax.all.*
+import fs2.{Chunk, Stream}
 import io.ocfl.api.model.DigestAlgorithm
 import io.ocfl.api.{MutableOcflRepository, OcflConfig}
 import io.ocfl.core.OcflRepositoryBuilder
@@ -12,17 +13,14 @@ import io.ocfl.core.storage.OcflStorageBuilder
 import org.h2.jdbcx.JdbcDataSource
 import uk.gov.nationalarchives.reconciler.Main.Config
 import uk.gov.nationalarchives.utils.Utils.*
-import fs2.{Chunk, Stream}
-import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.ContentObject
 
 import java.nio.file.Paths
-import java.time.Instant
 import java.util.UUID
 import scala.jdk.CollectionConverters.*
 import scala.jdk.FunctionConverters.*
 
 trait OcflService[F[_]] {
-  def getAllObjectFiles: Stream[F, OcflCoRow]
+  def getAllObjectFiles: Stream[F, CoRow]
 }
 object OcflService {
 
@@ -61,13 +59,13 @@ object OcflService {
           val coRef = UUID.fromString(pathStartingFromRepType(1))
           val fixities = coFile.getFixity.asScala.toMap.map { case (digestAlgo, value) => (digestAlgo.getOcflName, value) }
           val potentialSha256 = fixities.get("sha256")
-          OcflCoRow(coRef, Option(ioRef), ContentObject, potentialSha256, Instant.now.toEpochMilli)
+          CoRow(coRef, potentialSha256)
       }
       Async[F].pure(chunk)
     }
 
     new OcflService[F] {
-      override def getAllObjectFiles: Stream[F, OcflCoRow] =
+      override def getAllObjectFiles: Stream[F, CoRow] =
         Stream.fromIterator(repo.listObjectIds().iterator().asScala, config.maxConcurrency)
           .chunkN(50)
           .flatMap(chunk => Stream.evalUnChunk(chunk.parFlatTraverse(filesForId)))
