@@ -31,7 +31,7 @@ def setupDirectories(serviceName: String) =
   Cmd(
     "RUN",
     s"""apk update && apk upgrade && apk add openjdk21-jre && \\
-               |    mkdir -p /poduser/work/downloads /poduser/repo /poduser/version /poduser/database /poduser/log-config && \\
+               |    mkdir -p /poduser/work /poduser/repo /poduser/version /poduser/database /poduser/log-config && \\
                |    mkdir /poduser/logs && \\
                |    touch /poduser/logs/$serviceName.log && \\
                |    chmod 644 /poduser/logs/$serviceName.log && \\
@@ -214,7 +214,7 @@ lazy val commonSettings = Seq(
     Cmd("USER", "1002"),
     Cmd(
       "CMD",
-      s"rm -rf /poduser/work/downloads && java -Xmx2g -Dlog4j.configurationFile=/poduser/log-config/log4j2.properties -jar /opt/${(assembly / assemblyJarName).value}"
+      s"[ -z $$DOWNLOAD_DIR ] || rm -rf $$DOWNLOAD_DIR && java -Xmx2g -Dlog4j.configurationFile=/poduser/log-config/log4j2.properties -jar /opt/${(assembly / assemblyJarName).value}"
     )
   )
 )

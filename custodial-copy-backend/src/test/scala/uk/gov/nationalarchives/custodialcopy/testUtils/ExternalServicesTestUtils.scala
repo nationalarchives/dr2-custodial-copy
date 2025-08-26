@@ -280,7 +280,9 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       addAccessRepUrl: Boolean = false
   ) {
     val downloadDir: String = Files.createTempDirectory("downloads").toString
-    val config: Config = Config("", "", "", downloadDir, None, "", "")
+    val workDir: String = Files.createTempDirectory("work").toString
+    val repoDir: Path = Files.createTempDirectory("repo")
+    val config: Config = Config("", "", repoDir.toString, workDir, downloadDir, None, "", "")
 
     val bitstreamInfoResponsesWithSameName: Seq[BitStreamInfo] = bitstreamInfo1Responses.flatMap { bitstreamInfo1Response =>
       bitstreamInfo2Responses.filter { bitstreamInfo2Response =>
@@ -292,7 +294,6 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val coId2: UUID = UUID.randomUUID()
     val coId3: UUID = if bitstreamInfoResponsesWithSameName.nonEmpty then coId1 else UUID.randomUUID()
     val ioId: UUID = bitstreamInfo1Responses.headOption.flatMap(_.parentRef).getOrElse(UUID.randomUUID())
-    lazy val repoDir: Path = Files.createTempDirectory("repo")
     lazy val repo: MutableOcflRepository = createTestRepo(repoDir)
 
     private val coIds: Seq[UUID] = List(coId1, coId2, coId3, coId1)
@@ -424,8 +425,10 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       throwErrorInMissingAndChangedObjects: Boolean = false,
       bitstreamUrl: String = "url"
   ) {
-    val workDir: String = Files.createTempDirectory("download").toString
-    val config: Config = Config("", "queueUrl", "", workDir, Option(URI.create("https://example.com")), "", "topicArn")
+    val downloadDir: String = Files.createTempDirectory("downloads").toString
+    val workDir: String = Files.createTempDirectory("work").toString
+    val repoDir: String = Files.createTempDirectory("repo").toString
+    val config: Config = Config("", "queueUrl", repoDir, workDir, downloadDir, Option(URI.create("https://example.com")), "", "topicArn")
     val ioId: UUID = UUID.randomUUID()
     val coId: UUID = UUID.randomUUID()
     val soId: UUID = UUID.randomUUID()

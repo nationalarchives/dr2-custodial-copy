@@ -236,7 +236,7 @@ class Processor(
     case fo: FileObject =>
       if fo.url.nonEmpty then
         for {
-          writePath <- fo.sourceFilePath(config.workDir)
+          writePath <- fo.sourceFilePath(config.downloadDir)
           _ <- entityClient.streamBitstreamContent[Unit](Fs2Streams.apply)(
             fo.url,
             s => s.through(Files[IO].writeAll(writePath, Flags.Write)).compile.drain

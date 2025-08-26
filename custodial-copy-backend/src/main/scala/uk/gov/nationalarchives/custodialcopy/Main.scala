@@ -28,6 +28,7 @@ object Main extends IOApp {
       sqsQueueUrl: String,
       repoDir: String,
       workDir: String,
+      downloadDir: String,
       proxyUrl: Option[URI],
       versionPath: String,
       topicArn: String
