@@ -1,9 +1,10 @@
 package uk.gov.nationalarchives.reconciler
 
 import cats.effect.Async
+import cats.effect.implicits.*
 import cats.syntax.all.*
-import io.ocfl.api.exception.NotFoundException
-import io.ocfl.api.model.{DigestAlgorithm, OcflObjectVersionFile}
+import fs2.{Chunk, Stream}
+import io.ocfl.api.model.DigestAlgorithm
 import io.ocfl.api.{MutableOcflRepository, OcflConfig}
 import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
@@ -19,7 +20,7 @@ import scala.jdk.CollectionConverters.*
 import scala.jdk.FunctionConverters.*
 
 trait OcflService[F[_]] {
-  def getAllObjectFiles(ioId: UUID): F[List[OcflObjectVersionFile]]
+  def getAllObjectFiles: Stream[F, CoRow]
 }
 object OcflService {
 
@@ -45,10 +46,31 @@ object OcflService {
       .prettyPrintJson()
       .workDir(workDir)
       .buildMutable()
-    (ioId: UUID) =>
-      Async[F]
-        .blocking(repo.getObject(ioId.toHeadVersion))
-        .map(_.getFiles.asScala.toList)
-        .handleErrorWith { case nfe: NotFoundException => Async[F].pure(Nil) }
+
+    def isNotMetadataFile(storageRelativePath: String) =
+      (storageRelativePath.contains("/Preservation_") || storageRelativePath.contains("/Access_")) && !storageRelativePath.contains("CO_Metadata.xml")
+
+    def filesForId(id: String) = {
+      val ioRef = UUID.fromString(id)
+      val chunk = Chunk.from(repo.getObject(ioRef.toHeadVersion).getFiles.asScala).collect {
+        case coFile if isNotMetadataFile(coFile.getStorageRelativePath) =>
+          val pathAsList = coFile.getStorageRelativePath.split("/")
+          val pathStartingFromRepType = pathAsList.dropWhile(pathPart => !pathPart.startsWith("Preservation_"))
+          val coRef = UUID.fromString(pathStartingFromRepType(1))
+          val fixities = coFile.getFixity.asScala.toMap.map { case (digestAlgo, value) => (digestAlgo.getOcflName, value) }
+          val potentialSha256 = fixities.get("sha256")
+          CoRow(coRef, Option(ioRef), potentialSha256)
+      }
+      Async[F].pure(chunk)
+    }
+
+    new OcflService[F] {
+      override def getAllObjectFiles: Stream[F, CoRow] =
+        Stream
+          .fromIterator(repo.listObjectIds().iterator().asScala, config.maxConcurrency)
+          .chunkN(50)
+          .flatMap(chunk => Stream.evalUnChunk(chunk.parFlatTraverse(filesForId)))
+    }
+
   }
 }

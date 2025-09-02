@@ -13,7 +13,7 @@ import org.scalatest.prop.TableDrivenPropertyChecks.forAll
 import org.scalatest.prop.TableFor3
 import org.scalatest.prop.Tables.Table
 import uk.gov.nationalarchives.reconciler.Main.Config
-import uk.gov.nationalarchives.reconciler.{Configuration, Database, OcflCoRow, PreservicaCoRow}
+import uk.gov.nationalarchives.reconciler.{Configuration, Database, CoRow}
 import uk.gov.nationalarchives.utils.TestUtils.*
 
 import java.net.URI
@@ -25,35 +25,35 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
   given Put[UUID] = Put[String].contramap(_.toString)
 
   case class ReconcilerDatabaseUtils() extends DatabaseUtils("test-database") {
-    def createOcflCoRow(
-        coRef: UUID,
-        ioRef: UUID = UUID.randomUUID(),
+    def createCoRow(
+        id: UUID,
+        parent: UUID = UUID.randomUUID(),
         sha256Checksum: Option[String] = None
-    ): IO[OcflCoRow] =
-      sql"""INSERT INTO OcflCOs (coRef, ioRef, sha256Checksum)
-                 VALUES ($coRef, $ioRef, $sha256Checksum)""".update.run
+    ): IO[CoRow] =
+      sql"""INSERT INTO OcflCOs (id, parent, sha256Checksum)
+                 VALUES ($id, $parent, $sha256Checksum)""".update.run
         .transact(xa)
-        .map(_ => OcflCoRow(coRef, ioRef, sha256Checksum))
+        .map(_ => CoRow(id, Option(parent), sha256Checksum))
 
     def createPSCoRow(
-        coRef: UUID,
-        ioRef: UUID = UUID.randomUUID(),
+        id: UUID,
+        parent: UUID = UUID.randomUUID(),
         sha256Checksum: Option[String] = None
-    ): IO[PreservicaCoRow] =
-      sql"""INSERT INTO PreservicaCOs (coRef, ioRef, sha256Checksum)
-               VALUES ($coRef, $ioRef, $sha256Checksum)""".update.run
+    ): IO[CoRow] =
+      sql"""INSERT INTO PreservicaCOs (id, parent, sha256Checksum)
+               VALUES ($id, $parent, $sha256Checksum)""".update.run
         .transact(xa)
-        .map(_ => PreservicaCoRow(coRef, ioRef, sha256Checksum))
+        .map(_ => CoRow(id, Option(parent), sha256Checksum))
 
-    def getOcflCoRows(coRef: UUID): IO[List[OcflCoRow]] =
-      sql"SELECT * FROM OcflCOs WHERE coRef = $coRef"
-        .query[OcflCoRow]
+    def getCoRows(id: UUID): IO[List[CoRow]] =
+      sql"SELECT * FROM OcflCOs WHERE id = $id"
+        .query[CoRow]
         .to[List]
         .transact(xa)
 
-    def getPreservicaCoRows(coRef: UUID): IO[List[PreservicaCoRow]] =
-      sql"SELECT * FROM PreservicaCOs WHERE coRef = $coRef"
-        .query[PreservicaCoRow]
+    def getPreservicaCoRows(id: UUID): IO[List[CoRow]] =
+      sql"SELECT * FROM PreservicaCOs WHERE id = $id"
+        .query[CoRow]
         .to[List]
         .transact(xa)
   }
@@ -71,15 +71,15 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     val ioRef = UUID.randomUUID()
     val coRef = UUID.randomUUID()
 
-    val initialResponse = getOcflCoRows(coRef).unsafeRunSync()
-    val ocflCoRows = Chunk(
-      OcflCoRow(coRef, ioRef, Some("sha256Checksum1"))
+    val initialResponse = getCoRows(coRef).unsafeRunSync()
+    val CoRows = Chunk(
+      CoRow(coRef, Option(ioRef), Some("sha256Checksum1"))
     )
-    Database[IO].writeToOcflCOsTable(ocflCoRows).unsafeRunSync()
-    val response = getOcflCoRows(coRef).unsafeRunSync()
+    Database[IO].writeToOcflCOsTable(CoRows).unsafeRunSync()
+    val response = getCoRows(coRef).unsafeRunSync()
 
     initialResponse should equal(Nil)
-    response should equal(ocflCoRows.toList)
+    response should equal(CoRows.toList)
   }
 
   "writeToPreservicaCOsTable" should "should write the values to the PreservicaCOs table" in {
@@ -88,7 +88,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     val coRef = UUID.randomUUID()
 
     val initialResponse = getPreservicaCoRows(coRef).unsafeRunSync()
-    val preservicaCoRows = Chunk(PreservicaCoRow(coRef, ioRef, Some("sha256Checksum1")))
+    val preservicaCoRows = Chunk(CoRow(coRef, Option(ioRef), Some("sha256Checksum1")))
 
     Database[IO].writeToPreservicaCOsTable(preservicaCoRows).unsafeRunSync()
     val response = getPreservicaCoRows(coRef).unsafeRunSync()
@@ -99,10 +99,10 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
 
   "writeToOcflCOsTable" should "should write nothing to the OcflCOs table if no CoRows were passed in" in {
     createOcflCOsTable()
-    val initialResponse = getOcflCoRows(coRef).unsafeRunSync()
+    val initialResponse = getCoRows(coRef).unsafeRunSync()
 
     Database[IO].writeToOcflCOsTable(Chunk.empty).unsafeRunSync()
-    val response = getOcflCoRows(coRef).unsafeRunSync()
+    val response = getCoRows(coRef).unsafeRunSync()
 
     initialResponse should equal(Nil)
     response should equal(Nil)
@@ -140,7 +140,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
   "findAllMissingCOs" should s"should return a message for each CO if it has the same checksum in CC" in {
     createPreservicaCOsTable()
     createOcflCOsTable()
-    (createOcflCoRow(coRef, ioRef, Some("checksum1")) >> createPSCoRow(coRef, ioRef, Some("checksum1"))).unsafeRunSync()
+    (createCoRow(coRef, ioRef, Some("checksum1")) >> createPSCoRow(coRef, ioRef, Some("checksum1"))).unsafeRunSync()
 
     val coMessage = Database[IO].findAllMissingCOs().unsafeRunSync()
 
@@ -150,9 +150,9 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
   "findAllMissingCOs" should s"should return a message for each CO if it has the same checksum in PS" in {
     createPreservicaCOsTable()
     createOcflCOsTable()
-    (createPSCoRow(coRef, ioRef, Some("checksum1")) >> createOcflCoRow(coRef, ioRef, Some("checksum1"))).unsafeRunSync()
+    (createPSCoRow(coRef, ioRef, Some("checksum1")) >> createCoRow(coRef, ioRef, Some("checksum1"))).unsafeRunSync()
 
-    val ocflCoRow = OcflCoRow(coRef, ioRef, Some("checksum1"))
+    val coRow = CoRow(coRef, Option(ioRef), Some("checksum1"))
     val coMessage = Database[IO].findAllMissingCOs().unsafeRunSync()
 
     coMessage should be(Nil)
@@ -162,14 +162,14 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     "findAllMissingCOs" should s"should return a message for each CO if $mismatch" in {
       createPreservicaCOsTable()
       createOcflCOsTable()
-      (createPSCoRow(coRef, ioRef, preservicaChecksum) >> createOcflCoRow(coRefTwo, ioRef, ocflChecksum)).unsafeRunSync()
+      (createPSCoRow(coRef, ioRef, preservicaChecksum) >> createCoRow(coRefTwo, ioRef, ocflChecksum)).unsafeRunSync()
 
       val coMessage = Database[IO].findAllMissingCOs().unsafeRunSync()
 
       coMessage should be(
         List(
-          s"CO $coRef (parent: $ioRef) is in Preservica, but its checksum could not be found in CC",
-          s"CO $coRefTwo (parent: $ioRef) is in CC, but its checksum could not be found in Preservica"
+          s":alert-noflash-slow: CO $coRef is in Preservica, but its checksum could not be found in CC",
+          s":alert-noflash-slow: CO $coRefTwo is in CC, but its checksum could not be found in Preservica"
         )
       )
     }
