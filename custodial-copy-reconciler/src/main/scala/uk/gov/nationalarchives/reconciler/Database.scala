@@ -58,7 +58,7 @@ object Database:
       for {
         psCOsMissingFromOcfl <- findPsCOsMissingFromOcfl()
         ocflCOsMissingFromPs <- findOcflCOsMissingFromPs()
-      } yield (psCOsMissingFromOcfl ++ ocflCOsMissingFromPs).toSet.toList
+      } yield (psCOsMissingFromOcfl ++ ocflCOsMissingFromPs).distinct
 
     private def findPsCOsMissingFromOcfl(): F[List[String]] = {
       val selectSql = sql"select p.* from PreservicaCOs p LEFT JOIN OcflCOs o on p.sha256checksum = o.sha256Checksum WHERE o.sha256Checksum is null;"
@@ -67,7 +67,7 @@ object Database:
           logger <- Slf4jLogger.create[F]
           messages <- psRefs.traverse { row =>
             val message = s"CO ${row.id} is in Preservica, but its checksum could not be found in CC"
-            logger.warn(message).map(_ => message)
+            logger.warn(message).map(message => s":alert-noflash-slow: $message")
           }
         } yield messages
       }
@@ -80,7 +80,7 @@ object Database:
           logger <- Slf4jLogger.create[F]
           messages <- ocflRefs.traverse { row =>
             val message = s"CO ${row.id} is in CC, but its checksum could not be found in Preservica"
-            logger.warn(message).map(_ => message)
+            logger.warn(message).map(_ => s":alert-noflash-slow: $message")
           }
         } yield messages
       }

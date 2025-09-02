@@ -43,7 +43,7 @@ object Main extends IOApp {
 
   private def logError(err: Throwable) = for
     logger <- Slf4jLogger.create[IO]
-    _ <- logger.error(err)("Error running custodial copy")
+    _ <- logger.error(err)("Error running Custodial Copy Reconciler")
   yield ()
 
   private def logComplete(count: Int) = for
@@ -114,7 +114,9 @@ object Main extends IOApp {
       logComplete(missingCOs.size) >>
         IO.whenA(missingCOs.nonEmpty) {
           if missingCOs.size > 10 then
-            sendMissingCosToSlack(List("More than 10 missing Content Objects have been detected. Check the CC Reconciler logs for details."))
+            sendMissingCosToSlack(
+              List(":alert-noflash-slow: More than 10 missing Content Objects have been detected. Check the CC Reconciler logs for details.")
+            )
           else sendMissingCosToSlack(missingCOs)
         }
     }

@@ -18,14 +18,14 @@ import scala.jdk.CollectionConverters.*
 
 class BuilderSpec extends AnyFlatSpec:
 
-  "Builder run" should ", given a ContentObject, return only the PreservicaCoRows for COs that have the generation type of 'Original' and generation version of '1'" in {
+  "Builder run" should ", given a ContentObject, return only the Preservica CoRows for COs that have the generation type of 'Original' and generation version of '1'" in {
     val config = Config("", "", 5, Files.createTempDirectory("work").toString, Files.createTempDirectory("repo").toString)
-    val parentRef = Some(UUID.randomUUID)
+    val potentialParentRef = Some(UUID.randomUUID)
     val co1Ref = UUID.randomUUID
     val co2Ref = UUID.randomUUID
-    val bitStreamInfo1 = BitStreamInfo(s"$co1Ref.testExt", 1, "", List(Fixity("sha256", "co1FileFixity")), 1, Original, None, parentRef)
-    val bitStreamInfo2 = BitStreamInfo(s"$co1Ref.testExt2", 1, "", List(Fixity("sha256", "co1FileFixity2")), 2, Derived, None, parentRef)
-    val bitStreamInfo3 = BitStreamInfo(s"$co2Ref.testExt2", 1, "", List(Fixity("sha256", "co2FileFixity")), 2, Original, None, parentRef)
+    val bitStreamInfo1 = BitStreamInfo(s"$co1Ref.testExt", 1, "", List(Fixity("sha256", "co1FileFixity")), 1, Original, None, potentialParentRef)
+    val bitStreamInfo2 = BitStreamInfo(s"$co1Ref.testExt2", 1, "", List(Fixity("sha256", "co1FileFixity2")), 2, Derived, None, potentialParentRef)
+    val bitStreamInfo3 = BitStreamInfo(s"$co2Ref.testExt2", 1, "", List(Fixity("sha256", "co2FileFixity")), 2, Original, None, potentialParentRef)
 
     val bitStreamInfoList1 = List(bitStreamInfo1, bitStreamInfo2)
     val bitStreamInfoList2 = List(bitStreamInfo3)
@@ -36,7 +36,7 @@ class BuilderSpec extends AnyFlatSpec:
 
     val preservicaCoRows = Builder[IO](preservicaClient).run(entityIds).unsafeRunSync()
     preservicaCoRows should equal(
-      List(CoRow(co1Ref, parentRef, Some("co1FileFixity")))
+      List(CoRow(co1Ref, potentialParentRef, Some("co1FileFixity")))
     )
   }
 

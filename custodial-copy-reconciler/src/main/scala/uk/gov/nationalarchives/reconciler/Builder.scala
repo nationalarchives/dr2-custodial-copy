@@ -6,7 +6,6 @@ import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.dp.client.EntityClient
 import uk.gov.nationalarchives.dp.client.EntityClient.GenerationType.Original
 
-import java.time.Instant
 import java.util.UUID
 
 trait Builder[F[_]]:
@@ -16,9 +15,8 @@ trait Builder[F[_]]:
 
 object Builder:
   def apply[F[_]: Async](client: EntityClient[F, Fs2Streams[F]]): Builder[F] =
-    (entityIds: Seq[UUID]) => {
+    (entityIds: Seq[UUID]) =>
       entityIds.toList.flatTraverse { entityId =>
-        val now = Instant.now.toEpochMilli
         client.getBitstreamInfo(entityId).map { bitstreamInfoForCo =>
           bitstreamInfoForCo.collect { // We're only concerned with original COs
             case bitstreamInfo if bitstreamInfo.generationType == Original && bitstreamInfo.generationVersion == 1 =>
@@ -27,4 +25,3 @@ object Builder:
           }.toList
         }
       }
-    }
