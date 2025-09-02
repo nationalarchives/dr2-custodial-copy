@@ -168,8 +168,8 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
 
       coMessage should be(
         List(
-          s"CO $coRef is in Preservica, but its checksum could not be found in CC",
-          s"CO $coRefTwo is in CC, but its checksum could not be found in Preservica"
+          s":alert-noflash-slow: CO $coRef is in Preservica, but its checksum could not be found in CC",
+          s":alert-noflash-slow: CO $coRefTwo is in CC, but its checksum could not be found in Preservica"
         )
       )
     }

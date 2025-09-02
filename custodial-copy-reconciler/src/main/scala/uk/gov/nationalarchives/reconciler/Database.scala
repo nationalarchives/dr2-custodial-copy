@@ -67,7 +67,7 @@ object Database:
           logger <- Slf4jLogger.create[F]
           messages <- psRefs.traverse { row =>
             val message = s"CO ${row.id} is in Preservica, but its checksum could not be found in CC"
-            logger.warn(message).map(message => s":alert-noflash-slow: $message")
+            logger.warn(message).map(_ => s":alert-noflash-slow: $message")
           }
         } yield messages
       }

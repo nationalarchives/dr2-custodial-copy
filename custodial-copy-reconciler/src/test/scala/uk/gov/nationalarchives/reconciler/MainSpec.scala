@@ -94,8 +94,8 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach {
 
     eventBridgeEvents should equal(
       List(
-        Detail(s"CO $coRef is in CC, but its checksum could not be found in Preservica"),
-        Detail(s"CO $coRef is in Preservica, but its checksum could not be found in CC")
+        Detail(s":alert-noflash-slow: CO $coRef is in CC, but its checksum could not be found in Preservica"),
+        Detail(s":alert-noflash-slow: CO $coRef is in Preservica, but its checksum could not be found in CC")
       )
     )
   }
