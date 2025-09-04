@@ -308,58 +308,6 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     verify(processor, never()).process(any[MessageResponse[ReceivedSnsMessage]])
   }
 
-  "runCustodialCopy" should "(given a CO message with 'deleted' set to 'true') throw an Exception" in {
-    val fixity = Fixity("SHA256", "")
-
-    val utils = new MainTestUtils(
-      List((ContentObject, true)),
-      typesOfMetadataFilesInRepo = List(InformationObject, ContentObject),
-      objectVersion = 2,
-      fileContentToWriteToEachFileInRepo = List("fileContent1"),
-      entityDeleted = true
-    )
-
-    val repo = utils.repo
-
-    utils.latestObjectVersion(repo, utils.ioId) must equal(2)
-
-    val err: Throwable = getError(utils.sqsClient, utils.config, utils.processor)
-
-    err.getMessage must equal(s"A Content Object '${utils.coId1}' has been deleted in Preservica")
-  }
-
-  "runCustodialCopy" should "(given a CO and IO message that both have 'deleted' set to 'true') the exception message thrown by the CO message " +
-    "doesn't prevent the IO message from being processed" in {
-      val fixity = Fixity("SHA256", "")
-
-      val utils = new MainTestUtils(
-        List((ContentObject, true), (InformationObject, true)),
-        typesOfMetadataFilesInRepo = List(InformationObject, ContentObject),
-        objectVersion = 2,
-        fileContentToWriteToEachFileInRepo = List("fileContent1"),
-        entityDeleted = true
-      )
-
-      val repo = utils.repo
-
-      utils.latestObjectVersion(repo, utils.ioId) must equal(2)
-      val expectedDestinationFilePathsAlreadyInRepo = List(
-        s"${utils.ioId}/Preservation_1/${utils.coId1}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
-        s"${utils.ioId}/Preservation_1/${utils.coId1}/CO_Metadata.xml",
-        s"${utils.ioId}/IO_Metadata.xml"
-      )
-
-      expectedDestinationFilePathsAlreadyInRepo.foreach { path =>
-        repo.getObject(utils.ioId.toHeadVersion).containsFile(path) must be(true)
-      }
-
-      val err: Throwable = getError(utils.sqsClient, utils.config, utils.processor)
-
-      err.getMessage must equal(s"A Content Object '${utils.coId1}' has been deleted in Preservica")
-      utils.latestObjectVersion(repo, utils.ioId) must equal(2)
-      repo.getObject(utils.ioId.toHeadVersion).getFiles.toArray.toList must be(Nil)
-    }
-
   "runCustodialCopy" should "(given a CO message that has 'deleted' set to 'false' and IO message that has 'deleted' set to 'true') " +
     "parse the non-deleted (CO) message first" in {
       val fixity = Fixity("SHA256", "")
@@ -760,7 +708,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val utils = new MainTestUtils(objectVersion = 0)
     val sqsClient = utils.sqsClient
     val groupId = UUID.randomUUID.toString
-    def messages = (1 to 10).map(i => MessageResponse("", Option(groupId), SoReceivedSnsMessage(UUID.randomUUID, false))).toList
+    def messages = (1 to 10).map(i => MessageResponse("", Option(groupId), SoReceivedSnsMessage(UUID.randomUUID))).toList
     reset(sqsClient)
     when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO(DeleteMessageResponse.builder.build))
     when(sqsClient.receiveMessages(any[String], any[Int])(using any[Decoder[SoReceivedSnsMessage]]))
@@ -778,7 +726,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val sqsClient = utils.sqsClient
     val groupId = UUID.randomUUID.toString
 
-    def messages = (1 to 25).map(i => MessageResponse("", Option(groupId), SoReceivedSnsMessage(UUID.randomUUID, false))).toList
+    def messages = (1 to 25).map(i => MessageResponse("", Option(groupId), SoReceivedSnsMessage(UUID.randomUUID))).toList
 
     reset(sqsClient)
     when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO(DeleteMessageResponse.builder.build))
@@ -798,7 +746,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val sqsClient = utils.sqsClient
     val groupId = UUID.randomUUID.toString
 
-    def messages = (1 to 26).map(i => MessageResponse("", Option(groupId), SoReceivedSnsMessage(UUID.randomUUID, false))).toList
+    def messages = (1 to 26).map(i => MessageResponse("", Option(groupId), SoReceivedSnsMessage(UUID.randomUUID))).toList
 
     reset(sqsClient)
     when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO(DeleteMessageResponse.builder.build))
@@ -833,7 +781,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val sqsClient = utils.sqsClient
     val groupId = UUID.randomUUID.toString
 
-    def messages = (1 to 10).map(i => MessageResponse("", Option(groupId), SoReceivedSnsMessage(UUID.randomUUID, false))).toList
+    def messages = (1 to 10).map(i => MessageResponse("", Option(groupId), SoReceivedSnsMessage(UUID.randomUUID))).toList
 
     reset(sqsClient)
     when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO(DeleteMessageResponse.builder.build))

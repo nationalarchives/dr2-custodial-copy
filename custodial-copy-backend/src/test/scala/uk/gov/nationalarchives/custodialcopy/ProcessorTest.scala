@@ -13,8 +13,8 @@ import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.Main.IdWithSourceAndDestPaths
 import uk.gov.nationalarchives.custodialcopy.Message.{IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
-import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Deleted, Updated}
-import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Bitstream, Metadata, MetadataAndPotentialBitstreams}
+import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Updated}
+import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Bitstream, Metadata}
 import uk.gov.nationalarchives.custodialcopy.Processor.Result.{Failure, Success}
 import uk.gov.nationalarchives.custodialcopy.testUtils.ExternalServicesTestUtils.*
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
@@ -31,8 +31,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     val message: IoReceivedSnsMessage = utils.ioMessageResponse.message.asInstanceOf[IoReceivedSnsMessage]
     val response = MessageResponse[ReceivedSnsMessage](
       "receiptHandle1",
-      Option(utils.ioMessage.ref.toString),
-      utils.ioMessage.copy(deleted = true)
+      Option(utils.deletedMessage.ref.toString),
+      utils.deletedMessage
     )
 
     utils.processor.process(response).unsafeRunSync()
@@ -44,39 +44,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       xmlRequestsToValidate = Nil,
       createdIdSourceAndDestinationPathAndId = Nil,
       drosToLookup = Nil,
-      snsMessagesToSend = List(
-        SendSnsMessage(InformationObject, utils.ioId, MetadataAndPotentialBitstreams, Deleted, "")
-      ),
-      destinationPathsToDelete = paths
-    )
-  }
-
-  "process" should "return a Failure if a CO message has 'deleted' set to 'true'" in {
-    val utils = new ProcessorTestUtils(ContentObject)
-
-    val messageResponse = MessageResponse[ReceivedSnsMessage](
-      "receiptHandle1",
-      Option(utils.coMessage.ref.toString),
-      utils.coMessage.copy(deleted = true)
-    )
-
-    val response = utils.processor.process(messageResponse).unsafeRunSync()
-
-    response.isError should equal(true)
-
-    val ex = response.asInstanceOf[Failure].ex
-
-    ex.getMessage should equal(s"A Content Object '${utils.coId}' has been deleted in Preservica")
-    utils.verifyCallsAndArguments(
-      repTypes = Nil,
-      repIndexes = Nil,
-      idsOfEntityToGetMetadataFrom = Nil,
-      entityTypesToGetMetadataFrom = Nil,
-      xmlRequestsToValidate = Nil,
-      createdIdSourceAndDestinationPathAndId = Nil,
-      drosToLookup = Nil,
       snsMessagesToSend = Nil,
-      destinationPathsToDelete = Nil
+      destinationPathsToDelete = paths
     )
   }
 
@@ -312,7 +281,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     val response: MessageResponse[ReceivedSnsMessage] = MessageResponse[ReceivedSnsMessage](
       "receiptHandle2",
       Option(changedFileId.toString),
-      IoReceivedSnsMessage(changedFileId, false)
+      IoReceivedSnsMessage(changedFileId)
     )
 
     utils.processor.process(response).unsafeRunSync()
@@ -345,7 +314,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       MessageResponse[ReceivedSnsMessage](
         "receiptHandle1",
         Option(missingFileId.toString),
-        IoReceivedSnsMessage(missingFileId, false)
+        IoReceivedSnsMessage(missingFileId)
       )
     utils.processor.process(response).unsafeRunSync()
 
