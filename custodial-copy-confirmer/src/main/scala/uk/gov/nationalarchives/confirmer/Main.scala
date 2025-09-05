@@ -76,7 +76,7 @@ object Main extends IOApp {
         _ <- IO.whenA(messages.nonEmpty)(logger.info(s"Processing message refs ${messages.map(_.message.payload.preservationSystemId).mkString(",")}"))
         _ <- messages.parTraverse { sqsMessage =>
           val message = sqsMessage.message
-          val request = DADynamoDbRequest(config.dynamoTableName, message.primaryKey, Map(config.dynamoAttributeName -> "true".toAttributeValue.some))
+          val request = DADynamoDbRequest(config.dynamoTableName, message.primaryKey, Map(config.dynamoAttributeName -> "true".toAttributeValue))
           val objectExists = ocfl.checkObjectExists(message.payload.preservationSystemId)
           logger.info(s"Object with assetId ${message.assetId} and preservation system ref ${message.payload.preservationSystemId} ${
               if objectExists then "has been found" else "has not been found"

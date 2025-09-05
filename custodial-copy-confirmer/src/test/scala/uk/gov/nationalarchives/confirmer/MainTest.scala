@@ -27,7 +27,7 @@ class MainTest extends AnyFlatSpec {
     val updateItem = dynamoUpdateItems.head
     updateItem.primaryKeyAndItsValue("assetId").s() should equal(existingAssetId.toString)
     updateItem.primaryKeyAndItsValue("batchId").s() should equal("batchId1")
-    updateItem.attributeNamesAndValuesToUpdate("attribute").get.s() should equal("true")
+    updateItem.attributeNamesAndValuesToUpdate("attribute").s() should equal("true")
   }
 
   "runConfirmer" should "not delete the messages from the queue if there is an error" in {
