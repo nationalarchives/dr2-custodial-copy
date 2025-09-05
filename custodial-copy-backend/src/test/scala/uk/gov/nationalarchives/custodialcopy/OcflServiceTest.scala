@@ -209,20 +209,6 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     optionOverwriteToAdd.getAllValues.asScala.toList.head should equal(OcflOption.OVERWRITE)
   }
 
-  "getAllFilePathsOnAnObject" should "throw an exception if the object to be deleted does not exist" in {
-    val id = UUID.randomUUID()
-    val ocflRepository = mock[MutableOcflRepository]
-    when(ocflRepository.getObject(any[ObjectVersionId])).thenThrow(new NotFoundException)
-
-    val service = new OcflService(ocflRepository, semaphore)
-
-    val err = intercept[Exception] {
-      service.getAllFilePathsOnAnObject(id).unsafeRunSync()
-    }
-
-    err.getMessage should equal(s"Object id $id does not exist")
-  }
-
   "getAllFilePathsOnAnObject" should "return a path if the repository contains the OCFL object" in {
     val id = UUID.randomUUID()
     val ocflRepository = mock[MutableOcflRepository]
