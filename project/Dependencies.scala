@@ -9,7 +9,7 @@ object Dependencies {
 
   lazy val dynamoClient = "uk.gov.nationalarchives" %% "da-dynamodb-client" % daAwsClientsVersion
   lazy val eventbridgeClient = "uk.gov.nationalarchives" %% "da-eventbridge-client" % daAwsClientsVersion
-  lazy val fs2Core = "co.fs2" %% "fs2-core" % "3.12.0"
+  lazy val fs2Core = "co.fs2" %% "fs2-core" % "3.12.2"
   lazy val log4Cats = "org.typelevel" %% "log4cats-core" % log4CatsVersion
   lazy val declineEffect = "com.monovore" %% "decline-effect" % "2.5.0"
   lazy val h2 = "com.h2database" % "h2" % "2.3.232"
