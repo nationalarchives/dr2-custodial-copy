@@ -9,7 +9,7 @@ object Dependencies {
 
   lazy val dynamoClient = "uk.gov.nationalarchives" %% "da-dynamodb-client" % daAwsClientsVersion
   lazy val eventbridgeClient = "uk.gov.nationalarchives" %% "da-eventbridge-client" % daAwsClientsVersion
-  lazy val fs2Core = "co.fs2" %% "fs2-core" % "3.12.0"
+  lazy val fs2Core = "co.fs2" %% "fs2-core" % "3.12.2"
   lazy val log4Cats = "org.typelevel" %% "log4cats-core" % log4CatsVersion
   lazy val declineEffect = "com.monovore" %% "decline-effect" % "2.5.0"
   lazy val h2 = "com.h2database" % "h2" % "2.3.232"
@@ -19,10 +19,10 @@ object Dependencies {
   lazy val log4jTemplateJson = "org.apache.logging.log4j" % "log4j-layout-template-json" % logbackVersion
   lazy val mockito = "org.scalatestplus" %% "mockito-5-10" % s"$scalaTestVersion.0"
   lazy val ocfl = "io.ocfl" % "ocfl-java-core" % "2.2.2"
-  lazy val preservicaClient = "uk.gov.nationalarchives" %% "preservica-client-fs2" % "0.0.148"
+  lazy val preservicaClient = "uk.gov.nationalarchives" %% "preservica-client-fs2" % "0.0.149"
   lazy val pureConfigCatsEffect = "com.github.pureconfig" %% "pureconfig-cats-effect" % pureConfigVersion
   lazy val pureConfig = "com.github.pureconfig" %% "pureconfig-core" % pureConfigVersion
-  lazy val scalaCheck = "org.scalacheck" %% "scalacheck" % "1.18.1"
+  lazy val scalaCheck = "org.scalacheck" %% "scalacheck" % "1.19.0"
   lazy val scalaCheckPlus = "org.scalatestplus" %% "scalacheck-1-16" % "3.2.14.0"
   lazy val scalaTest = "org.scalatest" %% "scalatest" % scalaTestVersion
   lazy val scalaXml = "org.scala-lang.modules" %% "scala-xml" % "2.4.0"
