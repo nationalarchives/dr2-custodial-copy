@@ -46,9 +46,11 @@ object Main extends IOApp {
     _ <- logger.error(err)("Error running Custodial Copy Reconciler")
   yield ()
 
-  private def logComplete(count: Int) = for
+  private def logCompletion(missingCosCount: Int) = for
     logger <- Slf4jLogger.create[IO]
-    _ <- logger.info(Map("count" -> count.toString, "timestamp" -> Instant.now.getEpochSecond.toString))("CC reconcile complete")
+    _ <- logger.info(
+      Map("missingCOsCount" -> missingCosCount.toString, "completionTimestamp" -> Instant.now.getEpochSecond.toString)
+    )("CC reconcile complete")
   yield ()
 
   override def runtimeConfig: IORuntimeConfig =
@@ -111,7 +113,7 @@ object Main extends IOApp {
       .drain
 
     IO.both(ocfl, ps) >> database.findAllMissingCOs().flatMap { missingCOs =>
-      logComplete(missingCOs.size) >>
+      logCompletion(missingCOs.size) >>
         IO.whenA(missingCOs.nonEmpty) {
           if missingCOs.size > 10 then
             sendMissingCosToSlack(
