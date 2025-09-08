@@ -137,7 +137,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     ("checksums doesn't exist in both tables", None, None)
   )
 
-  "findAllMissingCOs" should s"should return a message for each CO if it has the same checksum in CC" in {
+  "findAllMissingCOs" should s"should return no messages if each CO in PS has a corresponding CO with the same checksum in CC" in {
     createPreservicaCOsTable()
     createOcflCOsTable()
     (createCoRow(coRef, ioRef, Some("checksum1")) >> createPSCoRow(coRef, ioRef, Some("checksum1"))).unsafeRunSync()
@@ -148,12 +148,11 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     result.psCOsMissingFromOcfl should be(Nil)
   }
 
-  "findAllMissingCOs" should s"should return a message for each CO if it has the same checksum in PS" in {
+  "findAllMissingCOs" should s"should return no messages if each CO in CC has a corresponding CO with the same checksum in PS" in {
     createPreservicaCOsTable()
     createOcflCOsTable()
     (createPSCoRow(coRef, ioRef, Some("checksum1")) >> createCoRow(coRef, ioRef, Some("checksum1"))).unsafeRunSync()
 
-    val coRow = CoRow(coRef, Option(ioRef), Some("checksum1"))
     val result = Database[IO].findAllMissingCOs().unsafeRunSync()
 
     result.ocflCOsCount should equal(1)
