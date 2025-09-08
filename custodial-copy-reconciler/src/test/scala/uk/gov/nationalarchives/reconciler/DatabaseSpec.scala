@@ -142,9 +142,10 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     createOcflCOsTable()
     (createCoRow(coRef, ioRef, Some("checksum1")) >> createPSCoRow(coRef, ioRef, Some("checksum1"))).unsafeRunSync()
 
-    val coMessage = Database[IO].findAllMissingCOs().unsafeRunSync()
+    val result = Database[IO].findAllMissingCOs().unsafeRunSync()
 
-    coMessage should be(Nil)
+    result.psCOsCount should equal(1)
+    result.psCOsMissingFromOcfl should be(Nil)
   }
 
   "findAllMissingCOs" should s"should return a message for each CO if it has the same checksum in PS" in {
@@ -153,9 +154,10 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     (createPSCoRow(coRef, ioRef, Some("checksum1")) >> createCoRow(coRef, ioRef, Some("checksum1"))).unsafeRunSync()
 
     val coRow = CoRow(coRef, Option(ioRef), Some("checksum1"))
-    val coMessage = Database[IO].findAllMissingCOs().unsafeRunSync()
+    val result = Database[IO].findAllMissingCOs().unsafeRunSync()
 
-    coMessage should be(Nil)
+    result.ocflCOsCount should equal(1)
+    result.ocflCOsMissingFromPs should be(Nil)
   }
 
   forAll(checksumMismatchPossibilities) { (mismatch, ocflChecksum, preservicaChecksum) =>
@@ -164,12 +166,17 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
       createOcflCOsTable()
       (createPSCoRow(coRef, ioRef, preservicaChecksum) >> createCoRow(coRefTwo, ioRef, ocflChecksum)).unsafeRunSync()
 
-      val coMessage = Database[IO].findAllMissingCOs().unsafeRunSync()
+      val result = Database[IO].findAllMissingCOs().unsafeRunSync()
 
-      coMessage should be(
+      result.ocflCOsMissingFromPs should be(
         List(
-          s":alert-noflash-slow: CO $coRef is in Preservica, but its checksum could not be found in CC",
           s":alert-noflash-slow: CO $coRefTwo is in CC, but its checksum could not be found in Preservica"
+        )
+      )
+
+      result.psCOsMissingFromOcfl should be(
+        List(
+          s":alert-noflash-slow: CO $coRef is in Preservica, but its checksum could not be found in CC"
         )
       )
     }

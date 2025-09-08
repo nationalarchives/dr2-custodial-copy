@@ -46,10 +46,16 @@ object Main extends IOApp {
     _ <- logger.error(err)("Error running Custodial Copy Reconciler")
   yield ()
 
-  private def logCompletion(missingCosCount: Int) = for
+  private def logCompletion(result: Result) = for
     logger <- Slf4jLogger.create[IO]
     _ <- logger.info(
-      Map("missingCOsCount" -> missingCosCount.toString, "completionTimestamp" -> Instant.now.getEpochSecond.toString)
+      Map(
+        "ocflCOsCount" -> result.ocflCOsCount.toString,
+        "psCOsCount" -> result.psCOsCount.toString,
+        "ocflCOsMissingFromPs" -> result.ocflCOsMissingFromPs.length.toString,
+        "psCOsMissingFromOcfl" -> result.psCOsMissingFromOcfl.length.toString,
+        "completionTimestamp" -> Instant.now.getEpochSecond.toString
+      )
     )("CC reconcile complete")
   yield ()
 
@@ -112,8 +118,9 @@ object Main extends IOApp {
       .compile
       .drain
 
-    IO.both(ocfl, ps) >> database.findAllMissingCOs().flatMap { missingCOs =>
-      logCompletion(missingCOs.size) >>
+    IO.both(ocfl, ps) >> database.findAllMissingCOs().flatMap { result =>
+      val missingCOs = result.psCOsMissingFromOcfl ++ result.ocflCOsMissingFromPs
+      logCompletion(result) >>
         IO.whenA(missingCOs.nonEmpty) {
           if missingCOs.size > 10 then
             sendMissingCosToSlack(
