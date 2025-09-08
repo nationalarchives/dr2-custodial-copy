@@ -48,7 +48,7 @@ object Main extends IOApp {
             case "co" => CoReceivedSnsMessage(ref)
             case "so" => SoReceivedSnsMessage(ref)
           }
-        case Array(ref) => DeletedReceivedSnsMessage(UUID.fromString(ref))
+        case Array(ref) => DeletionReceivedSnsMessage(UUID.fromString(ref))
     }
 
   case class IdWithSourceAndDestPaths(id: UUID, sourceNioFilePath: Option[file.Path], destinationPath: String)

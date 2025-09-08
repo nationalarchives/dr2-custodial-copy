@@ -12,7 +12,7 @@ object Message {
   case class IoReceivedSnsMessage(ref: UUID) extends ReceivedSnsMessage
   case class CoReceivedSnsMessage(ref: UUID) extends ReceivedSnsMessage
   case class SoReceivedSnsMessage(ref: UUID) extends ReceivedSnsMessage
-  case class DeletedReceivedSnsMessage(ref: UUID) extends ReceivedSnsMessage
+  case class DeletionReceivedSnsMessage(ref: UUID) extends ReceivedSnsMessage
 
   case class SendSnsMessage(entityType: EntityType, ioRef: UUID, objectType: ObjectType, status: ObjectStatus, tableItemIdentifier: String)
 }

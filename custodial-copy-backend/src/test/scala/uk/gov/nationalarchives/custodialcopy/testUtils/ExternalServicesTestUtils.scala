@@ -29,7 +29,7 @@ import uk.gov.nationalarchives.custodialcopy.{Checksum, CustodialCopyObject, Mes
 import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
 import uk.gov.nationalarchives.custodialcopy.Message.{
   CoReceivedSnsMessage,
-  DeletedReceivedSnsMessage,
+  DeletionReceivedSnsMessage,
   IoReceivedSnsMessage,
   ReceivedSnsMessage,
   SendSnsMessage,
@@ -307,12 +307,12 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     private val sqsMessages: List[ReceivedSnsMessage] =
       typesOfSqsMsgAndDeletionStatus.zipWithIndex.flatMap { case ((entityType, hasBeenDeleted), index) =>
         entityType match { // create duplicates in order to test deduplication
-          case InformationObject => (1 to 2).map(_ => if hasBeenDeleted then DeletedReceivedSnsMessage(ioId) else IoReceivedSnsMessage(ioId))
+          case InformationObject => (1 to 2).map(_ => if hasBeenDeleted then DeletionReceivedSnsMessage(ioId) else IoReceivedSnsMessage(ioId))
           case ContentObject =>
             val coId = coIds(index)
-            (1 to 2).map(_ => if hasBeenDeleted then DeletedReceivedSnsMessage(coId) else CoReceivedSnsMessage(coId))
+            (1 to 2).map(_ => if hasBeenDeleted then DeletionReceivedSnsMessage(coId) else CoReceivedSnsMessage(coId))
           case StructuralObject =>
-            (1 to 2).map(_ => if hasBeenDeleted then DeletedReceivedSnsMessage(UUID.randomUUID) else SoReceivedSnsMessage(UUID.randomUUID))
+            (1 to 2).map(_ => if hasBeenDeleted then DeletionReceivedSnsMessage(UUID.randomUUID) else SoReceivedSnsMessage(UUID.randomUUID))
         }
       }
     val sqsClient: DASQSClient[IO] = mockSqs(sqsMessages, ioId.toString)
@@ -445,7 +445,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     lazy val coMessage: CoReceivedSnsMessage = CoReceivedSnsMessage(coId)
     lazy val ioMessage: IoReceivedSnsMessage = IoReceivedSnsMessage(ioId)
     lazy val soMessage: SoReceivedSnsMessage = SoReceivedSnsMessage(soId)
-    lazy val deletedMessage: DeletedReceivedSnsMessage = DeletedReceivedSnsMessage(deletedId)
+    lazy val deletedMessage: DeletionReceivedSnsMessage = DeletionReceivedSnsMessage(deletedId)
     val sqsClient: DASQSClient[IO] = mock[DASQSClient[IO]]
 
     val snsClient: DASNSClient[IO] = mock[DASNSClient[IO]]

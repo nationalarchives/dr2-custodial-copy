@@ -350,8 +350,8 @@ class Processor(
       logger <- Slf4jLogger.create[IO]
       snsMessages <-
         messageResponse.message match
-          case DeletedReceivedSnsMessage(ref) => processDeletedEntities(messageResponse)
-          case _                              => processNonDeletedMessages(messageResponse)
+          case DeletionReceivedSnsMessage(ref) => processDeletedEntities(messageResponse)
+          case _                               => processNonDeletedMessages(messageResponse)
       _ <- IO.whenA(snsMessages.nonEmpty) {
         snsClient.publish[SendSnsMessage](config.topicArn)(snsMessages).void
       }
@@ -373,7 +373,7 @@ object Processor {
   )
 
   enum ObjectStatus:
-    case Created, Updated, Deleted
+    case Created, Updated
 
   enum ObjectType:
     case Bitstream, Metadata, MetadataAndPotentialBitstreams

@@ -124,7 +124,7 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO
     IO.blocking(ocflRepository.getObject(ioId.toHeadVersion))
       .map(_.getFiles.asScala.toList.map(_.getPath))
       .handleErrorWith {
-        case nfe: NotFoundException => IO.pure(Nil)
+        case nfe: NotFoundException => Logger[IO].warn(s"$ioId not found in the repository.") >> IO.pure(Nil)
         case coe: CorruptObjectException =>
           purgeObject(ioId) >>
             IO.raiseError(
