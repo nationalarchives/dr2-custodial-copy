@@ -15,17 +15,22 @@ For each invocation, it will try to fetch messages from the queue until there ar
 
 ### Messages
 
-The queue sends messages in this format:
+The queue sends messages in one of two formats:
 
 ```json
 {
-  "id": "io:1b9555dd-43b7-4681-9b0d-85ebe951ca02",
-  "deleted": false
+  "id": "io:1b9555dd-43b7-4681-9b0d-85ebe951ca02"
 }
 ```
 
-The prefix of the id can be `io`, `co` or `so` depending on the entity type; they are dealt with differently.
-The "deleted" entry refers to the status on Preservica; the value could be `true` or `false`.
+```json
+{
+  "id": "1b9555dd-43b7-4681-9b0d-85ebe951ca02"
+}
+```
+
+For the first message, the prefix of the id can be `io`, `co` or `so` depending on the entity type; they are dealt with differently.
+For the second message, there is no entity type as these messages are for deleted entities where we don't know the entity type.
 
 #### Processing incoming messages based on message group ID.
 
@@ -41,7 +46,7 @@ changes without creating new versions.
 
 Once all messages are processed, we commit the changes to that OCFL object which writes the version permanently.
 
-#### Handling Information Object (IO) messages, if entity has **not** been deleted
+#### Handling Information Object (IO) messages
 
 * Create the metadata file name `IO_Metadata.xml`
 * Get the metadata from the Preservica API
@@ -50,7 +55,7 @@ Once all messages are processed, we commit the changes to that OCFL object which
 * Calculate the checksum of this metadata string
 * Use all of this information to create a `MetadataObject`
 
-#### Handling non-deleted Content Object (CO) messages, if entity has **not** been deleted
+#### Handling Content Object (CO) messages
 
 * Get the bitstream information (which contains the parent ID) from the Preservica API
 * Verify that the parent ID is present
@@ -67,19 +72,12 @@ Once all messages are processed, we commit the changes to that OCFL object which
 * Create the destination path for the CO file `{IO_REF}/{REP_TYPE}/{CO_REF}/{GEN_TYPE}/g{GEN_VERSION}/{FILE_NAME}`
 * Use the path and bitstream information to create a `FileObject`
 
-#### Handling Information Object (IO) messages, if entity **has** been deleted
-
-* Get all the paths to the files that sit underneath this object
-* Delete all the paths
-* Generate a `SendSnsMessage` object for it
-
-#### Handling non-deleted Content Object (CO) messages, if entity **has** been deleted
-
-We are not expecting COs to be deleted in Preservica so if one is, an Exception will be thrown.
-
-#### Handling Structural Object (SO) messages
-
-Whether they are deleted or not, these are ignored as there is nothing in the structural objects we want to store.
+#### Handling deleted messages
+* Try to get an object with the id from the message. 
+* If the object doesn't exist, this will probably be an id from a CO or an SO so log and continue.
+* If the object does exist:
+  * Get all the paths to the files that sit underneath this object
+  * Delete all the paths
 
 ### Example of the OCFL Structure
 
@@ -145,7 +143,7 @@ Once the process completes successfully, a message per OCFL update is sent to SN
 
 * entity type
 * `ioRef`
-* `ObjectStatus`: `Created`, `Updated` or `Deleted`
+* `ObjectStatus`: `Created`, `Updated`
 * `ObjectType`: `Bitstream`, `Metadata`, `MetadataAndPotentialBitstreams`
 * `tableItemIdentifier` - the reference that can be used to find it in the files table
 
@@ -153,8 +151,6 @@ Once the process completes successfully, a message per OCFL update is sent to SN
 
 If the Custodial Copy process completes successfully, the messages that were received from SQS are then deleted from the
 SQS queue.
-If any messages in a batch fail, all messages are left to try again; this avoids having to work out which ones were
-successful, which could be error-prone.
 
 #### Parallel processing
 
@@ -183,6 +179,7 @@ repository to store the Docker image.
 | SQS_QUEUE_URL          | The queue the service will poll                                             |
 | REPO_DIR               | The directory for the OCFL repository                                       |
 | WORK_DIR               | The directory for the OCFL work directory                                   |
+| DOWNLOAD_DIR           | The directory to use for downloading files                                  |
 | HTTPS_PROXY            | An optional proxy. This is needed running in TNA's network but not locally. |
 
 ## 2. Frontend database builder

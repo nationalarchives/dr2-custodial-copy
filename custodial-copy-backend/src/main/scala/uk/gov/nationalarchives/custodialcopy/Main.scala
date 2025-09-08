@@ -40,13 +40,15 @@ object Main extends IOApp {
       deleted <- c.downField("deleted").as[Boolean]
     } yield {
       val typeAndRef = id.split(":")
-      val ref = UUID.fromString(typeAndRef.last)
-      val entityType = typeAndRef.head
-      entityType match {
-        case "io" => IoReceivedSnsMessage(ref, deleted)
-        case "co" => CoReceivedSnsMessage(ref, deleted)
-        case "so" => SoReceivedSnsMessage(ref, deleted)
-      }
+      typeAndRef match
+        case Array(entityType, refString) =>
+          val ref = UUID.fromString(refString)
+          entityType match {
+            case "io" => IoReceivedSnsMessage(ref)
+            case "co" => CoReceivedSnsMessage(ref)
+            case "so" => SoReceivedSnsMessage(ref)
+          }
+        case Array(ref) => DeletionReceivedSnsMessage(UUID.fromString(ref))
     }
 
   case class IdWithSourceAndDestPaths(id: UUID, sourceNioFilePath: Option[file.Path], destinationPath: String)

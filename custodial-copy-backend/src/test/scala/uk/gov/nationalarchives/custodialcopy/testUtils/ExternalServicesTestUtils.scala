@@ -27,7 +27,14 @@ import uk.gov.nationalarchives.utils.TestUtils.*
 import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.{FileObject, MetadataObject}
 import uk.gov.nationalarchives.custodialcopy.{Checksum, CustodialCopyObject, Message, OcflService, Processor}
 import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
-import uk.gov.nationalarchives.custodialcopy.Message.{CoReceivedSnsMessage, IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage, SoReceivedSnsMessage}
+import uk.gov.nationalarchives.custodialcopy.Message.{
+  CoReceivedSnsMessage,
+  DeletionReceivedSnsMessage,
+  IoReceivedSnsMessage,
+  ReceivedSnsMessage,
+  SendSnsMessage,
+  SoReceivedSnsMessage
+}
 import uk.gov.nationalarchives.custodialcopy.OcflService.MissingAndChangedObjects
 import uk.gov.nationalarchives.*
 import uk.gov.nationalarchives.custodialcopy.Processor.Result
@@ -183,7 +190,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       repo: MutableOcflRepository,
       existingMetadata: Elem,
       destinationPath: String
-  ) = {
+  ): Unit = {
     val xmlAsString = existingMetadata.toString()
     addFileToRepo(id, repo, xmlAsString, metadataFile(id, entityType), destinationPath)
   }
@@ -194,7 +201,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       bodyAsString: String,
       sourceFilePath: String,
       destinationPath: String
-  ) = {
+  ): Unit = {
     val path = Files.createTempDirectory(id.toString)
     Files.createDirectories(Paths.get(path.toString, id.toString))
     val fullSourceFilePath = Paths.get(path.toString, sourceFilePath)
@@ -300,11 +307,12 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     private val sqsMessages: List[ReceivedSnsMessage] =
       typesOfSqsMsgAndDeletionStatus.zipWithIndex.flatMap { case ((entityType, hasBeenDeleted), index) =>
         entityType match { // create duplicates in order to test deduplication
-          case InformationObject => (1 to 2).map(_ => IoReceivedSnsMessage(ioId, hasBeenDeleted))
+          case InformationObject => (1 to 2).map(_ => if hasBeenDeleted then DeletionReceivedSnsMessage(ioId) else IoReceivedSnsMessage(ioId))
           case ContentObject =>
             val coId = coIds(index)
-            (1 to 2).map(_ => CoReceivedSnsMessage(coId, hasBeenDeleted))
-          case StructuralObject => (1 to 2).map(_ => SoReceivedSnsMessage(UUID.randomUUID, hasBeenDeleted))
+            (1 to 2).map(_ => if hasBeenDeleted then DeletionReceivedSnsMessage(coId) else CoReceivedSnsMessage(coId))
+          case StructuralObject =>
+            (1 to 2).map(_ => if hasBeenDeleted then DeletionReceivedSnsMessage(UUID.randomUUID) else SoReceivedSnsMessage(UUID.randomUUID))
         }
       }
     val sqsClient: DASQSClient[IO] = mockSqs(sqsMessages, ioId.toString)
@@ -432,10 +440,12 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val ioId: UUID = UUID.randomUUID()
     val coId: UUID = UUID.randomUUID()
     val soId: UUID = UUID.randomUUID()
+    val deletedId: UUID = UUID.randomUUID()
 
-    lazy val coMessage: CoReceivedSnsMessage = CoReceivedSnsMessage(coId, false)
-    lazy val ioMessage: IoReceivedSnsMessage = IoReceivedSnsMessage(ioId, false)
-    lazy val soMessage: SoReceivedSnsMessage = SoReceivedSnsMessage(soId, false)
+    lazy val coMessage: CoReceivedSnsMessage = CoReceivedSnsMessage(coId)
+    lazy val ioMessage: IoReceivedSnsMessage = IoReceivedSnsMessage(ioId)
+    lazy val soMessage: SoReceivedSnsMessage = SoReceivedSnsMessage(soId)
+    lazy val deletedMessage: DeletionReceivedSnsMessage = DeletionReceivedSnsMessage(deletedId)
     val sqsClient: DASQSClient[IO] = mock[DASQSClient[IO]]
 
     val snsClient: DASNSClient[IO] = mock[DASNSClient[IO]]
@@ -564,7 +574,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
             id,
             entityType,
             Some("Preservation_1"),
-            s"${entityType.entityTypeShort}_Metadata_${missingOrChanged}.xml",
+            s"${entityType.entityTypeShort}_Metadata_$missingOrChanged.xml",
             List(Checksum("sha256", "checksum")),
             consolidatedMetadata,
             "destinationPath",
@@ -748,7 +758,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       capturedLookupDestinationPaths should equal(drosToLookup)
 
       if numOfTimesToDeleteObjects > 0 then
-        ioToDeleteObjectsFromCaptor.getValue should equal(ioId)
+        ioToDeleteObjectsFromCaptor.getValue should equal(deletedId)
         pathsToDeleteCaptor.getValue should equal(destinationPathsToDelete)
 
       if (numOfTimesSnsMsgShouldBeSent > 0) {
