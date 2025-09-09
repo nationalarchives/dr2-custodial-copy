@@ -137,25 +137,26 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     ("checksums doesn't exist in both tables", None, None)
   )
 
-  "findAllMissingCOs" should s"should return a message for each CO if it has the same checksum in CC" in {
+  "findAllMissingCOs" should s"should return no messages if each CO in PS has a corresponding CO with the same checksum in CC" in {
     createPreservicaCOsTable()
     createOcflCOsTable()
     (createCoRow(coRef, ioRef, Some("checksum1")) >> createPSCoRow(coRef, ioRef, Some("checksum1"))).unsafeRunSync()
 
-    val coMessage = Database[IO].findAllMissingCOs().unsafeRunSync()
+    val result = Database[IO].findAllMissingCOs().unsafeRunSync()
 
-    coMessage should be(Nil)
+    result.psCOsCount should equal(1)
+    result.psCOsMissingFromCc should be(Nil)
   }
 
-  "findAllMissingCOs" should s"should return a message for each CO if it has the same checksum in PS" in {
+  "findAllMissingCOs" should s"should return no messages if each CO in CC has a corresponding CO with the same checksum in PS" in {
     createPreservicaCOsTable()
     createOcflCOsTable()
     (createPSCoRow(coRef, ioRef, Some("checksum1")) >> createCoRow(coRef, ioRef, Some("checksum1"))).unsafeRunSync()
 
-    val coRow = CoRow(coRef, Option(ioRef), Some("checksum1"))
-    val coMessage = Database[IO].findAllMissingCOs().unsafeRunSync()
+    val result = Database[IO].findAllMissingCOs().unsafeRunSync()
 
-    coMessage should be(Nil)
+    result.ccCOsCount should equal(1)
+    result.ccCOsMissingFromPs should be(Nil)
   }
 
   forAll(checksumMismatchPossibilities) { (mismatch, ocflChecksum, preservicaChecksum) =>
@@ -164,12 +165,17 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
       createOcflCOsTable()
       (createPSCoRow(coRef, ioRef, preservicaChecksum) >> createCoRow(coRefTwo, ioRef, ocflChecksum)).unsafeRunSync()
 
-      val coMessage = Database[IO].findAllMissingCOs().unsafeRunSync()
+      val result = Database[IO].findAllMissingCOs().unsafeRunSync()
 
-      coMessage should be(
+      result.ccCOsMissingFromPs should be(
         List(
-          s":alert-noflash-slow: CO $coRef is in Preservica, but its checksum could not be found in CC",
           s":alert-noflash-slow: CO $coRefTwo is in CC, but its checksum could not be found in Preservica"
+        )
+      )
+
+      result.psCOsMissingFromCc should be(
+        List(
+          s":alert-noflash-slow: CO $coRef is in Preservica, but its checksum could not be found in CC"
         )
       )
     }

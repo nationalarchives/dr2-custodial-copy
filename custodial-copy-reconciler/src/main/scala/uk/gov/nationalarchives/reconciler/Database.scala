@@ -21,7 +21,7 @@ import java.util.UUID
 trait Database[F[_]]:
   def writeToPreservicaCOsTable(cosInPS: Chunk[CoRow]): F[Unit]
   def writeToOcflCOsTable(expectedCosInPS: Chunk[CoRow]): F[Unit]
-  def findAllMissingCOs(): F[List[String]]
+  def findAllMissingCOs(): F[Result]
 
 object Database:
   enum TableName:
@@ -54,11 +54,13 @@ object Database:
       writeTransaction(PreservicaCOs, Update[CoRow](insertSql).updateMany(cosInPS))
     }
 
-    override def findAllMissingCOs(): F[List[String]] =
+    override def findAllMissingCOs(): F[Result] =
       for {
-        psCOsMissingFromOcfl <- findPsCOsMissingFromOcfl()
-        ocflCOsMissingFromPs <- findOcflCOsMissingFromPs()
-      } yield (psCOsMissingFromOcfl ++ ocflCOsMissingFromPs).distinct
+        psCOsCount <- preservicaCOsCount
+        ccCOsCount <- ccCOsCount
+        psCOsMissingFromCc <- findPsCOsMissingFromOcfl()
+        ccCOsMissingFromPs <- findOcflCOsMissingFromPs()
+      } yield Result(psCOsCount, psCOsMissingFromCc.distinct, ccCOsCount, ccCOsMissingFromPs.distinct)
 
     private def findPsCOsMissingFromOcfl(): F[List[String]] = {
       val selectSql = sql"select p.* from PreservicaCOs p LEFT JOIN OcflCOs o on p.sha256checksum = o.sha256Checksum WHERE o.sha256Checksum is null;"
@@ -86,6 +88,16 @@ object Database:
       }
     }
 
+    private def preservicaCOsCount: F[Int] = {
+      val selectSql = sql"select count(*) from PreservicaCOs;".query[Int].unique
+      selectSql.transact(xa)
+    }
+
+    private def ccCOsCount: F[Int] = {
+      val selectSql = sql"select count(*) from OcflCOs;".query[Int].unique
+      selectSql.transact(xa)
+    }
+
     private def writeTransaction(tableName: TableName, connection: ConnectionIO[Int]) = for {
       logger <- Slf4jLogger.create[F]
       updateCount <- connection.transact(xa)
@@ -97,4 +109,11 @@ case class CoRow(
     id: UUID,
     parent: Option[UUID],
     sha256Checksum: Option[String]
+)
+
+case class Result(
+    psCOsCount: Int,
+    psCOsMissingFromCc: List[String],
+    ccCOsCount: Int,
+    ccCOsMissingFromPs: List[String]
 )
