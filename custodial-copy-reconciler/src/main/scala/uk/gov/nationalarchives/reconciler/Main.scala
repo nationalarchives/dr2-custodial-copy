@@ -50,10 +50,10 @@ object Main extends IOApp {
     logger <- Slf4jLogger.create[IO]
     _ <- logger.info(
       Map(
-        "ocflCOsCount" -> result.ocflCOsCount.toString,
+        "ccCOsCount" -> result.ccCOsCount.toString,
         "psCOsCount" -> result.psCOsCount.toString,
-        "ocflCOsMissingFromPs" -> result.ocflCOsMissingFromPs.length.toString,
-        "psCOsMissingFromOcfl" -> result.psCOsMissingFromOcfl.length.toString,
+        "ccCOsMissingFromPs" -> result.ccCOsMissingFromPs.length.toString,
+        "psCOsMissingFromCc" -> result.psCOsMissingFromCc.length.toString,
         "completionTimestamp" -> Instant.now.getEpochSecond.toString
       )
     )("CC reconcile complete")
@@ -119,7 +119,7 @@ object Main extends IOApp {
       .drain
 
     IO.both(ocfl, ps) >> database.findAllMissingCOs().flatMap { result =>
-      val missingCOs = result.psCOsMissingFromOcfl ++ result.ocflCOsMissingFromPs
+      val missingCOs = result.psCOsMissingFromCc ++ result.ccCOsMissingFromPs
       logCompletion(result) >>
         IO.whenA(missingCOs.nonEmpty) {
           if missingCOs.size > 10 then

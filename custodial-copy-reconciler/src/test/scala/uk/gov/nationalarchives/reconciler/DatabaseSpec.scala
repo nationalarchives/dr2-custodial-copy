@@ -145,7 +145,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     val result = Database[IO].findAllMissingCOs().unsafeRunSync()
 
     result.psCOsCount should equal(1)
-    result.psCOsMissingFromOcfl should be(Nil)
+    result.psCOsMissingFromCc should be(Nil)
   }
 
   "findAllMissingCOs" should s"should return no messages if each CO in CC has a corresponding CO with the same checksum in PS" in {
@@ -155,8 +155,8 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
 
     val result = Database[IO].findAllMissingCOs().unsafeRunSync()
 
-    result.ocflCOsCount should equal(1)
-    result.ocflCOsMissingFromPs should be(Nil)
+    result.ccCOsCount should equal(1)
+    result.ccCOsMissingFromPs should be(Nil)
   }
 
   forAll(checksumMismatchPossibilities) { (mismatch, ocflChecksum, preservicaChecksum) =>
@@ -167,13 +167,13 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
 
       val result = Database[IO].findAllMissingCOs().unsafeRunSync()
 
-      result.ocflCOsMissingFromPs should be(
+      result.ccCOsMissingFromPs should be(
         List(
           s":alert-noflash-slow: CO $coRefTwo is in CC, but its checksum could not be found in Preservica"
         )
       )
 
-      result.psCOsMissingFromOcfl should be(
+      result.psCOsMissingFromCc should be(
         List(
           s":alert-noflash-slow: CO $coRef is in Preservica, but its checksum could not be found in CC"
         )

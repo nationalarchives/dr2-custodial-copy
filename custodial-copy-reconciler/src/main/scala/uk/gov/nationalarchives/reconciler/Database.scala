@@ -57,10 +57,10 @@ object Database:
     override def findAllMissingCOs(): F[Result] =
       for {
         psCOsCount <- preservicaCOsCount
-        ocflCOsCount <- ocflCOsCount
-        psCOsMissingFromOcfl <- findPsCOsMissingFromOcfl()
-        ocflCOsMissingFromPs <- findOcflCOsMissingFromPs()
-      } yield Result(psCOsCount, psCOsMissingFromOcfl.distinct, ocflCOsCount, ocflCOsMissingFromPs.distinct)
+        ccCOsCount <- ccCOsCount
+        psCOsMissingFromCc <- findPsCOsMissingFromOcfl()
+        ccCOsMissingFromPs <- findOcflCOsMissingFromPs()
+      } yield Result(psCOsCount, psCOsMissingFromCc.distinct, ccCOsCount, ccCOsMissingFromPs.distinct)
 
     private def findPsCOsMissingFromOcfl(): F[List[String]] = {
       val selectSql = sql"select p.* from PreservicaCOs p LEFT JOIN OcflCOs o on p.sha256checksum = o.sha256Checksum WHERE o.sha256Checksum is null;"
@@ -93,7 +93,7 @@ object Database:
       selectSql.transact(xa)
     }
 
-    private def ocflCOsCount: F[Int] = {
+    private def ccCOsCount: F[Int] = {
       val selectSql = sql"select count(*) from OcflCOs;".query[Int].unique
       selectSql.transact(xa)
     }
@@ -113,7 +113,7 @@ case class CoRow(
 
 case class Result(
     psCOsCount: Int,
-    psCOsMissingFromOcfl: List[String],
-    ocflCOsCount: Int,
-    ocflCOsMissingFromPs: List[String]
+    psCOsMissingFromCc: List[String],
+    ccCOsCount: Int,
+    ccCOsMissingFromPs: List[String]
 )
