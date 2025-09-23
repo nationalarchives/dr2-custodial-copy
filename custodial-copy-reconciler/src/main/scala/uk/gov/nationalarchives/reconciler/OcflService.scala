@@ -48,7 +48,7 @@ object OcflService {
       .buildMutable()
 
     def isNotMetadataFile(storageRelativePath: String) =
-      (storageRelativePath.contains("/Preservation_") || storageRelativePath.contains("/Access_")) && !storageRelativePath.contains("CO_Metadata.xml")
+      storageRelativePath.contains("/Preservation_") && !storageRelativePath.contains("CO_Metadata.xml")
 
     def filesForId(id: String) = {
       val ioRef = UUID.fromString(id)

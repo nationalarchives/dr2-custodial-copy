@@ -159,6 +159,20 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     result.ccCOsMissingFromPs should be(Nil)
   }
 
+  "deleteFromTables" should "delete all rows from both tables" in {
+    createPreservicaCOsTable()
+    createOcflCOsTable()
+    (createPSCoRow(coRef, ioRef, Some("checksum1")) >> createCoRow(coRef, ioRef, Some("checksum1"))).unsafeRunSync()
+
+    countPreservicaCORows() should equal(1)
+    countOcflCORows() should equal(1)
+
+    Database[IO].deleteFromTables().unsafeRunSync()
+
+    countPreservicaCORows() should equal(0)
+    countOcflCORows() should equal(0)
+  }
+
   forAll(checksumMismatchPossibilities) { (mismatch, ocflChecksum, preservicaChecksum) =>
     "findAllMissingCOs" should s"should return a message for each CO if $mismatch" in {
       createPreservicaCOsTable()

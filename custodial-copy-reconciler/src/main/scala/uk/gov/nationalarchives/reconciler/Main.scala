@@ -118,7 +118,7 @@ object Main extends IOApp {
       .compile
       .drain
 
-    IO.both(ocfl, ps) >> database.findAllMissingCOs().flatMap { result =>
+    database.deleteFromTables() >> IO.both(ocfl, ps) >> database.findAllMissingCOs().flatMap { result =>
       val missingCOs = result.psCOsMissingFromCc ++ result.ccCOsMissingFromPs
       logCompletion(result) >>
         IO.whenA(missingCOs.nonEmpty) {

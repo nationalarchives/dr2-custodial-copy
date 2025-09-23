@@ -22,10 +22,10 @@ import java.util.UUID
 class MainSpec extends AnyFlatSpec with BeforeAndAfterEach {
 
   val databaseName = "test-database"
+  val databaseUtils = new DatabaseUtils(databaseName)
 
   override def beforeEach(): Unit = {
     Files.deleteIfExists(Path.of(databaseName))
-    val databaseUtils = new DatabaseUtils(databaseName)
     databaseUtils.createPreservicaCOsTable()
     databaseUtils.createOcflCOsTable()
   }
@@ -121,5 +121,22 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach {
     val eventBridgeEvents = runTestReconciler(entities, List(bitStreamInfo))
 
     eventBridgeEvents.size should equal(0)
+  }
+
+  "runReconciler" should "empty both database tables before starting" in {
+    val repoDir = Files.createTempDirectory("repo").toString
+    val workDir = Files.createTempDirectory("work").toString
+
+    databaseUtils.createPreservicaCORow()
+    databaseUtils.createOcflCORow()
+
+    databaseUtils.countOcflCORows() should equal(1)
+    databaseUtils.countPreservicaCORows() should equal(1)
+
+    given Configuration = configuration(repoDir, workDir)
+    runTestReconciler(Nil, Nil)
+
+    databaseUtils.countOcflCORows() should equal(0)
+    databaseUtils.countPreservicaCORows() should equal(0)
   }
 }

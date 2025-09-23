@@ -63,6 +63,16 @@ object TestUtils:
       transaction.transact(xa).unsafeRunSync()
     }
 
+    def createPreservicaCORow(): Unit = sql"INSERT INTO PreservicaCOs SELECT 1,1,1".update.run.transact(xa).unsafeRunSync()
+
+    def createOcflCORow(): Unit = sql"INSERT INTO OcflCOs SELECT 1,1,1".update.run.transact(xa).unsafeRunSync()
+
+    def countPreservicaCORows(): Int =
+      sql"SELECT count(*) FROM PreservicaCOs;".query[Int].unique.transact(xa).unsafeRunSync()
+
+    def countOcflCORows(): Int =
+      sql"SELECT count(*) FROM OcflCOs;".query[Int].unique.transact(xa).unsafeRunSync()
+
     def addColumn(columnName: String): Unit =
       (fr"ALTER TABLE files ADD COLUMN" ++ Fragment.const(columnName)).update.run.transact(xa).unsafeRunSync()
 
