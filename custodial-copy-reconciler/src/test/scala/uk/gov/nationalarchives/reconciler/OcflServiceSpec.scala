@@ -48,7 +48,7 @@ class OcflServiceSpec extends AnyFlatSpec {
     }
   }
 
-  "getAllObjectFiles" should "not return access copies" in {
+  "getAllObjectFiles" should "return access copies" in {
     val (repoDir, workDir) = (Files.createTempDirectory("repo").toString, Files.createTempDirectory("work").toString)
     val repository = createOcflRepository(repoDir, workDir)
     val preservationId = UUID.randomUUID
@@ -70,11 +70,16 @@ class OcflServiceSpec extends AnyFlatSpec {
     )
     val config = Config("", "test-database", 1, repoDir, workDir)
     val allFiles = OcflService[IO](config).getAllObjectFiles.compile.toList.unsafeRunSync()
-    allFiles.length should equal(1)
+    allFiles.length should equal(2)
 
-    val file = allFiles.head
-    file.id should equal(preservationId)
-    file.parent.get should equal(id)
-    file.sha256Checksum.get should equal(DigestUtils.sha256Hex(preservationId.toString))
+    val preservationFile = allFiles.head
+    preservationFile.id should equal(preservationId)
+    preservationFile.parent.get should equal(id)
+    preservationFile.sha256Checksum.get should equal(DigestUtils.sha256Hex(preservationId.toString))
+
+    val accessFile = allFiles.last
+    accessFile.id should equal(accessId)
+    accessFile.parent.get should equal(id)
+    accessFile.sha256Checksum.get should equal(DigestUtils.sha256Hex(accessId.toString))
   }
 }

@@ -48,14 +48,16 @@ object OcflService {
       .buildMutable()
 
     def isNotMetadataFile(storageRelativePath: String) =
-      storageRelativePath.contains("/Preservation_") && !storageRelativePath.contains("CO_Metadata.xml")
+      (storageRelativePath.contains("/Preservation_") || storageRelativePath.contains("/Access_")) && !storageRelativePath.contains("CO_Metadata.xml")
 
     def filesForId(id: String) = {
       val ioRef = UUID.fromString(id)
       val chunk = Chunk.from(repo.getObject(ioRef.toHeadVersion).getFiles.asScala).collect {
         case coFile if isNotMetadataFile(coFile.getStorageRelativePath) =>
           val pathAsList = coFile.getStorageRelativePath.split("/")
-          val pathStartingFromRepType = pathAsList.dropWhile(pathPart => !pathPart.startsWith("Preservation_"))
+          val pathStartingFromRepType =
+            if coFile.getStorageRelativePath.contains("/Preservation_") then pathAsList.dropWhile(pathPart => !pathPart.startsWith("Preservation_"))
+            else pathAsList.dropWhile(pathPart => !pathPart.startsWith("Access_"))
           val coRef = UUID.fromString(pathStartingFromRepType(1))
           val fixities = coFile.getFixity.asScala.toMap.map { case (digestAlgo, value) => (digestAlgo.getOcflName, value) }
           val potentialSha256 = fixities.get("sha256")
