@@ -72,14 +72,8 @@ class OcflServiceSpec extends AnyFlatSpec {
     val allFiles = OcflService[IO](config).getAllObjectFiles.compile.toList.unsafeRunSync()
     allFiles.length should equal(2)
 
-    val preservationFile = allFiles.head
-    preservationFile.id should equal(preservationId)
-    preservationFile.parent.get should equal(id)
-    preservationFile.sha256Checksum.get should equal(DigestUtils.sha256Hex(preservationId.toString))
+    allFiles.contains(CoRow(preservationId, Option(id), Option(DigestUtils.sha256Hex(preservationId.toString)))) should equal(true)
+    allFiles.contains(CoRow(accessId, Option(id), Option(DigestUtils.sha256Hex(accessId.toString)))) should equal(true)
 
-    val accessFile = allFiles.last
-    accessFile.id should equal(accessId)
-    accessFile.parent.get should equal(id)
-    accessFile.sha256Checksum.get should equal(DigestUtils.sha256Hex(accessId.toString))
   }
 }
