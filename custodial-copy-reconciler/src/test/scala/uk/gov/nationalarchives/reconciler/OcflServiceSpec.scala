@@ -21,7 +21,7 @@ class OcflServiceSpec extends AnyFlatSpec {
 
     case class IdPath(preservationId: UUID, path: Path)
 
-    val idsPaths = List.fill(100)(UUID.randomUUID).map { preservationId =>
+    val idPaths = List.fill(100)(UUID.randomUUID).map { preservationId =>
       val preservationTestFile = Files.createTempFile(preservationId.toString, "file")
       val path = Files.write(preservationTestFile, preservationId.toString.getBytes)
       IdPath(preservationId, path)
@@ -29,26 +29,25 @@ class OcflServiceSpec extends AnyFlatSpec {
     repository.updateObject(
       ObjectVersionId.head(id.toString),
       new VersionInfo(),
-      updater => {
-        idsPaths.map { idPath =>
+      updater =>
+        idPaths.map { idPath =>
           updater
             .addPath(idPath.path, s"$id/Preservation_1/${idPath.preservationId}")
         }
-      }
     )
 
     val config = Config("", "test-database", 1, repoDir, workDir)
     val allFiles = OcflService[IO](config).getAllObjectFiles.compile.toList.unsafeRunSync()
     allFiles.length should equal(100)
 
-    idsPaths.map(_.preservationId).map { preservationId =>
+    idPaths.map(_.preservationId).map { preservationId =>
       val file = allFiles.find(_.id == preservationId).get
       file.parent.get should equal(id)
       file.sha256Checksum.get should equal(DigestUtils.sha256Hex(preservationId.toString))
     }
   }
 
-  "getAllObjectFiles" should "return access copies" in {
+  "getAllObjectFiles" should "return 'Preservation' and 'Access' copies" in {
     val (repoDir, workDir) = (Files.createTempDirectory("repo").toString, Files.createTempDirectory("work").toString)
     val repository = createOcflRepository(repoDir, workDir)
     val preservationId = UUID.randomUUID
@@ -62,11 +61,10 @@ class OcflServiceSpec extends AnyFlatSpec {
     repository.updateObject(
       ObjectVersionId.head(id.toString),
       new VersionInfo(),
-      updater => {
+      updater =>
         updater
           .addPath(preservationTestFile, s"$id/Preservation_1/$preservationId")
           .addPath(accessTestFile, s"$id/Access_1/$accessId")
-      }
     )
     val config = Config("", "test-database", 1, repoDir, workDir)
     val allFiles = OcflService[IO](config).getAllObjectFiles.compile.toList.unsafeRunSync()
