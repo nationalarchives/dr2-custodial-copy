@@ -58,8 +58,8 @@ object OcflService {
           val pathStartingFromRepType = pathAsList.dropWhile(pathPart => !pathPart.startsWith("Preservation_") && !pathPart.startsWith("Access_"))
           val coRef = UUID.fromString(pathStartingFromRepType(1))
           val fixities = coFile.getFixity.asScala.toMap.map { case (digestAlgo, value) => (digestAlgo.getOcflName, value) }
-          val potentialSha256 = fixities.get("sha256")
-          CoRow(coRef, Option(ioRef), potentialSha256)
+          val sha256 = fixities("sha256")
+          CoRow(coRef, Option(ioRef), sha256)
       }
       Async[F].pure(chunk)
     }

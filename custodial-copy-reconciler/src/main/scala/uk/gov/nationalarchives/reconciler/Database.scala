@@ -116,7 +116,7 @@ object Database:
 case class CoRow(
     id: UUID,
     parent: Option[UUID],
-    sha256Checksum: Option[String]
+    sha256Checksum: String
 )
 
 case class Result(
