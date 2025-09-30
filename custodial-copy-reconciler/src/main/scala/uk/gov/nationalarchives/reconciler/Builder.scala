@@ -4,7 +4,6 @@ import cats.effect.Async
 import cats.implicits.*
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.dp.client.EntityClient
-import uk.gov.nationalarchives.dp.client.EntityClient.GenerationType.Original
 
 import java.util.UUID
 
@@ -18,10 +17,10 @@ object Builder:
     (entityIds: Seq[UUID]) =>
       entityIds.toList.flatTraverse { entityId =>
         client.getBitstreamInfo(entityId).map { bitstreamInfoForCo =>
-          bitstreamInfoForCo.collect { // We're only concerned with original COs
-            case bitstreamInfo if bitstreamInfo.generationType == Original && bitstreamInfo.generationVersion == 1 =>
-              val potentialSha256 = bitstreamInfo.fixities.collectFirst { case fixity if fixity.algorithm.toLowerCase == "sha256" => fixity.value }
-              CoRow(entityId, bitstreamInfo.parentRef, potentialSha256)
+          bitstreamInfoForCo.map { bitstreamInfo =>
+            val potentialSha256 = bitstreamInfo.fixities.collectFirst { case fixity if fixity.algorithm.toLowerCase == "sha256" => fixity.value }
+            CoRow(entityId, bitstreamInfo.parentRef, potentialSha256)
           }.toList
+
         }
       }

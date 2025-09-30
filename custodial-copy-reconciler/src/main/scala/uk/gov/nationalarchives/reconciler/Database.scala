@@ -22,6 +22,7 @@ trait Database[F[_]]:
   def writeToPreservicaCOsTable(cosInPS: Chunk[CoRow]): F[Unit]
   def writeToOcflCOsTable(expectedCosInPS: Chunk[CoRow]): F[Unit]
   def findAllMissingCOs(): F[Result]
+  def deleteFromTables(): F[Unit]
 
 object Database:
   enum TableName:
@@ -103,6 +104,13 @@ object Database:
       updateCount <- connection.transact(xa)
       _ <- logger.info(s"$tableName: $updateCount rows updated.")
     } yield ()
+
+    override def deleteFromTables(): F[Unit] =
+      val deleteUpdates = for
+        _ <- sql"delete from OcflCOs;".update.run
+        _ <- sql"delete from PreservicaCOs;".update.run
+      yield ()
+      deleteUpdates.transact(xa)
   }
 
 case class CoRow(

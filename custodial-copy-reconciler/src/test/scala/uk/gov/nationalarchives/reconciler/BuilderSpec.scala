@@ -18,7 +18,7 @@ import scala.jdk.CollectionConverters.*
 
 class BuilderSpec extends AnyFlatSpec:
 
-  "Builder run" should ", given a ContentObject, return only the Preservica CoRows for COs that have the generation type of 'Original' and generation version of '1'" in {
+  "Builder run" should ", given a ContentObject, return all Preservica CoRows regardless of generation type and version" in {
     val config = Config("", "", 5, Files.createTempDirectory("work").toString, Files.createTempDirectory("repo").toString)
     val potentialParentRef = Some(UUID.randomUUID)
     val co1Ref = UUID.randomUUID
@@ -32,12 +32,15 @@ class BuilderSpec extends AnyFlatSpec:
     val preservicaClient = testEntityClient(Map(co1Ref -> bitStreamInfoList1, co2Ref -> bitStreamInfoList2))
     val ocflService = testOcflService(Nil)
 
-    val entityIds: Seq[UUID] = Seq(co1Ref)
+    val entityIds: Seq[UUID] = Seq(co1Ref, co2Ref)
 
     val preservicaCoRows = Builder[IO](preservicaClient).run(entityIds).unsafeRunSync()
-    preservicaCoRows should equal(
-      List(CoRow(co1Ref, potentialParentRef, Some("co1FileFixity")))
-    )
+
+    preservicaCoRows.length should equal(3)
+
+    preservicaCoRows.contains(CoRow(co1Ref, potentialParentRef, Some("co1FileFixity"))) should equal(true)
+    preservicaCoRows.contains(CoRow(co1Ref, potentialParentRef, Some("co1FileFixity2"))) should equal(true)
+    preservicaCoRows.contains(CoRow(co2Ref, potentialParentRef, Some("co2FileFixity"))) should equal(true)
   }
 
   private def createObjectVersionFile(path: String, fixityMap: Map[DigestAlgorithm, String]) =

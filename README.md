@@ -363,28 +363,15 @@ two storage mediums to become out of sync. We are only concerned with original n
 
 ### The process
 
-1. Make a call to Preservica to stream the refs of every entity we have stored
-2. It will filter out anything that is not an IO ref nor CO ref
+1. Stream every entity from Preservica via paginated calls to the `updated-since` endpoint.
+2. It will filter out anything that is not a CO ref.
 3. Splits the remaining object refs into Chunks:
 4. Run this process for each Chunk:
-   1. if the object ref if an Information Object one, it will
-      1. get all the object files from OCFL
-      2. if the object is a CO content file
-         1. get the storage path and extract the CO ref
-         2. get the sha256 fixity of the CO
-         3. add each of these values (including the IO ref) to an `OcflCoRow` object
-   2. if the object ref is a Content Object one, it will:
-      1. get the bitstream info from Preservica
-      2. filter it out if it's a non-Original and non-Preservation CO (The opposite of "Preservation" is "Access")
-      3. retrieve the IO ref and sha256 checksum
-      4. add each of these values to an `PreservicaCoRow` object
-   3. Return these `CoRow`s in a Chunk
-5. For each `CoRow` object
-   1. gather all `PreservicaCoRow`s into a Chunk
-   2. gather all `OcflCoRow`s into a Chunk
-   3. write the Chunk of `PreservicaCoRow`s to a table
-   4. write the Chunk of `OcflCoRow`s to another table
-6. Now that they have been saved to the tables, the stream can be drained (in order to discard anything returned)
+   1. get the bitstream info from Preservica
+   2. retrieve the IO ref and sha256 checksum
+   3. Return these `CoRow`s
+5. There is a parallel process which streams all OCFL objects from the repository and writes them in chunks to the database. 
+6. Once both processes have completed and all rows have been written to the database, the stream can be drained (in order to discard anything returned)
 7. Find the missing COs in each table
    1. first parse the `PreservicaCOs` table and check if the checksum(s) appear in the `OcflCos` table
       1. if not, for each missing CO
