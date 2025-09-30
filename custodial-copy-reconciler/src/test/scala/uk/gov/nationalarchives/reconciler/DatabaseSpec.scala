@@ -9,11 +9,8 @@ import fs2.Chunk
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
-import org.scalatest.prop.TableDrivenPropertyChecks.forAll
-import org.scalatest.prop.TableFor3
-import org.scalatest.prop.Tables.Table
 import uk.gov.nationalarchives.reconciler.Main.Config
-import uk.gov.nationalarchives.reconciler.{Configuration, Database, CoRow}
+import uk.gov.nationalarchives.reconciler.{CoRow, Configuration, Database}
 import uk.gov.nationalarchives.utils.TestUtils.*
 
 import java.net.URI
@@ -28,7 +25,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     def createCoRow(
         id: UUID,
         parent: UUID = UUID.randomUUID(),
-        sha256Checksum: Option[String] = None
+        sha256Checksum: String
     ): IO[CoRow] =
       sql"""INSERT INTO OcflCOs (id, parent, sha256Checksum)
                  VALUES ($id, $parent, $sha256Checksum)""".update.run
@@ -38,7 +35,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     def createPSCoRow(
         id: UUID,
         parent: UUID = UUID.randomUUID(),
-        sha256Checksum: Option[String] = None
+        sha256Checksum: String
     ): IO[CoRow] =
       sql"""INSERT INTO PreservicaCOs (id, parent, sha256Checksum)
                VALUES ($id, $parent, $sha256Checksum)""".update.run
@@ -73,7 +70,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
 
     val initialResponse = getCoRows(coRef).unsafeRunSync()
     val CoRows = Chunk(
-      CoRow(coRef, Option(ioRef), Some("sha256Checksum1"))
+      CoRow(coRef, Option(ioRef), "sha256Checksum1")
     )
     Database[IO].writeToOcflCOsTable(CoRows).unsafeRunSync()
     val response = getCoRows(coRef).unsafeRunSync()
@@ -88,7 +85,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     val coRef = UUID.randomUUID()
 
     val initialResponse = getPreservicaCoRows(coRef).unsafeRunSync()
-    val preservicaCoRows = Chunk(CoRow(coRef, Option(ioRef), Some("sha256Checksum1")))
+    val preservicaCoRows = Chunk(CoRow(coRef, Option(ioRef), "sha256Checksum1"))
 
     Database[IO].writeToPreservicaCOsTable(preservicaCoRows).unsafeRunSync()
     val response = getPreservicaCoRows(coRef).unsafeRunSync()
@@ -129,18 +126,10 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     ex.getMessage should equal("[SQLITE_ERROR] SQL error or missing database (no such table: PreservicaCOs)")
   }
 
-  val checksumMismatchPossibilities: TableFor3[String, Option[String], Option[String]] = Table(
-    ("Mismatch", "ocflChecksum", "preservicaChecksum"),
-    ("checksums exist in both tables, but they're different", Some("checksum1"), Some("checksum2")),
-    ("checksums doesn't exist in OCFL but does in Preservica", None, Some("checksum1")),
-    ("checksums does exist in OCFL but doesn't in Preservica", Some("checksum1"), None),
-    ("checksums doesn't exist in both tables", None, None)
-  )
-
   "findAllMissingCOs" should s"should return no messages if each CO in PS has a corresponding CO with the same checksum in CC" in {
     createPreservicaCOsTable()
     createOcflCOsTable()
-    (createCoRow(coRef, ioRef, Some("checksum1")) >> createPSCoRow(coRef, ioRef, Some("checksum1"))).unsafeRunSync()
+    (createCoRow(coRef, ioRef, "checksum1") >> createPSCoRow(coRef, ioRef, "checksum1")).unsafeRunSync()
 
     val result = Database[IO].findAllMissingCOs().unsafeRunSync()
 
@@ -151,7 +140,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
   "findAllMissingCOs" should s"should return no messages if each CO in CC has a corresponding CO with the same checksum in PS" in {
     createPreservicaCOsTable()
     createOcflCOsTable()
-    (createPSCoRow(coRef, ioRef, Some("checksum1")) >> createCoRow(coRef, ioRef, Some("checksum1"))).unsafeRunSync()
+    (createPSCoRow(coRef, ioRef, "checksum1") >> createCoRow(coRef, ioRef, "checksum1")).unsafeRunSync()
 
     val result = Database[IO].findAllMissingCOs().unsafeRunSync()
 
@@ -162,7 +151,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
   "deleteFromTables" should "delete all rows from both tables" in {
     createPreservicaCOsTable()
     createOcflCOsTable()
-    (createPSCoRow(coRef, ioRef, Some("checksum1")) >> createCoRow(coRef, ioRef, Some("checksum1"))).unsafeRunSync()
+    (createPSCoRow(coRef, ioRef, "checksum1") >> createCoRow(coRef, ioRef, "checksum1")).unsafeRunSync()
 
     countPreservicaCORows() should equal(1)
     countOcflCORows() should equal(1)
@@ -173,24 +162,24 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     countOcflCORows() should equal(0)
   }
 
-  forAll(checksumMismatchPossibilities) { (mismatch, ocflChecksum, preservicaChecksum) =>
-    "findAllMissingCOs" should s"should return a message for each CO if $mismatch" in {
-      createPreservicaCOsTable()
-      createOcflCOsTable()
-      (createPSCoRow(coRef, ioRef, preservicaChecksum) >> createCoRow(coRefTwo, ioRef, ocflChecksum)).unsafeRunSync()
+  "findAllMissingCOs" should s"should return a message for each CO if the checksums don't match" in {
+    val preservicaChecksum = "checksum1"
+    val ocflChecksum = "checksum2"
+    createPreservicaCOsTable()
+    createOcflCOsTable()
+    (createPSCoRow(coRef, ioRef, preservicaChecksum) >> createCoRow(coRefTwo, ioRef, ocflChecksum)).unsafeRunSync()
 
-      val result = Database[IO].findAllMissingCOs().unsafeRunSync()
+    val result = Database[IO].findAllMissingCOs().unsafeRunSync()
 
-      result.ccCOsMissingFromPs should be(
-        List(
-          s":alert-noflash-slow: CO $coRefTwo is in CC, but its checksum could not be found in Preservica"
-        )
+    result.ccCOsMissingFromPs should be(
+      List(
+        s":alert-noflash-slow: CO $coRefTwo is in CC, but its checksum could not be found in Preservica"
       )
+    )
 
-      result.psCOsMissingFromCc should be(
-        List(
-          s":alert-noflash-slow: CO $coRef is in Preservica, but its checksum could not be found in CC"
-        )
+    result.psCOsMissingFromCc should be(
+      List(
+        s":alert-noflash-slow: CO $coRef is in Preservica, but its checksum could not be found in CC"
       )
-    }
+    )
   }

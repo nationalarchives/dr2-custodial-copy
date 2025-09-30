@@ -43,7 +43,7 @@ class OcflServiceSpec extends AnyFlatSpec {
     idPaths.map(_.preservationId).map { preservationId =>
       val file = allFiles.find(_.id == preservationId).get
       file.parent.get should equal(id)
-      file.sha256Checksum.get should equal(DigestUtils.sha256Hex(preservationId.toString))
+      file.sha256Checksum should equal(DigestUtils.sha256Hex(preservationId.toString))
     }
   }
 
@@ -70,8 +70,8 @@ class OcflServiceSpec extends AnyFlatSpec {
     val allFiles = OcflService[IO](config).getAllObjectFiles.compile.toList.unsafeRunSync()
     allFiles.length should equal(2)
 
-    allFiles.contains(CoRow(preservationId, Option(id), Option(DigestUtils.sha256Hex(preservationId.toString)))) should equal(true)
-    allFiles.contains(CoRow(accessId, Option(id), Option(DigestUtils.sha256Hex(accessId.toString)))) should equal(true)
+    allFiles.contains(CoRow(preservationId, Option(id), DigestUtils.sha256Hex(preservationId.toString))) should equal(true)
+    allFiles.contains(CoRow(accessId, Option(id), DigestUtils.sha256Hex(accessId.toString))) should equal(true)
 
   }
 }

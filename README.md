@@ -368,7 +368,7 @@ two storage mediums to become out of sync. We are only concerned with original n
 3. Splits the remaining object refs into Chunks:
 4. Run this process for each Chunk:
    1. get the bitstream info from Preservica
-   2. retrieve the IO ref and sha256 checksum
+   2. retrieve the IO ref and sha256 checksum. If there is no checksum (as is the case for files extracted from email attachments), then this CO is ignored.
    3. Return these `CoRow`s
 5. There is a parallel process which streams all OCFL objects from the repository and writes them in chunks to the database. 
 6. Once both processes have completed and all rows have been written to the database, the stream can be drained (in order to discard anything returned)

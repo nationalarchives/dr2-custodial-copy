@@ -38,9 +38,9 @@ class BuilderSpec extends AnyFlatSpec:
 
     preservicaCoRows.length should equal(3)
 
-    preservicaCoRows.contains(CoRow(co1Ref, potentialParentRef, Some("co1FileFixity"))) should equal(true)
-    preservicaCoRows.contains(CoRow(co1Ref, potentialParentRef, Some("co1FileFixity2"))) should equal(true)
-    preservicaCoRows.contains(CoRow(co2Ref, potentialParentRef, Some("co2FileFixity"))) should equal(true)
+    preservicaCoRows.contains(CoRow(co1Ref, potentialParentRef, "co1FileFixity")) should equal(true)
+    preservicaCoRows.contains(CoRow(co1Ref, potentialParentRef, "co1FileFixity2")) should equal(true)
+    preservicaCoRows.contains(CoRow(co2Ref, potentialParentRef, "co2FileFixity")) should equal(true)
   }
 
   private def createObjectVersionFile(path: String, fixityMap: Map[DigestAlgorithm, String]) =

@@ -17,10 +17,12 @@ object Builder:
     (entityIds: Seq[UUID]) =>
       entityIds.toList.flatTraverse { entityId =>
         client.getBitstreamInfo(entityId).map { bitstreamInfoForCo =>
-          bitstreamInfoForCo.map { bitstreamInfo =>
-            val potentialSha256 = bitstreamInfo.fixities.collectFirst { case fixity if fixity.algorithm.toLowerCase == "sha256" => fixity.value }
-            CoRow(entityId, bitstreamInfo.parentRef, potentialSha256)
-          }.toList
-
+          bitstreamInfoForCo
+            .map { bitstreamInfo =>
+              bitstreamInfo.fixities
+                .collectFirst { case fixity if fixity.algorithm.toLowerCase == "sha256" => CoRow(entityId, bitstreamInfo.parentRef, fixity.value) }
+            }
+            .toList
+            .flatten
         }
       }
