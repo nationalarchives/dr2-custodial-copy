@@ -20,10 +20,7 @@ object Builder:
           bitstreamInfoForCo
             .map { bitstreamInfo =>
               bitstreamInfo.fixities
-                .collectFirst { case fixity if fixity.algorithm.toLowerCase == "sha256" => fixity.value }
-                .map { sha256 =>
-                  CoRow(entityId, bitstreamInfo.parentRef, sha256)
-                }
+                .collectFirst { case fixity if fixity.algorithm.toLowerCase == "sha256" => CoRow(entityId, bitstreamInfo.parentRef, fixity.value) }
             }
             .toList
             .flatten
