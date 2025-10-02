@@ -30,7 +30,7 @@ def tagScannedImage(imageName: String): Unit = {
 def setupDirectories(serviceName: String) =
   Cmd(
     "RUN",
-    s"""apk update && apk upgrade && apk add openjdk21-jre && \\
+    s"""apk update && apk upgrade && apk update openssl && apk add openjdk21-jre && \\
                |    mkdir -p /poduser/work /poduser/repo /poduser/version /poduser/database /poduser/log-config && \\
                |    mkdir /poduser/logs && \\
                |    touch /poduser/logs/$serviceName.log && \\
