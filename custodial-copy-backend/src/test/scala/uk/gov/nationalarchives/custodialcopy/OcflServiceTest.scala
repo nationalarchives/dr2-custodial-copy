@@ -5,10 +5,11 @@ import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
 import io.ocfl.api.exception.{CorruptObjectException, NotFoundException}
 import io.ocfl.api.model.*
-import io.ocfl.api.{MutableOcflRepository, OcflObjectUpdater, OcflOption}
+import io.ocfl.api.{DigestAlgorithmRegistry, MutableOcflRepository, OcflObjectUpdater, OcflOption}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.*
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
+import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -23,11 +24,13 @@ import java.util.UUID
 import java.util.function.Consumer
 import scala.jdk.CollectionConverters.*
 
-class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenPropertyChecks {
+class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenPropertyChecks with EitherValues {
 
   private val url = "url"
   private val name = "name"
-  val checksums = List(Checksum("MD5", "md5checksum"), Checksum("SHA256", "checksum"))
+  val md5 = Checksum("MD5", "md5checksum")
+  val sha256 = Checksum("SHA256", "checksum")
+  val checksums = List(md5, sha256)
   private val destinationPath = "destinationPath"
   private val entity = mock[Entity]
   val semaphore: Semaphore[IO] = Semaphore[IO](1).unsafeRunSync()
@@ -35,11 +38,11 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
   def mockGetObjectResponse(
       ocflRepository: MutableOcflRepository,
       id: UUID,
-      ocflChecksum: List[Checksum],
+      sha256: Option[String],
       destinationPath: String
   ): Unit = {
     val fileDetails = new FileDetails()
-    fileDetails.setFixity(ocflChecksum.map(eachChecksum => DigestAlgorithm.fromOcflName(eachChecksum.algorithm) -> eachChecksum.fingerprint).toMap.asJava)
+    sha256.foreach(s => fileDetails.setFixity(java.util.Map.of(DigestAlgorithmRegistry.sha256, s)))
     fileDetails.setPath(destinationPath)
     val ocflObjectVersionFile = new OcflObjectVersionFile(fileDetails, testOcflFileRetriever)
     val versionDetails = new VersionDetails()
@@ -72,7 +75,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     "but doesn't contain the file" in {
       val id = UUID.randomUUID()
       val ocflRepository = mock[MutableOcflRepository]
-      mockGetObjectResponse(ocflRepository, id, checksums, destinationPath)
+      mockGetObjectResponse(ocflRepository, id, Option(sha256.fingerprint), destinationPath)
 
       val service = new OcflService(ocflRepository, semaphore)
       val fileObjectThatShouldBeMissing =
@@ -92,7 +95,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     "but the checksums match" in {
       val id = UUID.randomUUID()
       val ocflRepository = mock[MutableOcflRepository]
-      mockGetObjectResponse(ocflRepository, id, checksums, destinationPath)
+      mockGetObjectResponse(ocflRepository, id, Option(sha256.fingerprint), destinationPath)
 
       val service = new OcflService(ocflRepository, semaphore)
 
@@ -111,7 +114,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     "but the checksums don't match" in {
       val id = UUID.randomUUID()
       val ocflRepository = mock[MutableOcflRepository]
-      mockGetObjectResponse(ocflRepository, id, checksums, destinationPath)
+      mockGetObjectResponse(ocflRepository, id, Option(sha256.fingerprint), destinationPath)
 
       val service = new OcflService(ocflRepository, semaphore)
       val fileObjectThatShouldHaveChangedChecksum =
@@ -165,6 +168,50 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     objectIdCaptor.getValue should equal(id.toString)
   }
 
+  "getMissingAndChangedObjects" should "return an error if there is no sha256 checksum from the preservation system" in {
+    val id = UUID.randomUUID()
+    val ocflRepository = mock[MutableOcflRepository]
+    mockGetObjectResponse(ocflRepository, id, Option(sha256.fingerprint), destinationPath)
+
+    val service = new OcflService(ocflRepository, semaphore)
+
+    val error =
+      service
+        .getMissingAndChangedObjects(
+          List(FileObject(id, name, List(md5), url, destinationPath, UUID.randomUUID.toString))
+        )
+        .attempt
+        .unsafeRunSync()
+        .left
+        .value
+
+    error.getMessage should equal(
+      s"'getObject' returned an unexpected error 'java.lang.Exception: SHA256 checksum missing in PS' when called with object id $id"
+    )
+  }
+
+  "getMissingAndChangedObjects" should "return an error if there is no sha256 checksum from OCFL" in {
+    val id = UUID.randomUUID()
+    val ocflRepository = mock[MutableOcflRepository]
+    mockGetObjectResponse(ocflRepository, id, None, destinationPath)
+
+    val service = new OcflService(ocflRepository, semaphore)
+
+    val error =
+      service
+        .getMissingAndChangedObjects(
+          List(FileObject(id, name, checksums, url, destinationPath, UUID.randomUUID.toString))
+        )
+        .attempt
+        .unsafeRunSync()
+        .left
+        .value
+
+    error.getMessage should equal(
+      s"'getObject' returned an unexpected error 'java.lang.Exception: SHA256 checksum missing in OCFL' when called with object id $id"
+    )
+  }
+
   "createObjects" should "not create an object if the file path doesn't exist" in {
     val ocflRepository = mock[MutableOcflRepository]
     val service = new OcflService(ocflRepository, semaphore)
@@ -212,7 +259,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
   "getAllFilePathsOnAnObject" should "return a path if the repository contains the OCFL object" in {
     val id = UUID.randomUUID()
     val ocflRepository = mock[MutableOcflRepository]
-    mockGetObjectResponse(ocflRepository, id, checksums, destinationPath)
+    mockGetObjectResponse(ocflRepository, id, Option(sha256.fingerprint), destinationPath)
 
     val service = new OcflService(ocflRepository, semaphore)
 

@@ -5,7 +5,7 @@ import cats.effect.std.Semaphore
 import cats.syntax.all.*
 import io.ocfl.api.exception.{CorruptObjectException, NotFoundException}
 import io.ocfl.api.model.DigestAlgorithm
-import io.ocfl.api.{MutableOcflRepository, OcflConfig, OcflObjectUpdater, OcflOption}
+import io.ocfl.api.{DigestAlgorithmRegistry, MutableOcflRepository, OcflConfig, OcflObjectUpdater, OcflOption}
 import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.lock.ObjectLockBuilder
@@ -77,14 +77,15 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO
       missingAndChangedIO.flatMap { missingAndChanged =>
         val (missingObjects, changedObjects) = missingAndChanged
         IO.blocking(ocflRepository.getObject(objectId.toHeadVersion))
-          .map { ocflObject =>
+          .flatMap { ocflObject =>
             val potentialFile = Option(ocflObject.getFile(obj.destinationFilePath))
             potentialFile match {
               case Some(ocflFileObject) =>
-                val checksumUnchanged = isChecksumUnchanged(ocflFileObject.getFixity.asScala.toMap, obj.checksums)
-                if checksumUnchanged then missingAndChanged else (missingObjects, obj :: changedObjects)
+                isChecksumUnchanged(ocflFileObject.getFixity.asScala.toMap, obj.checksums).map { checksumUnchanged =>
+                  if checksumUnchanged then missingAndChanged else (missingObjects, obj :: changedObjects)
+                }
               case None =>
-                (obj :: missingObjects, changedObjects) // Information Object exists but file doesn't
+                IO(obj :: missingObjects, changedObjects) // Information Object exists but file doesn't
             }
           }
           .handleErrorWith {
@@ -115,10 +116,11 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO
     semaphore.acquire >> IO.blocking(ocflRepository.purgeObject(objectId.toString)).onError(logErrorAndRelease) >> semaphore.release
   }
 
-  private def isChecksumUnchanged(fixitiesMap: Map[DigestAlgorithm, String], checksums: List[Checksum]): Boolean = {
-    if (fixitiesMap.size != checksums.size) false
-    else checksums.forall(eachChecksum => fixitiesMap.get(DigestAlgorithm.fromOcflName(eachChecksum.algorithm.toLowerCase)).contains(eachChecksum.fingerprint))
-  }
+  private def isChecksumUnchanged(fixitiesMap: Map[DigestAlgorithm, String], checksums: List[Checksum]): IO[Boolean] =
+    for
+      psChecksum <- IO.fromOption(checksums.find(_.algorithm.toLowerCase == "sha256").map(_.fingerprint))(new Exception(s"SHA256 checksum missing in PS"))
+      ocflChecksum <- IO.fromOption(fixitiesMap.get(DigestAlgorithmRegistry.sha256))(new Exception(s"SHA256 checksum missing in OCFL"))
+    yield psChecksum == ocflChecksum
 
   def getAllFilePathsOnAnObject(ioId: UUID): IO[List[String]] =
     IO.blocking(ocflRepository.getObject(ioId.toHeadVersion))
