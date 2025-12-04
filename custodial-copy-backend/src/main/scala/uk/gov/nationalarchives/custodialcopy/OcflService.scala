@@ -116,11 +116,16 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO
     semaphore.acquire >> IO.blocking(ocflRepository.purgeObject(objectId.toString)).onError(logErrorAndRelease) >> semaphore.release
   }
 
-  private def isChecksumUnchanged(fixitiesMap: Map[DigestAlgorithm, String], checksums: List[Checksum]): IO[Boolean] =
-    for
-      psChecksum <- IO.fromOption(checksums.find(_.algorithm.toLowerCase == "sha256").map(_.fingerprint))(new Exception(s"SHA256 checksum missing in PS"))
-      ocflChecksum <- IO.fromOption(fixitiesMap.get(DigestAlgorithmRegistry.sha256))(new Exception(s"SHA256 checksum missing in OCFL"))
-    yield psChecksum == ocflChecksum
+  private def isChecksumUnchanged(fixitiesMap: Map[DigestAlgorithm, String], checksums: List[Checksum]): IO[Boolean] = {
+    (
+      checksums.find(_.algorithm.toLowerCase == "sha256").map(_.fingerprint).toValidNel(s"SHA256 checksum missing in PS"),
+      fixitiesMap.get(DigestAlgorithmRegistry.sha256).toValidNel(s"SHA256 checksum missing in OCFL")
+    ).mapN(_ == _)
+      .fold(
+        nel => IO.raiseError(new Exception(nel.toList.mkString(","))),
+        IO.pure
+      )
+  }
 
   def getAllFilePathsOnAnObject(ioId: UUID): IO[List[String]] =
     IO.blocking(ocflRepository.getObject(ioId.toHeadVersion))

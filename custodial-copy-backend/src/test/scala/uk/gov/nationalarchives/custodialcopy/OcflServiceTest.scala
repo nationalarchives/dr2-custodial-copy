@@ -212,6 +212,28 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     )
   }
 
+  "getMissingAndChangedObjects" should "return an error if there is no sha256 checksum from OCFL or PS" in {
+    val id = UUID.randomUUID()
+    val ocflRepository = mock[MutableOcflRepository]
+    mockGetObjectResponse(ocflRepository, id, None, destinationPath)
+
+    val service = new OcflService(ocflRepository, semaphore)
+
+    val error =
+      service
+        .getMissingAndChangedObjects(
+          List(FileObject(id, name, List(md5), url, destinationPath, UUID.randomUUID.toString))
+        )
+        .attempt
+        .unsafeRunSync()
+        .left
+        .value
+
+    error.getMessage should equal(
+      s"'getObject' returned an unexpected error 'java.lang.Exception: SHA256 checksum missing in PS,SHA256 checksum missing in OCFL' when called with object id $id"
+    )
+  }
+
   "createObjects" should "not create an object if the file path doesn't exist" in {
     val ocflRepository = mock[MutableOcflRepository]
     val service = new OcflService(ocflRepository, semaphore)
