@@ -28,6 +28,22 @@ class MainTest extends AnyFlatSpec {
     updateItem.primaryKeyAndItsValue("assetId").s() should equal(existingAssetId.toString)
     updateItem.primaryKeyAndItsValue("batchId").s() should equal("batchId1")
     updateItem.attributeNamesAndValuesToUpdate("attribute").s() should equal("true")
+    updateItem.conditionalExpression.get should equal("attribute_exists(assetId)")
+  }
+
+  "runConfirmer" should "not error if there is a conditional check failed exception" in {
+    val existingAssetId = UUID.randomUUID
+    val existingRef = UUID.randomUUID
+    val nonExistingRef = UUID.randomUUID
+    val inputMessages = List {
+      val message = OutputQueueMessage(existingAssetId, "batchId1", Payload(existingRef))
+      MessageResponse(message.batchId, None, message)
+    }
+    val (deletedMessages, dynamoUpdateItems) = runConfirmer(inputMessages, List(existingRef), Errors(conditionalCheckError = true))
+
+    deletedMessages.size should equal(1)
+    deletedMessages.sorted should equal(List("batchId1"))
+    dynamoUpdateItems.size should equal(0)
   }
 
   "runConfirmer" should "not delete the messages from the queue if there is an error" in {

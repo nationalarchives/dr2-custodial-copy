@@ -16,7 +16,7 @@ import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
 import software.amazon.awssdk.http.nio.netty.{NettyNioAsyncHttpClient, ProxyConfiguration}
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
-import software.amazon.awssdk.services.dynamodb.model.AttributeValue
+import software.amazon.awssdk.services.dynamodb.model.{AttributeValue, ConditionalCheckFailedException}
 import uk.gov.nationalarchives.DADynamoDBClient.DADynamoDbRequest
 
 import java.net.URI
@@ -76,13 +76,21 @@ object Main extends IOApp {
         _ <- IO.whenA(messages.nonEmpty)(logger.info(s"Processing message refs ${messages.map(_.message.payload.preservationSystemId).mkString(",")}"))
         _ <- messages.parTraverse { sqsMessage =>
           val message = sqsMessage.message
-          val request = DADynamoDbRequest(config.dynamoTableName, message.primaryKey, Map(config.dynamoAttributeName -> "true".toAttributeValue))
+          val request = DADynamoDbRequest(
+            config.dynamoTableName,
+            message.primaryKey,
+            Map(config.dynamoAttributeName -> "true".toAttributeValue),
+            Option("attribute_exists(assetId)")
+          )
           val objectExists = ocfl.checkObjectExists(message.payload.preservationSystemId)
           logger.info(s"Object with assetId ${message.assetId} and preservation system ref ${message.payload.preservationSystemId} ${
               if objectExists then "has been found" else "has not been found"
             }") >>
             IO.whenA(objectExists) {
-              dynamoClient.updateAttributeValues(request) >> sqsClient.deleteMessage(config.sqsUrl, sqsMessage.receiptHandle).void
+              dynamoClient.updateAttributeValues(request).handleErrorWith {
+                case ce: ConditionalCheckFailedException => IO.unit
+                case e                                   => IO.raiseError(e)
+              } >> sqsClient.deleteMessage(config.sqsUrl, sqsMessage.receiptHandle).void
             }
         }
       } yield ()
