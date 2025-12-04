@@ -335,7 +335,9 @@ The queue sends messages in this format:
 
 For each message, the Confirmer checks to see if this object exists in the OCFL repository. 
 
-If it does exist, it writes `true` to an attribute specified by `DYNAMO_ATTRIBUTE_NAME` in the table specified by `DYNAMO_TABLE_NAME`
+If it does exist, it writes `true` to an attribute specified by `DYNAMO_ATTRIBUTE_NAME` in the table specified by `DYNAMO_TABLE_NAME`. 
+It has a conditional check on `attribute_exists(assetId)` in the table. This is to prevent repeated messages adding a row back in after it has been deleted by the change handler.
+If the row has been deleted, it doesn't matter because the asset has already been marked as complete so we ignore any errors related to the conditional check.
 It then deletes the message from the queue. 
 
 If the object is not in the queue, nothing happens. The message will eventually be resent after the visibility timeout has expired.
