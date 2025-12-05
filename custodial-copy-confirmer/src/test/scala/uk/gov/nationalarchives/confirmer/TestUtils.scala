@@ -5,7 +5,7 @@ import cats.effect.{IO, Ref}
 import io.circe.Decoder
 import org.scanamo.DynamoFormat
 import org.scanamo.request.RequestCondition
-import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
+import software.amazon.awssdk.services.dynamodb.model.{BatchWriteItemResponse, ConditionalCheckFailedException}
 import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
 import uk.gov.nationalarchives.DADynamoDBClient.DADynamoDbRequest
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
@@ -22,10 +22,17 @@ object TestUtils:
 
   def notImplemented[T]: IO[T] = createError("Not implemented")
 
-  case class Errors(dynamoUpdateError: Boolean = false, sqsReceiveError: Boolean = false, sqsDeleteError: Boolean = false) {
+  case class Errors(
+      dynamoUpdateError: Boolean = false,
+      sqsReceiveError: Boolean = false,
+      sqsDeleteError: Boolean = false,
+      conditionalCheckError: Boolean = false
+  ) {
     def hasReceiveMessagesError: IO[Unit] = IO.whenA(sqsReceiveError)(createError[Unit]("Error receiving messages"))
 
     def hasDynamoUpdateError: IO[Unit] = IO.whenA(dynamoUpdateError)(createError[Unit]("Error updating Dynamo table"))
+
+    def hasDynamoConditionalCheckError: IO[Unit] = IO.whenA(conditionalCheckError)(IO.raiseError(ConditionalCheckFailedException.builder.build))
 
     def hasDeleteError: IO[Unit] = IO.whenA(sqsDeleteError)(createError[Unit]("Error deleting from SQS"))
   }
@@ -59,11 +66,11 @@ object TestUtils:
       ref: Ref[IO, List[MessageResponse[OutputQueueMessage]]],
       deletedMessagesRef: Ref[IO, List[String]],
       errors: Errors,
-      allowMultiplSqsCalls: Boolean
+      allowMultipleSqsCalls: Boolean
   ): DASQSClient[IO] = new TestSqsClient {
     override def receiveMessages[T](queueUrl: String, maxNumberOfMessages: Int)(using dec: Decoder[T]): IO[List[MessageResponse[T]]] =
       errors.hasReceiveMessagesError >>
-        (if allowMultiplSqsCalls then ref.get.asInstanceOf[IO[List[MessageResponse[T]]]]
+        (if allowMultipleSqsCalls then ref.get.asInstanceOf[IO[List[MessageResponse[T]]]]
          else ref.getAndUpdate(_ => Nil).asInstanceOf[IO[List[MessageResponse[T]]]])
 
     override def deleteMessage(queueUrl: String, receiptHandle: String): IO[DeleteMessageResponse] = errors.hasDeleteError >> deletedMessagesRef
@@ -87,11 +94,12 @@ object TestUtils:
     override def getItems[T, K](primaryKeys: List[K], tableName: String)(using returnFormat: DynamoFormat[T], keyFormat: DynamoFormat[K]): IO[List[T]] =
       notImplemented
 
-    override def updateAttributeValues(dynamoDbRequest: DADynamoDBClient.DADynamoDbRequest): IO[Int] = errors.hasDynamoUpdateError >> ref
-      .update { requests =>
-        dynamoDbRequest :: requests
-      }
-      .map(_ => 1)
+    override def updateAttributeValues(dynamoDbRequest: DADynamoDBClient.DADynamoDbRequest): IO[Int] =
+      errors.hasDynamoUpdateError >> errors.hasDynamoConditionalCheckError >> ref
+        .update { requests =>
+          dynamoDbRequest :: requests
+        }
+        .map(_ => 1)
   }
 
   def ocfl(existingRefs: List[UUID], config: Config): Ocfl = new Ocfl(config) {
