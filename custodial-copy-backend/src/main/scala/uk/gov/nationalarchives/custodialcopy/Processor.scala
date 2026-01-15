@@ -7,7 +7,7 @@ import fs2.io.file.{Files, Flags, Path}
 import io.circe.Encoder
 import org.apache.commons.codec.digest.DigestUtils
 import org.typelevel.log4cats.slf4j.Slf4jLogger
-import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
+import software.amazon.awssdk.services.sqs.model.{ChangeMessageVisibilityResponse, DeleteMessageResponse}
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.{DASNSClient, DASQSClient}
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
@@ -28,6 +28,7 @@ import uk.gov.nationalarchives.dp.client.ValidateXmlAgainstXsd.PreservicaSchema.
 
 import java.util.UUID
 import scala.xml.{Elem, Node}
+import scala.concurrent.duration.*
 
 class Processor(
     config: Config,
@@ -38,6 +39,11 @@ class Processor(
     snsClient: DASNSClient[IO]
 ) {
   private val newlineAndIndent = "\n          "
+
+  private val changeVisibilityTimeout: (String, Duration) => IO[ChangeMessageVisibilityResponse] = sqsClient.changeVisibilityTimeout(config.sqsQueueUrl)
+
+  def sendHeartbeat(receiptHandle: String): IO[Unit] =
+    IO.sleep(config.queueTimeout) >> changeVisibilityTimeout(receiptHandle, config.queueTimeout) >> sendHeartbeat(receiptHandle)
 
   def deleteMessage(receiptHandle: String): IO[DeleteMessageResponse] =
     sqsClient.deleteMessage(config.sqsQueueUrl, receiptHandle)

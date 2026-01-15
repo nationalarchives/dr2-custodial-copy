@@ -52,6 +52,7 @@ import scala.jdk.FunctionConverters.*
 import java.net.URI
 import java.nio.file.{Files, Path, Paths}
 import java.util.UUID
+import scala.concurrent.duration.Duration
 import scala.jdk.CollectionConverters.ListHasAsScala
 import scala.util.{Failure, Success, Try}
 import scala.xml.Utility.trim
@@ -289,7 +290,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val downloadDir: String = Files.createTempDirectory("downloads").toString
     val workDir: String = Files.createTempDirectory("work").toString
     val repoDir: Path = Files.createTempDirectory("repo")
-    val config: Config = Config("", "", repoDir.toString, workDir, downloadDir, None, "", "")
+    val config: Config = Config("", "", repoDir.toString, workDir, downloadDir, None, "", "", Duration("1s"))
 
     val bitstreamInfoResponsesWithSameName: Seq[BitStreamInfo] = bitstreamInfo1Responses.flatMap { bitstreamInfo1Response =>
       bitstreamInfo2Responses.filter { bitstreamInfo2Response =>
@@ -436,7 +437,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val downloadDir: String = Files.createTempDirectory("downloads").toString
     val workDir: String = Files.createTempDirectory("work").toString
     val repoDir: String = Files.createTempDirectory("repo").toString
-    val config: Config = Config("", "queueUrl", repoDir, workDir, downloadDir, Option(URI.create("https://example.com")), "", "topicArn")
+    val config: Config = Config("", "queueUrl", repoDir, workDir, downloadDir, Option(URI.create("https://example.com")), "", "topicArn", Duration("1s"))
     val ioId: UUID = UUID.randomUUID()
     val coId: UUID = UUID.randomUUID()
     val soId: UUID = UUID.randomUUID()
@@ -770,5 +771,12 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         xmlRequestsToValidate.map(trim)
       )
     }
+  }
+
+  class TestProcessor(config: Config, sqsClient: DASQSClient[IO], fn: MessageResponse[ReceivedSnsMessage] => IO[Result])
+      extends Processor(config, sqsClient, mock[OcflService], mock[EntityClient[IO, Fs2Streams[IO]]], mock[ValidateXmlAgainstXsd[IO]], mock[DASNSClient[IO]]) {
+    override def process(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[Result] = fn(messageResponse)
+
+    override def commitStagedChanges(id: UUID): IO[Unit] = IO.unit
   }
 }

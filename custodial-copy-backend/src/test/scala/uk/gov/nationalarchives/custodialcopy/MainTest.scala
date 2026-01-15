@@ -7,29 +7,31 @@ import io.circe.Decoder
 import io.ocfl.api.MutableOcflRepository
 import io.ocfl.api.model.ObjectVersionId
 import org.apache.commons.codec.digest.DigestUtils
+import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.*
-import org.mockito.Mockito.{never, reset, times, verify, when}
+import org.mockito.Mockito.*
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers.*
 import org.scalatestplus.mockito.MockitoSugar
-import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
+import software.amazon.awssdk.services.sqs.model.{ChangeMessageVisibilityResponse, DeleteMessageResponse}
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DASQSClient
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.Main.*
-import uk.gov.nationalarchives.custodialcopy.Message.{ReceivedSnsMessage, SoReceivedSnsMessage}
+import uk.gov.nationalarchives.custodialcopy.Message.{IoReceivedSnsMessage, ReceivedSnsMessage, SoReceivedSnsMessage}
 import uk.gov.nationalarchives.custodialcopy.Processor.Result
-import uk.gov.nationalarchives.utils.TestUtils.*
-import uk.gov.nationalarchives.custodialcopy.testUtils.ExternalServicesTestUtils.MainTestUtils
+import uk.gov.nationalarchives.custodialcopy.testUtils.ExternalServicesTestUtils.{MainTestUtils, TestProcessor}
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.Entity
 import uk.gov.nationalarchives.dp.client.EntityClient
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.GenerationType.*
+import uk.gov.nationalarchives.utils.TestUtils.*
 
 import java.nio.file.{Files, Paths}
 import java.util.UUID
+import scala.concurrent.duration.*
 import scala.xml.Utility.trim
 import scala.xml.XML
 
@@ -792,5 +794,40 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val results = runCustodialCopy(sqsClient, utils.config, utils.processor)
 
     results.size must equal(10)
+  }
+
+  "runCustodialCopy" should "call changeVisibilityTimeout if the processor takes longer than the configured timeout" in {
+    val delayedId = UUID.randomUUID
+    val id = UUID.randomUUID
+    val messageIdOne = Option(UUID.randomUUID.toString)
+    val messageIdTwo = Option(UUID.randomUUID.toString)
+    val config: Config = Config("", "", "", "", "", None, "", "", 2.seconds)
+    val sqsClient = mock[DASQSClient[IO]]
+
+    val processor = new TestProcessor(
+      config,
+      sqsClient,
+      { messageResponse =>
+        if messageResponse.receiptHandle == "receiptHandleDelayed" then IO.sleep(4.seconds) >> IO.pure(Result.Success(delayedId))
+        else IO.pure(Result.Success(id))
+      }
+    )
+
+    val messageResponseDelayed = IO.pure(List(MessageResponse("receiptHandleDelayed", messageIdOne, IoReceivedSnsMessage(delayedId))))
+    val messageResponse = IO.pure(List(MessageResponse("receiptHandle", messageIdTwo, IoReceivedSnsMessage(id))))
+
+    when(sqsClient.receiveMessages[ReceivedSnsMessage](any[String], any[Int])(using any[Decoder[ReceivedSnsMessage]]))
+      .thenReturn(messageResponseDelayed)
+      .thenReturn(messageResponse)
+      .thenReturn(IO.pure(Nil))
+    when(sqsClient.changeVisibilityTimeout(any[String])(any[String], any[Duration])).thenReturn(IO.pure(ChangeMessageVisibilityResponse.builder.build))
+    when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO.pure(DeleteMessageResponse.builder.build))
+
+    runCustodialCopy(sqsClient, config, processor)
+
+    verify(sqsClient, atLeastOnce()).changeVisibilityTimeout(any[String])(ArgumentMatchers.eq("receiptHandleDelayed"), any[Duration])
+
+    // This line has the potential to become flaky if the tests run too slowly, in which case, we can remove it.
+    verify(sqsClient, never()).changeVisibilityTimeout(any[String])(ArgumentMatchers.eq("receiptHandle"), any[Duration])
   }
 }

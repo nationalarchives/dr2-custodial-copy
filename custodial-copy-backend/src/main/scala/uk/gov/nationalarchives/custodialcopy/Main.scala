@@ -19,7 +19,7 @@ import uk.gov.nationalarchives.utils.Utils.*
 import java.net.URI
 import java.nio.file
 import java.util.UUID
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.{Duration, DurationInt}
 
 object Main extends IOApp {
 
@@ -31,7 +31,8 @@ object Main extends IOApp {
       downloadDir: String,
       proxyUrl: Option[URI],
       versionPath: String,
-      topicArn: String
+      topicArn: String,
+      queueTimeout: Duration
   ) derives ConfigReader
 
   given Decoder[ReceivedSnsMessage] = (c: HCursor) =>
@@ -98,6 +99,11 @@ object Main extends IOApp {
       _ <- logger.info(responses.map(_.message.ref).mkString(","))
       dedupedMessages = dedupeMessages(responses)
 
+      heartbeats <- dedupedMessages
+        .map(_.receiptHandle)
+        .parTraverse(r => processor.sendHeartbeat(r).start.map(f => r -> f))
+        .map(_.toMap)
+
       results <- dedupedMessages.traverse(processor.process)
 
       _ <- processor.commitStagedChanges(UUID.fromString(groupId))
@@ -110,7 +116,10 @@ object Main extends IOApp {
           responses
             .filter(_.message.ref == ref)
             .map(_.receiptHandle)
-            .parTraverse(receiptHandle => logger.info(s"Deleting message with receipt handle $receiptHandle") >> processor.deleteMessage(receiptHandle))
+            .parTraverse(receiptHandle =>
+              logger.info(s"Deleting message with receipt handle $receiptHandle") >> processor
+                .deleteMessage(receiptHandle) >> heartbeats.get(receiptHandle).traverse(_.cancel)
+            )
       }
     } yield results
   }

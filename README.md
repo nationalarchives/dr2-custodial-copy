@@ -79,6 +79,16 @@ Once all messages are processed, we commit the changes to that OCFL object which
   * Get all the paths to the files that sit underneath this object
   * Delete all the paths
 
+
+#### Handling long-running processes
+It is possible that we will have a file which is large enough that the processing will take longer than the 1 hour we have set as a visibility timeout on the input queue.
+This would mean that another run of the custodial copy process will pick it up and attempt to process it again which will almost certainly fail.
+
+For each message that we receive, a fiber is started which waits for 1 hour (the time is configurable) and after an hour, increases the visibility timeout by another hour.
+The method is recursive so it will keep doing this once an hour until the process completes. 
+
+Once a message has been processed, the fiber is cancelled. 
+
 ### Example of the OCFL Structure
 
 ```
