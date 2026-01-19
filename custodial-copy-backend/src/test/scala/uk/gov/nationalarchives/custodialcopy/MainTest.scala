@@ -7,29 +7,31 @@ import io.circe.Decoder
 import io.ocfl.api.MutableOcflRepository
 import io.ocfl.api.model.ObjectVersionId
 import org.apache.commons.codec.digest.DigestUtils
+import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.*
-import org.mockito.Mockito.{never, reset, times, verify, when}
+import org.mockito.Mockito.*
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers.*
 import org.scalatestplus.mockito.MockitoSugar
-import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
+import software.amazon.awssdk.services.sqs.model.{ChangeMessageVisibilityResponse, DeleteMessageResponse}
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DASQSClient
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.Main.*
-import uk.gov.nationalarchives.custodialcopy.Message.{ReceivedSnsMessage, SoReceivedSnsMessage}
+import uk.gov.nationalarchives.custodialcopy.Message.{IoReceivedSnsMessage, ReceivedSnsMessage, SoReceivedSnsMessage}
 import uk.gov.nationalarchives.custodialcopy.Processor.Result
-import uk.gov.nationalarchives.utils.TestUtils.*
-import uk.gov.nationalarchives.custodialcopy.testUtils.ExternalServicesTestUtils.MainTestUtils
+import uk.gov.nationalarchives.custodialcopy.testUtils.ExternalServicesTestUtils.{MainTestUtils, TestProcessor}
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.Entity
 import uk.gov.nationalarchives.dp.client.EntityClient
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.GenerationType.*
+import uk.gov.nationalarchives.utils.TestUtils.*
 
 import java.nio.file.{Files, Paths}
 import java.util.UUID
+import scala.concurrent.duration.*
 import scala.xml.Utility.trim
 import scala.xml.XML
 
@@ -792,5 +794,109 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val results = runCustodialCopy(sqsClient, utils.config, utils.processor)
 
     results.size must equal(10)
+  }
+
+  "runCustodialCopy" should "call changeVisibilityTimeout if the processor takes longer than the configured timeout" in {
+    val delayedId = UUID.randomUUID
+    val id = UUID.randomUUID
+    val messageIdOne = Option(UUID.randomUUID.toString)
+    val messageIdTwo = Option(UUID.randomUUID.toString)
+
+    val config: Config = Config("", "https://queue", "", "", "", None, "", "", 2.seconds)
+    val sqsClient = mock[DASQSClient[IO]]
+
+    val processor = new TestProcessor(
+      config,
+      sqsClient,
+      { messageResponse =>
+        if messageResponse.receiptHandle == "receiptHandleDelayed" then IO.sleep(4.seconds) >> IO.pure(Result.Success(delayedId))
+        else IO.pure(Result.Success(id))
+      }
+    )
+
+    val messageResponseDelayed = IO.pure(List(MessageResponse("receiptHandleDelayed", messageIdOne, IoReceivedSnsMessage(delayedId))))
+    val messageResponse = IO.pure(
+      List(MessageResponse("receiptHandle", messageIdTwo, IoReceivedSnsMessage(id)))
+    )
+
+    when(sqsClient.receiveMessages[ReceivedSnsMessage](any[String], any[Int])(using any[Decoder[ReceivedSnsMessage]]))
+      .thenReturn(messageResponseDelayed)
+      .thenReturn(messageResponse)
+      .thenReturn(IO.pure(Nil))
+    when(sqsClient.changeVisibilityTimeout(any[String])(any[String], any[Duration])).thenReturn(IO.pure(ChangeMessageVisibilityResponse.builder.build))
+    when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO.pure(DeleteMessageResponse.builder.build))
+
+    val results = runCustodialCopy(sqsClient, config, processor)
+
+    results.size must equal(2)
+
+    val successResults = results.collect { case s: Result.Success => s }
+    successResults.size must equal(2)
+    successResults.map(_.id).sorted must equal(List(delayedId, id).sorted)
+
+    def queueMatcher = ArgumentMatchers.eq("https://queue")
+    def delayedMatcher = ArgumentMatchers.eq("receiptHandleDelayed")
+    def nonDelayedMatcher = ArgumentMatchers.eq("receiptHandle")
+
+    verify(sqsClient, atLeastOnce()).changeVisibilityTimeout(queueMatcher)(delayedMatcher, ArgumentMatchers.eq(2.seconds))
+
+    // This line has the potential to become flaky if the tests run too slowly, in which case, we can remove it.
+    verify(sqsClient, never()).changeVisibilityTimeout(any[String])(nonDelayedMatcher, any[Duration])
+
+    verify(sqsClient, times(1)).deleteMessage(queueMatcher, delayedMatcher)
+    verify(sqsClient, times(1)).deleteMessage(queueMatcher, nonDelayedMatcher)
+  }
+
+  "runCustodialCopy" should "call changeVisibilityTimeout on both messages with the same message group id if only one message is delayed" in {
+    val delayedId = UUID.randomUUID
+    val id = UUID.randomUUID
+    val messageId = Option(UUID.randomUUID.toString)
+    val config: Config = Config("", "https://queue", "", "", "", None, "", "", 2.seconds)
+    val sqsClient = mock[DASQSClient[IO]]
+
+    val processor = new TestProcessor(
+      config,
+      sqsClient,
+      { messageResponse =>
+        if messageResponse.receiptHandle == "receiptHandleDelayed" then IO.sleep(4.seconds) >> IO.pure(Result.Success(delayedId))
+        else IO.pure(Result.Success(id))
+      }
+    )
+
+    val messageResponse = IO.pure(
+      List(
+        MessageResponse("receiptHandleDelayed", messageId, IoReceivedSnsMessage(delayedId)),
+        MessageResponse("receiptHandle", messageId, IoReceivedSnsMessage(id))
+      )
+    )
+
+    when(sqsClient.receiveMessages[ReceivedSnsMessage](any[String], any[Int])(using any[Decoder[ReceivedSnsMessage]]))
+      .thenReturn(messageResponse)
+      .thenReturn(IO.pure(Nil))
+    when(sqsClient.changeVisibilityTimeout(any[String])(any[String], any[Duration])).thenReturn(IO.pure(ChangeMessageVisibilityResponse.builder.build))
+    when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO.pure(DeleteMessageResponse.builder.build))
+
+    val results = runCustodialCopy(sqsClient, config, processor)
+
+    results.size must equal(2)
+
+    val successResults = results.collect { case s: Result.Success => s }
+    successResults.size must equal(2)
+    successResults.map(_.id).sorted must equal(List(delayedId, id).sorted)
+
+    def queueMatcher = ArgumentMatchers.eq("https://queue")
+
+    def delayedMatcher = ArgumentMatchers.eq("receiptHandleDelayed")
+
+    def nonDelayedMatcher = ArgumentMatchers.eq("receiptHandle")
+
+    def durationMatcher = ArgumentMatchers.eq(2.seconds)
+
+    verify(sqsClient, atLeastOnce()).changeVisibilityTimeout(queueMatcher)(delayedMatcher, durationMatcher)
+
+    verify(sqsClient, atLeastOnce()).changeVisibilityTimeout(queueMatcher)(nonDelayedMatcher, durationMatcher)
+
+    verify(sqsClient, times(1)).deleteMessage(queueMatcher, delayedMatcher)
+    verify(sqsClient, times(1)).deleteMessage(queueMatcher, nonDelayedMatcher)
   }
 }

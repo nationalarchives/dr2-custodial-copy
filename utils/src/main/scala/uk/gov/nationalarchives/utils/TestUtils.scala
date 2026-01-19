@@ -10,7 +10,13 @@ import io.circe.{Decoder, Encoder}
 import io.ocfl.api.io.FixityCheckInputStream
 import io.ocfl.api.model.{DigestAlgorithm, ObjectVersionId, VersionInfo}
 import io.ocfl.api.{OcflFileRetriever, OcflObjectUpdater, OcflOption}
-import software.amazon.awssdk.services.sqs.model.{DeleteMessageResponse, GetQueueAttributesResponse, QueueAttributeName, SendMessageResponse}
+import software.amazon.awssdk.services.sqs.model.{
+  ChangeMessageVisibilityResponse,
+  DeleteMessageResponse,
+  GetQueueAttributesResponse,
+  QueueAttributeName,
+  SendMessageResponse
+}
 import uk.gov.nationalarchives.DASQSClient
 import uk.gov.nationalarchives.utils.Utils.{OcflFile, createOcflRepository, given}
 
@@ -20,6 +26,7 @@ import java.nio.file.Files
 import java.time.Instant
 import java.time.temporal.ChronoField
 import java.util.UUID
+import scala.concurrent.duration.Duration
 import scala.jdk.FunctionConverters.*
 import scala.xml.Elem
 
@@ -223,6 +230,8 @@ object TestUtils:
     override def deleteMessage(queueUrl: String, receiptHandle: String): IO[DeleteMessageResponse] = notImplemented
 
     override def getQueueAttributes(queueUrl: String, attributeNames: List[QueueAttributeName]): IO[GetQueueAttributesResponse] = notImplemented
+
+    override def changeVisibilityTimeout(queueUrl: String)(receiptHandle: String, timeout: Duration): IO[ChangeMessageVisibilityResponse] = IO.stub
 
 val testOcflFileRetriever: OcflFileRetriever = new OcflFileRetriever:
   override def retrieveFile(): FixityCheckInputStream =
