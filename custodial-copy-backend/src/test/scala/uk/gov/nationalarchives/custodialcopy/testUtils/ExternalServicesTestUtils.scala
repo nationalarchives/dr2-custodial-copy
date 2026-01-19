@@ -16,6 +16,7 @@ import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doReturn, spy, times, verify, when}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.{ArgumentCaptor, ArgumentMatcher, ArgumentMatchers, Mockito}
+import org.scalatest.matchers.must.Matchers.must
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.{Assertion, EitherValues}
 import org.scalatestplus.mockito.MockitoSugar
@@ -287,6 +288,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       addAccessRepUrl: Boolean = false
   ) {
     val downloadDir: String = Files.createTempDirectory("downloads").toString
+    val downloadDirPath: Path = Path.of(downloadDir)
     val workDir: String = Files.createTempDirectory("work").toString
     val repoDir: Path = Files.createTempDirectory("repo")
     val config: Config = Config("", "", repoDir.toString, workDir, downloadDir, None, "", "")
@@ -420,6 +422,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       case Failure(_: io.ocfl.api.exception.NotFoundException) => objectVersion should equal(0)
       case _                                                   => throw new Exception("Unexpected result")
     }
+
+    Files.list(downloadDirPath).toList.size() must equal(0)
   }
 
   class ProcessorTestUtils(

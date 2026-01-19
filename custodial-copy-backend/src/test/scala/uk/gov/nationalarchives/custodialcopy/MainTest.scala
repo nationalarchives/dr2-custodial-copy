@@ -28,8 +28,9 @@ import uk.gov.nationalarchives.dp.client.EntityClient
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.GenerationType.*
 
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, Path, Paths}
 import java.util.UUID
+import scala.jdk.CollectionConverters.*
 import scala.xml.Utility.trim
 import scala.xml.XML
 
@@ -792,5 +793,31 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val results = runCustodialCopy(sqsClient, utils.config, utils.processor)
 
     results.size must equal(10)
+  }
+
+  "runCustodialCopy" should "delete everything in the 'downloads' folder" in {
+    val utils = new MainTestUtils(objectVersion = 0)
+    val sqsClient = utils.sqsClient
+    val groupId = UUID.randomUUID.toString
+    Files.list(utils.downloadDirPath).toList.size() must equal(0)
+    Files.createDirectory(Path.of(utils.downloadDir + "/testFile"))
+    Files.list(utils.downloadDirPath).toList.asScala.toList.head.getFileName.toString must equal("testFile")
+
+    val results = runCustodialCopy(sqsClient, utils.config, utils.processor)
+
+    Files.list(utils.downloadDirPath).toList.size() must equal(0)
+  }
+
+  "runCustodialCopy" should "ignore errors thrown when trying to delete everything in the 'downloads' folder" in {
+    val utils = new MainTestUtils(objectVersion = 0)
+    val sqsClient = utils.sqsClient
+    val groupId = UUID.randomUUID.toString
+    Files.list(utils.downloadDirPath).toList.size() must equal(0)
+    Files.createDirectory(Path.of(utils.downloadDir + "/testFile"))
+    Files.list(utils.downloadDirPath).toList.asScala.toList.head.getFileName.toString must equal("testFile")
+
+    val results = runCustodialCopy(sqsClient, utils.config.copy(downloadDir = "NonExistentFolder"), utils.processor)
+
+    Files.list(utils.downloadDirPath).toList.size() must equal(1)
   }
 }

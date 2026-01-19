@@ -4,6 +4,7 @@ import cats.effect.*
 import cats.effect.std.Semaphore
 import cats.implicits.*
 import fs2.Stream
+import fs2.io.file.{Files, Path}
 import io.circe.{Decoder, HCursor}
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import pureconfig.*
@@ -88,7 +89,15 @@ object Main extends IOApp {
               case None => IO.raiseError(new Exception("Message Group ID is missing"))
           }
           .map(_.flatten)
-
+      }
+      .evalTap { _ =>
+        Files[IO]
+          .walk(Path(config.downloadDir))
+          .drop(1)
+          .evalMap(Files[IO].delete)
+          .handleErrorWith(err => Stream.eval[IO, Unit](logError(err)))
+          .compile
+          .drain
       }
 
   private def processMessages(processor: Processor, responses: List[MessageResponse[ReceivedSnsMessage]], groupId: String) = {
