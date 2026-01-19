@@ -801,7 +801,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val id = UUID.randomUUID
     val messageIdOne = Option(UUID.randomUUID.toString)
     val messageIdTwo = Option(UUID.randomUUID.toString)
-    val config: Config = Config("", "", "", "", "", None, "", "", 2.seconds)
+
+    val config: Config = Config("", "https://queue", "", "", "", None, "", "", 2.seconds)
     val sqsClient = mock[DASQSClient[IO]]
 
     val processor = new TestProcessor(
@@ -814,7 +815,9 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     )
 
     val messageResponseDelayed = IO.pure(List(MessageResponse("receiptHandleDelayed", messageIdOne, IoReceivedSnsMessage(delayedId))))
-    val messageResponse = IO.pure(List(MessageResponse("receiptHandle", messageIdTwo, IoReceivedSnsMessage(id))))
+    val messageResponse = IO.pure(
+      List(MessageResponse("receiptHandle", messageIdTwo, IoReceivedSnsMessage(id)))
+    )
 
     when(sqsClient.receiveMessages[ReceivedSnsMessage](any[String], any[Int])(using any[Decoder[ReceivedSnsMessage]]))
       .thenReturn(messageResponseDelayed)
@@ -823,11 +826,77 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     when(sqsClient.changeVisibilityTimeout(any[String])(any[String], any[Duration])).thenReturn(IO.pure(ChangeMessageVisibilityResponse.builder.build))
     when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO.pure(DeleteMessageResponse.builder.build))
 
-    runCustodialCopy(sqsClient, config, processor)
+    val results = runCustodialCopy(sqsClient, config, processor)
 
-    verify(sqsClient, atLeastOnce()).changeVisibilityTimeout(any[String])(ArgumentMatchers.eq("receiptHandleDelayed"), any[Duration])
+    results.size must equal(2)
+
+    val successResults = results.collect { case s: Result.Success => s }
+    successResults.size must equal(2)
+    successResults.map(_.id).sorted must equal(List(delayedId, id).sorted)
+
+    def queueMatcher = ArgumentMatchers.eq("https://queue")
+    def delayedMatcher = ArgumentMatchers.eq("receiptHandleDelayed")
+    def nonDelayedMatcher = ArgumentMatchers.eq("receiptHandle")
+
+    verify(sqsClient, atLeastOnce()).changeVisibilityTimeout(queueMatcher)(delayedMatcher, ArgumentMatchers.eq(2.seconds))
 
     // This line has the potential to become flaky if the tests run too slowly, in which case, we can remove it.
-    verify(sqsClient, never()).changeVisibilityTimeout(any[String])(ArgumentMatchers.eq("receiptHandle"), any[Duration])
+    verify(sqsClient, never()).changeVisibilityTimeout(any[String])(nonDelayedMatcher, any[Duration])
+
+    verify(sqsClient, times(1)).deleteMessage(queueMatcher, delayedMatcher)
+    verify(sqsClient, times(1)).deleteMessage(queueMatcher, nonDelayedMatcher)
+  }
+
+  "runCustodialCopy" should "call changeVisibilityTimeout on both messages with the same message group id if only one message is delayed" in {
+    val delayedId = UUID.randomUUID
+    val id = UUID.randomUUID
+    val messageId = Option(UUID.randomUUID.toString)
+    val config: Config = Config("", "https://queue", "", "", "", None, "", "", 2.seconds)
+    val sqsClient = mock[DASQSClient[IO]]
+
+    val processor = new TestProcessor(
+      config,
+      sqsClient,
+      { messageResponse =>
+        if messageResponse.receiptHandle == "receiptHandleDelayed" then IO.sleep(4.seconds) >> IO.pure(Result.Success(delayedId))
+        else IO.pure(Result.Success(id))
+      }
+    )
+
+    val messageResponse = IO.pure(
+      List(
+        MessageResponse("receiptHandleDelayed", messageId, IoReceivedSnsMessage(delayedId)),
+        MessageResponse("receiptHandle", messageId, IoReceivedSnsMessage(id))
+      )
+    )
+
+    when(sqsClient.receiveMessages[ReceivedSnsMessage](any[String], any[Int])(using any[Decoder[ReceivedSnsMessage]]))
+      .thenReturn(messageResponse)
+      .thenReturn(IO.pure(Nil))
+    when(sqsClient.changeVisibilityTimeout(any[String])(any[String], any[Duration])).thenReturn(IO.pure(ChangeMessageVisibilityResponse.builder.build))
+    when(sqsClient.deleteMessage(any[String], any[String])).thenReturn(IO.pure(DeleteMessageResponse.builder.build))
+
+    val results = runCustodialCopy(sqsClient, config, processor)
+
+    results.size must equal(2)
+
+    val successResults = results.collect { case s: Result.Success => s }
+    successResults.size must equal(2)
+    successResults.map(_.id).sorted must equal(List(delayedId, id).sorted)
+
+    def queueMatcher = ArgumentMatchers.eq("https://queue")
+
+    def delayedMatcher = ArgumentMatchers.eq("receiptHandleDelayed")
+
+    def nonDelayedMatcher = ArgumentMatchers.eq("receiptHandle")
+
+    def durationMatcher = ArgumentMatchers.eq(2.seconds)
+
+    verify(sqsClient, atLeastOnce()).changeVisibilityTimeout(queueMatcher)(delayedMatcher, durationMatcher)
+
+    verify(sqsClient, atLeastOnce()).changeVisibilityTimeout(queueMatcher)(nonDelayedMatcher, durationMatcher)
+
+    verify(sqsClient, times(1)).deleteMessage(queueMatcher, delayedMatcher)
+    verify(sqsClient, times(1)).deleteMessage(queueMatcher, nonDelayedMatcher)
   }
 }
