@@ -3,7 +3,9 @@ package uk.gov.nationalarchives.custodialcopy
 import cats.effect.IO
 import cats.implicits.*
 import fs2.Stream
-import fs2.io.file.{Files, Flags, Path}
+import fs2.io.file.{Files, Flags}
+
+import java.nio.file.{Files as JFiles, Path as JPath}
 import io.circe.Encoder
 import org.apache.commons.codec.digest.DigestUtils
 import org.typelevel.log4cats.slf4j.Slf4jLogger
@@ -27,6 +29,7 @@ import uk.gov.nationalarchives.dp.client.Entities.{Entity, fromType}
 import uk.gov.nationalarchives.dp.client.ValidateXmlAgainstXsd.PreservicaSchema.XipXsdSchemaV7
 
 import java.util.UUID
+import scala.annotation.tailrec
 import scala.xml.{Elem, Node}
 import scala.concurrent.duration.*
 
@@ -253,7 +256,7 @@ class Processor(
     case mo: MetadataObject =>
       val metadataXmlAsString = mo.metadata.toString
       for {
-        writePath <- mo.sourceFilePath(config.workDir)
+        writePath <- mo.sourceFilePath(config.downloadDir)
         _ <- Stream
           .emit(metadataXmlAsString)
           .through(Files[IO].writeUtf8(writePath))
@@ -327,7 +330,7 @@ class Processor(
         } yield allCoObjectsOfIo :+ missingIoObject
       }
 
-      allMissingObjects = missingIosAndCos ++ missingCoObjects
+      allMissingObjects: List[CustodialCopyObject] = missingIosAndCos ++ missingCoObjects
       missingObjectsPaths <- allMissingObjects.traverse(download)
       changedObjectsPaths <- missingAndChangedObjects.changedObjects.traverse(download)
 
@@ -336,13 +339,20 @@ class Processor(
       _ <- ocflService.createObjects(changedObjectsPaths)
       _ <- logger.info(s"${changedObjectsPaths.length} objects updated")
 
-      _ <- missingObjectsPaths.flatMap(_.sourceNioFilePath).parTraverse(missingObjectPath => Files[IO].deleteIfExists(Path.fromNioPath(missingObjectPath)))
-      _ <- changedObjectsPaths.flatMap(_.sourceNioFilePath).parTraverse(changedObjectPath => Files[IO].deleteIfExists(Path.fromNioPath(changedObjectPath)))
+      _ <- (missingObjectsPaths ++ changedObjectsPaths).flatMap(_.sourceNioFilePath).parTraverse(deleteObjectPath)
 
       createdObjsSnsMessages = missingAndChangedObjects.missingObjects.flatMap(generateSnsMessage(_, messageResponse.message, Created))
       updatedObjsSnsMessages = missingAndChangedObjects.changedObjects.flatMap(generateSnsMessage(_, messageResponse.message, Updated))
 
     } yield createdObjsSnsMessages ++ updatedObjsSnsMessages
+
+  @tailrec
+  private def deleteObjectPath(path: JPath): IO[Unit] = {
+    if JPath.of(config.downloadDir) == path then IO.unit
+    else
+      val deleted = JFiles.deleteIfExists(path)
+      deleteObjectPath(path.getParent)
+  }
 
   private def processDeletedEntities(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[List[SendSnsMessage]] =
     val ref = messageResponse.message.ref
