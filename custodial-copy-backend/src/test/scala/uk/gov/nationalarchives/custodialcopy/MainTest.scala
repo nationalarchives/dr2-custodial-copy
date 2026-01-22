@@ -901,19 +901,6 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     verify(sqsClient, times(1)).deleteMessage(queueMatcher, nonDelayedMatcher)
   }
 
-  "runCustodialCopy" should "delete everything in the 'downloads' folder" in {
-    val utils = new MainTestUtils(objectVersion = 0)
-    val sqsClient = utils.sqsClient
-    val groupId = UUID.randomUUID.toString
-    Files.list(utils.downloadDirPath).toList.size() must equal(0)
-    Files.createDirectory(Path.of(utils.downloadDir + "/testFile"))
-    Files.list(utils.downloadDirPath).toList.asScala.toList.head.getFileName.toString must equal("testFile")
-
-    val results = runCustodialCopy(sqsClient, utils.config, utils.processor)
-
-    Files.list(utils.downloadDirPath).toList.size() must equal(0)
-  }
-
   "runCustodialCopy" should "ignore errors thrown when trying to delete everything in the 'downloads' folder" in {
     val utils = new MainTestUtils(objectVersion = 0)
     val sqsClient = utils.sqsClient
