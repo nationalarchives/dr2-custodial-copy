@@ -21,10 +21,8 @@ import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.IoMetadata
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 
-import java.nio.file.Files
 import java.util.UUID
 import scala.xml.Elem
-import scala.jdk.CollectionConverters.*
 
 class ProcessorTest extends AnyFlatSpec with MockitoSugar {
   "process" should "delete the file paths under an IO, if an IO message has 'deleted' set to 'true'" in {
@@ -65,18 +63,6 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
     )
   }
 
-  "process" should "delete the metadata from the downloads folder after processing if an Information Object update is received" in {
-    val utils = new ProcessorTestUtils(InformationObject, Some(true))
-
-    def files = Files.list(java.nio.file.Path.of(utils.downloadDir)).toList.asScala
-
-    files.size should equal(0)
-
-    utils.processMessage.unsafeRunSync()
-
-    files.size should equal(0)
-  }
-
   "process" should "retrieve the bitstream info for a CO message" in {
     val utils = new ProcessorTestUtils(ContentObject)
     val id = utils.coId
@@ -109,18 +95,6 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
         SendSnsMessage(ContentObject, id, Metadata, Created, tableItemIdentifier)
       )
     )
-  }
-
-  "process" should "delete the bitstreams from the downloads directory for a CO message" in {
-    val utils = new ProcessorTestUtils(ContentObject)
-
-    def files = Files.list(java.nio.file.Path.of(utils.downloadDir)).toList.asScala
-
-    files.size should equal(0)
-
-    utils.processMessage.unsafeRunSync()
-
-    files.size should equal(0)
   }
 
   "process" should "return a Failure if a Content Object does not have a parent" in {

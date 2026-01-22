@@ -659,11 +659,15 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
 
     val processor: Processor = new Processor(config, sqsClient, ocflService, entityClient, xmlValidator, snsClient)
 
-    val processMessage: IO[Result] = entityType match {
-      case ContentObject     => processor.process(coMessageResponse)
-      case InformationObject => processor.process(ioMessageResponse)
-      case unsupportedObject => throw new Exception(s"Unsupported object: $unsupportedObject")
-    }
+    def files: List[Path] = Files.list(java.nio.file.Path.of(downloadDir)).toList.asScala.toList
+
+    val processMessage: IO[Result] =
+      files.size should equal(0)
+      entityType match {
+        case ContentObject     => processor.process(coMessageResponse)
+        case InformationObject => processor.process(ioMessageResponse)
+        case unsupportedObject => throw new Exception(s"Unsupported object: $unsupportedObject")
+      }
 
     val ioXmlToValidate: Elem =
       <XIP xmlns="http://preservica.com/XIP/v7.7">
@@ -675,6 +679,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"/></Content></Metadata>
           <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
         </XIP>
+
     val coXmlToValidate: Elem =
       <XIP xmlns="http://preservica.com/XIP/v7.7">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
@@ -702,6 +707,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         snsMessagesToSend: List[SendSnsMessage] = Nil
     ): Assertion = {
 
+      files.size should equal(0)
       verify(entityClient, times(numOfGetBitstreamInfoCalls)).getBitstreamInfo(getBitstreamsCoIdCaptor.capture)
       verify(entityClient, times(numOfGetUrlsToIoRepresentationsCalls))
         .getUrlsToIoRepresentations(ArgumentMatchers.eq(ioId), ArgumentMatchers.eq(None))

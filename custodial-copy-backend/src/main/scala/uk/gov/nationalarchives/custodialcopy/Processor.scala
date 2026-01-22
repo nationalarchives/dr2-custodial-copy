@@ -296,7 +296,7 @@ class Processor(
   given Encoder[SendSnsMessage] = (message: SendSnsMessage) => {
     Encoder
       .forProduct5("entityType", "ioRef", "objectType", "status", "tableItemIdentifier")(_ =>
-        (message.entityType.toString, message.ioRef.toString, message.objectType.toString, message.status.toString, message.tableItemIdentifier.toString)
+        (message.entityType.toString, message.ioRef.toString, message.objectType.toString, message.status.toString, message.tableItemIdentifier)
       )
       .apply(message)
   }
@@ -350,7 +350,7 @@ class Processor(
   private def deleteObjectPath(path: JPath): IO[Unit] = {
     if JPath.of(config.downloadDir) == path then IO.unit
     else
-      val deleted = JFiles.deleteIfExists(path)
+      JFiles.deleteIfExists(path)
       deleteObjectPath(path.getParent)
   }
 
