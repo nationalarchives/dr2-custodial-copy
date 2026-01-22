@@ -182,7 +182,7 @@ lazy val commonSettings = Seq(
   ),
   (assembly / assemblyMergeStrategy) := {
     case PathList(ps @ _*) if ps.last == "Log4j2Plugins.dat" => log4j2MergeStrategy
-    case PathList("META-INF", xs @ _*) =>
+    case PathList("META-INF", xs @ _*)                       =>
       xs map {
         _.toLowerCase
       } match {

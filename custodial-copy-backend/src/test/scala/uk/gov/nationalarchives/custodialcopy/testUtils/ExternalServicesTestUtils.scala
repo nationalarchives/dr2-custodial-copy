@@ -311,7 +311,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       typesOfSqsMsgAndDeletionStatus.zipWithIndex.flatMap { case ((entityType, hasBeenDeleted), index) =>
         entityType match { // create duplicates in order to test deduplication
           case InformationObject => (1 to 2).map(_ => if hasBeenDeleted then DeletionReceivedSnsMessage(ioId) else IoReceivedSnsMessage(ioId))
-          case ContentObject =>
+          case ContentObject     =>
             val coId = coIds(index)
             (1 to 2).map(_ => if hasBeenDeleted then DeletionReceivedSnsMessage(coId) else CoReceivedSnsMessage(coId))
           case StructuralObject =>
@@ -597,7 +597,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
           .thenReturn(
             IO.pure(
               objectHasChanged match {
-                case None => MissingAndChangedObjects(generateObjects(entityType, "missing"), Nil)
+                case None                => MissingAndChangedObjects(generateObjects(entityType, "missing"), Nil)
                 case Some(objectChanged) =>
                   MissingAndChangedObjects(Nil, if objectChanged then generateObjects(entityType, "changed") else Nil)
               }

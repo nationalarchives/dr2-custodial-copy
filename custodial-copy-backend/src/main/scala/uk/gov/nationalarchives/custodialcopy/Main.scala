@@ -110,7 +110,7 @@ object Main extends IOApp {
       _ <- logger.info(s"${results.count(_.isError)} messages out of ${results.length} unique messages failed")
 
       _ <- results.parTraverse {
-        case Failure(e) => logError[IO](e)
+        case Failure(e)   => logError[IO](e)
         case Success(ref) =>
           responses
             .filter(_.message.ref == ref)
