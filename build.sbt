@@ -5,7 +5,7 @@ import uk.gov.nationalarchives.sbt.Log4j2MergePlugin.log4j2MergeStrategy
 import scala.sys.process.*
 
 ThisBuild / organization := "uk.gov.nationalarchives"
-ThisBuild / scalaVersion := "3.7.3"
+ThisBuild / scalaVersion := "3.7.4"
 
 lazy val tagImage = taskKey[Unit]("Sets a GitHub actions output for the latest tag")
 lazy val tagScannedImage = taskKey[Unit]("Tags the image with the Wiz CLI")
