@@ -12,7 +12,7 @@ object Dependencies {
   lazy val fs2Core = "co.fs2" %% "fs2-core" % "3.12.2"
   lazy val log4Cats = "org.typelevel" %% "log4cats-core" % log4CatsVersion
   lazy val declineEffect = "com.monovore" %% "decline-effect" % "2.5.0"
-  lazy val h2 = "com.h2database" % "h2" % "2.3.232"
+  lazy val h2 = "com.h2database" % "h2" % "2.4.240"
   lazy val log4CatsSlf4j = "org.typelevel" %% "log4cats-slf4j" % log4CatsVersion
   lazy val log4jCore = "org.apache.logging.log4j" % "log4j-core" % logbackVersion
   lazy val log4jSlf4j = "org.apache.logging.log4j" % "log4j-slf4j2-impl" % logbackVersion
