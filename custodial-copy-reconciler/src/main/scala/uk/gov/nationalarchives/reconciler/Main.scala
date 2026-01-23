@@ -11,7 +11,7 @@ import pureconfig.*
 import pureconfig.module.catseffect.syntax.*
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DAEventBridgeClient
-import uk.gov.nationalarchives.dp.client.{Entities, EntityClient}
+import uk.gov.nationalarchives.dp.client.EntityClient
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.ContentObject
 import uk.gov.nationalarchives.dp.client.fs2.Fs2Client
 import uk.gov.nationalarchives.reconciler.Configuration.impl
@@ -91,12 +91,12 @@ object Main extends IOApp {
       .drain
 
     val startOfEpoch = ZonedDateTime.ofInstant(Instant.ofEpochSecond(0), ZoneId.systemDefault())
-    def updatedSince(start: Int): IO[Seq[Entities.Entity]] = client.entitiesUpdatedSince(startOfEpoch, start, potentialEndDate = Option(endDate))
+    def updatedSince(start: Int): IO[EntityClient.EntitiesUpdated] = client.entitiesUpdatedSince(startOfEpoch, start, potentialEndDate = Option(endDate))
 
     def getEntities(start: Int = 0): Stream[IO, CoRow] =
       Stream
         .unfoldEval(0) { start =>
-          updatedSince(start).flatMap {
+          updatedSince(start).map(_.entities).flatMap {
             case Nil      => IO.none
             case entities =>
               entities
