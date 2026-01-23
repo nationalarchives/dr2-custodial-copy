@@ -97,7 +97,7 @@ object Main extends IOApp {
       Stream
         .unfoldEval(0) { start =>
           updatedSince(start).flatMap {
-            case Nil => IO.none
+            case Nil      => IO.none
             case entities =>
               entities
                 .filter(e => e.entityType.contains(ContentObject) && !e.deleted)
