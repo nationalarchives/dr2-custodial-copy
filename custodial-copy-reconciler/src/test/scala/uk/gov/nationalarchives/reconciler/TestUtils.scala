@@ -9,6 +9,7 @@ import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.DAEventBridgeClient
 import uk.gov.nationalarchives.dp.client.Client.BitStreamInfo
 import uk.gov.nationalarchives.dp.client.Entities.Entity
+import uk.gov.nationalarchives.dp.client.EntityClient.EntitiesUpdated
 import uk.gov.nationalarchives.dp.client.{DataProcessor, Entities, EntityClient}
 import uk.gov.nationalarchives.utils.Detail
 import uk.gov.nationalarchives.utils.TestUtils.notImplemented
@@ -34,10 +35,12 @@ object TestUtils:
         startEntry: Int,
         maxEntries: Int,
         potentialEndDate: Option[ZonedDateTime]
-    ): IO[Seq[Entities.Entity]] = entitiesRef.getAndUpdate {
-      case Nil          => Nil
-      case head :: tail => tail
-    }
+    ): IO[EntitiesUpdated] = entitiesRef
+      .getAndUpdate {
+        case Nil          => Nil
+        case head :: tail => tail
+      }
+      .map(e => EntitiesUpdated(false, e))
 
     override def getBitstreamInfo(contentRef: UUID): IO[Seq[BitStreamInfo]] = IO.pure(bitstreams)
   }
@@ -92,7 +95,7 @@ object TestUtils:
         startEntry: Int,
         maxEntries: Int,
         potentialEndDate: Option[ZonedDateTime]
-    ): IO[Seq[Entities.Entity]] = notImplemented
+    ): IO[EntitiesUpdated] = notImplemented
 
     override def entityEventActions(entity: Entities.Entity, startEntry: Int, maxEntries: Int): IO[Seq[DataProcessor.EventAction]] = notImplemented
 
