@@ -20,11 +20,11 @@ def tagDockerImage(imageName: String): Unit = {
 def getWizPath = Path(sys.env.getOrElse("WIZ_CLI_PATH", "./wizcli")).absolutePath
 
 def scanDockerImage(imageName: String): Unit = {
-  s"$getWizPath docker scan --file-hashes-scan --image $imageName:${sys.env("DOCKER_TAG")}".!!
+  s"$getWizPath scan container-image $imageName:${sys.env("DOCKER_TAG")}".!!
 }
 
 def tagScannedImage(imageName: String): Unit = {
-  s"$getWizPath docker tag --image $imageName:${sys.env("DOCKER_TAG")}".!!
+  s"$getWizPath tag $imageName:${sys.env("DOCKER_TAG")}".!!
 }
 
 def setupDirectories(serviceName: String) =
