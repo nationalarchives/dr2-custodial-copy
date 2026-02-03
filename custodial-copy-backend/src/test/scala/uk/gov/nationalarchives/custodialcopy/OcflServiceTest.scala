@@ -386,4 +386,40 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     verify(ocflRepository, times(0)).getObject(any[ObjectVersionId])
     verify(ocflRepository, times(0)).commitStagedChanges(any[String], any[VersionInfo])
   }
+
+  "isFileInRepository" should "return true if the file with the same path and checksum is in the repository" in {
+    val id = UUID.randomUUID
+    val ocflRepository = mock[MutableOcflRepository]
+    mockGetObjectResponse(ocflRepository, id, Option(sha256.fingerprint), destinationPath)
+
+    val ocflService = new OcflService(ocflRepository, semaphore)
+
+    val fileObject = FileObject(UUID.randomUUID(), "", List(Checksum("SHA256", sha256.fingerprint)), "", destinationPath, "")
+
+    ocflService.isFileInRepository(fileObject, id).unsafeRunSync() should equal(true)
+  }
+
+  "isFileInRepository" should "return true if the file with the same path but a different checksum is in the repository" in {
+    val id = UUID.randomUUID
+    val ocflRepository = mock[MutableOcflRepository]
+    mockGetObjectResponse(ocflRepository, id, Option(sha256.fingerprint), destinationPath)
+
+    val ocflService = new OcflService(ocflRepository, semaphore)
+
+    val fileObject = FileObject(UUID.randomUUID(), "", List(Checksum("SHA256", "anotherChecksum")), "", destinationPath, "")
+
+    ocflService.isFileInRepository(fileObject, id).unsafeRunSync() should equal(false)
+  }
+
+  "isFileInRepository" should "return true if no file with the same path is in the repository" in {
+    val id = UUID.randomUUID
+    val ocflRepository = mock[MutableOcflRepository]
+    mockGetObjectResponse(ocflRepository, id, Option(sha256.fingerprint), destinationPath)
+
+    val ocflService = new OcflService(ocflRepository, semaphore)
+
+    val fileObject = FileObject(UUID.randomUUID(), "", List(Checksum("SHA256", sha256.fingerprint)), "", "/test/path", "")
+
+    ocflService.isFileInRepository(fileObject, id).unsafeRunSync() should equal(false)
+  }
 }
