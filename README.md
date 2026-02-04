@@ -41,6 +41,8 @@ The process groups by the message group ID. Each group id corresponds to an OCFL
 
 The messages within each group are deduplicated to prevent repeat processing of the same entity.
 
+For messages within a group, if there is an IO message, all CO messages are removed as the IO message will download all CO messages.
+
 All updates for a single group of messages with the same group id are staged in OCFL; this allows us to write multiple
 changes without creating new versions.
 

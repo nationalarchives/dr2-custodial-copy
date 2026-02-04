@@ -128,7 +128,7 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO
       )
   }
 
-  def isFileInRepository(fileObject: FileObject, ioId: UUID): IO[Boolean] = {
+  def fileInRepository(fileObject: FileObject, ioId: UUID): IO[Boolean] = {
     for
       obj <- IO.blocking(ocflRepository.getObject(ioId.toHeadVersion))
       checksumChanged <- obj.getFiles.asScala.toList

@@ -172,7 +172,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     verify(utils.sqsClient, times(4)).deleteMessage(any[String], any[String])
   }
 
-  "runCustodialCopy" should "only download one file if there is an IO message and an existing CO file for that IO in the repository" in {
+  "runCustodialCopy" should "only download the missing CO file if there is an IO message with two COs and one CO file for that IO is in the repository" in {
     val bitstreamResponse = Seq(
       BitStreamInfo(
         "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2",

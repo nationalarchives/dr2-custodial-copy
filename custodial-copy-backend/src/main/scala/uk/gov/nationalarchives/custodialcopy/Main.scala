@@ -54,7 +54,7 @@ object Main extends IOApp {
 
   case class IdWithSourceAndDestPaths(id: UUID, sourceNioFilePath: Option[file.Path], destinationPath: String)
 
-  case class DedupedMessages(removedMessages: List[MessageResponse[ReceivedSnsMessage]], retainedMessages: List[MessageResponse[ReceivedSnsMessage]])
+  private case class DedupedMessages(removedMessages: List[MessageResponse[ReceivedSnsMessage]], retainedMessages: List[MessageResponse[ReceivedSnsMessage]])
 
   override def run(args: List[String]): IO[ExitCode] =
     for {
@@ -109,8 +109,8 @@ object Main extends IOApp {
       removedResults = dedupedMessages.removedMessages.map(_.message.ref).map(Success.apply)
 
       _ <- processor.commitStagedChanges(UUID.fromString(groupId))
-      _ <- logger.info(s"${results.count(_.isSuccess)} messages out of ${results.length} unique messages processed successfully")
-      _ <- logger.info(s"${results.count(_.isError)} messages out of ${results.length} unique messages failed")
+      _ <- logger.info(s"${results.count(_.isSuccess)} out of ${results.length} unique messages processed successfully")
+      _ <- logger.info(s"${results.count(_.isError)} out of ${results.length} unique messages failed")
 
       _ <- (results ++ removedResults).parTraverse {
         case Failure(e)   => logError[IO](e)
@@ -128,11 +128,9 @@ object Main extends IOApp {
 
   private def dedupeMessages(messages: List[MessageResponse[ReceivedSnsMessage]]): DedupedMessages = {
     val hasIo = messages.map(_.message).exists(_.isIo)
-    if hasIo then
-      val removedMessages = messages.filter(msg => msg.message.isCo).distinctBy(_.message.ref)
-      val retainedMessages = messages.filter(msg => !msg.message.isCo).distinctBy(_.message.ref)
-      DedupedMessages(removedMessages, retainedMessages)
-    else DedupedMessages(Nil, messages.distinctBy(_.message.ref))
+    val (removedMessages, retainedMessages) = if hasIo then messages.partition(msg => msg.message.isCo) else (Nil, messages)
+
+    DedupedMessages(removedMessages.distinctBy(_.message.ref), retainedMessages.distinctBy(_.message.ref))
   }
 
 }

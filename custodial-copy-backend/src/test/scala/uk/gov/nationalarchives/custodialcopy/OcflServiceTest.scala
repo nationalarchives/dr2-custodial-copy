@@ -396,10 +396,10 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
 
     val fileObject = FileObject(UUID.randomUUID(), "", List(Checksum("SHA256", sha256.fingerprint)), "", destinationPath, "")
 
-    ocflService.isFileInRepository(fileObject, id).unsafeRunSync() should equal(true)
+    ocflService.fileInRepository(fileObject, id).unsafeRunSync() should equal(true)
   }
 
-  "isFileInRepository" should "return true if the file with the same path but a different checksum is in the repository" in {
+  "isFileInRepository" should "return false if the file with the same path but a different checksum is in the repository" in {
     val id = UUID.randomUUID
     val ocflRepository = mock[MutableOcflRepository]
     mockGetObjectResponse(ocflRepository, id, Option(sha256.fingerprint), destinationPath)
@@ -408,10 +408,10 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
 
     val fileObject = FileObject(UUID.randomUUID(), "", List(Checksum("SHA256", "anotherChecksum")), "", destinationPath, "")
 
-    ocflService.isFileInRepository(fileObject, id).unsafeRunSync() should equal(false)
+    ocflService.fileInRepository(fileObject, id).unsafeRunSync() should equal(false)
   }
 
-  "isFileInRepository" should "return true if no file with the same path is in the repository" in {
+  "isFileInRepository" should "return false if no file with the same path is in the repository" in {
     val id = UUID.randomUUID
     val ocflRepository = mock[MutableOcflRepository]
     mockGetObjectResponse(ocflRepository, id, Option(sha256.fingerprint), destinationPath)
@@ -420,6 +420,6 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
 
     val fileObject = FileObject(UUID.randomUUID(), "", List(Checksum("SHA256", sha256.fingerprint)), "", "/test/path", "")
 
-    ocflService.isFileInRepository(fileObject, id).unsafeRunSync() should equal(false)
+    ocflService.fileInRepository(fileObject, id).unsafeRunSync() should equal(false)
   }
 }

@@ -244,7 +244,7 @@ class Processor(
   private def download(custodialCopyObject: CustodialCopyObject, ioId: UUID) = custodialCopyObject match {
     case fo: FileObject =>
       if fo.url.nonEmpty then
-        ocflService.isFileInRepository(fo, ioId).flatMap { isFileInRepository =>
+        ocflService.fileInRepository(fo, ioId).flatMap { isFileInRepository =>
           if isFileInRepository then IO.pure(IdWithSourceAndDestPaths(fo.id, None, fo.destinationFilePath))
           else
             for
