@@ -54,6 +54,8 @@ object Main extends IOApp {
 
   case class IdWithSourceAndDestPaths(id: UUID, sourceNioFilePath: Option[file.Path], destinationPath: String)
 
+  private case class DedupedMessages(removedMessages: List[MessageResponse[ReceivedSnsMessage]], retainedMessages: List[MessageResponse[ReceivedSnsMessage]])
+
   override def run(args: List[String]): IO[ExitCode] =
     for {
       config <- ConfigSource.default.loadF[IO, Config]()
@@ -98,18 +100,19 @@ object Main extends IOApp {
       _ <- logger.info(responses.map(_.message.ref).mkString(","))
       dedupedMessages = dedupeMessages(responses)
 
-      heartbeats <- dedupedMessages
+      heartbeats <- dedupedMessages.retainedMessages
         .map(_.receiptHandle)
         .parTraverse(r => processor.sendHeartbeat(r).start.map(f => r -> f))
         .map(_.toMap)
 
-      results <- dedupedMessages.traverse(processor.process)
+      results <- dedupedMessages.retainedMessages.traverse(processor.process)
+      removedResults = dedupedMessages.removedMessages.map(_.message.ref).map(Success.apply)
 
       _ <- processor.commitStagedChanges(UUID.fromString(groupId))
-      _ <- logger.info(s"${results.count(_.isSuccess)} messages out of ${results.length} unique messages processed successfully")
-      _ <- logger.info(s"${results.count(_.isError)} messages out of ${results.length} unique messages failed")
+      _ <- logger.info(s"${results.count(_.isSuccess)} out of ${results.length} unique messages processed successfully")
+      _ <- logger.info(s"${results.count(_.isError)} out of ${results.length} unique messages failed")
 
-      _ <- results.parTraverse {
+      _ <- (results ++ removedResults).parTraverse {
         case Failure(e)   => logError[IO](e)
         case Success(ref) =>
           responses
@@ -123,7 +126,11 @@ object Main extends IOApp {
     } yield results
   }
 
-  private def dedupeMessages(messages: List[MessageResponse[ReceivedSnsMessage]]): List[MessageResponse[ReceivedSnsMessage]] =
-    messages.distinctBy(_.message.ref)
+  private def dedupeMessages(messages: List[MessageResponse[ReceivedSnsMessage]]): DedupedMessages = {
+    val hasIo = messages.map(_.message).exists(_.isIo)
+    val (removedMessages, retainedMessages) = if hasIo then messages.partition(msg => msg.message.isCo) else (Nil, messages)
+
+    DedupedMessages(removedMessages.distinctBy(_.message.ref), retainedMessages.distinctBy(_.message.ref))
+  }
 
 }

@@ -148,6 +148,62 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
       )
     }
 
+  "runCustodialCopy" should "only download a file once if there are IO and CO messages for the same IO" in {
+    val utils = new MainTestUtils(
+      List((ContentObject, false), (InformationObject, false)),
+      bitstreamInfo2Responses = Seq(
+        BitStreamInfo(
+          "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2",
+          1,
+          "",
+          List(Fixity("SHA256", "")),
+          1,
+          Original,
+          None,
+          Some(UUID.randomUUID())
+        )
+      ),
+      objectVersion = 0
+    )
+
+    runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
+
+    verify(utils.preservicaClient, times(1)).streamBitstreamContent(any[Fs2Streams[IO]])(any[String], any())
+    verify(utils.sqsClient, times(4)).deleteMessage(any[String], any[String])
+  }
+
+  "runCustodialCopy" should "only download the missing CO file if there is an IO message with two COs and one CO file for that IO is in the repository" in {
+    val bitstreamResponse = Seq(
+      BitStreamInfo(
+        "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2",
+        1,
+        "https://example.com",
+        List(Fixity("SHA256", DigestUtils.sha256Hex("test"))),
+        1,
+        Original,
+        None,
+        Some(UUID.randomUUID())
+      )
+    )
+    val utils = new MainTestUtils(
+      List((InformationObject, false)),
+      bitstreamInfo1Responses = bitstreamResponse,
+      bitstreamInfo2Responses = bitstreamResponse,
+      objectVersion = 0
+    )
+    val tempFile = Files.createTempFile("test", "test")
+    Files.write(tempFile, "test".getBytes)
+    val destinationPath = s"${utils.ioId}/Preservation_1/${utils.coId1}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2"
+    (for
+      _ <- utils.ocflService.createObjects(List(IdWithSourceAndDestPaths(utils.ioId, Option(tempFile), destinationPath)))
+      _ <- utils.ocflService.commitStagedChanges(utils.ioId)
+    yield ()).unsafeRunSync()
+
+    runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
+
+    verify(utils.preservicaClient, times(1)).streamBitstreamContent(any[Fs2Streams[IO]])(any[String], any())
+  }
+
   "runCustodialCopy" should "delete all SO messages it receives" in {
     val utils = new MainTestUtils(typesOfSqsMsgAndDeletionStatus = List((StructuralObject, false), (StructuralObject, false)), objectVersion = 0)
 

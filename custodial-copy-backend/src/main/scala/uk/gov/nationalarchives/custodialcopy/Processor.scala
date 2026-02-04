@@ -241,16 +241,20 @@ class Processor(
     case _ => IO.pure(Nil)
   }
 
-  private def download(custodialCopyObject: CustodialCopyObject) = custodialCopyObject match {
+  private def download(custodialCopyObject: CustodialCopyObject, ioId: UUID) = custodialCopyObject match {
     case fo: FileObject =>
       if fo.url.nonEmpty then
-        for {
-          writePath <- fo.sourceFilePath(config.downloadDir)
-          _ <- entityClient.streamBitstreamContent[Unit](Fs2Streams.apply)(
-            fo.url,
-            s => s.through(Files[IO].writeAll(writePath, Flags.Write)).compile.drain
-          )
-        } yield IdWithSourceAndDestPaths(fo.id, Option(writePath.toNioPath), fo.destinationFilePath)
+        ocflService.fileInRepository(fo, ioId).flatMap { isFileInRepository =>
+          if isFileInRepository then IO.pure(IdWithSourceAndDestPaths(fo.id, None, fo.destinationFilePath))
+          else
+            for
+              writePath <- fo.sourceFilePath(config.downloadDir)
+              _ <- entityClient.streamBitstreamContent[Unit](Fs2Streams.apply)(
+                fo.url,
+                s => s.through(Files[IO].writeAll(writePath, Flags.Write)).compile.drain
+              )
+            yield IdWithSourceAndDestPaths(fo.id, Option(writePath.toNioPath), fo.destinationFilePath)
+        }
       else IO.pure(IdWithSourceAndDestPaths(fo.id, None, fo.destinationFilePath))
 
     case mo: MetadataObject =>
@@ -302,6 +306,7 @@ class Processor(
   }
 
   private def processNonDeletedMessages(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[List[SendSnsMessage]] =
+    val downloadFile = download(_, UUID.fromString(messageResponse.messageGroupId.get))
     for {
       logger <- Slf4jLogger.create[IO]
       custodialCopyObjects <- toCustodialCopyObject(messageResponse.message)
@@ -331,8 +336,8 @@ class Processor(
       }
 
       allMissingObjects: List[CustodialCopyObject] = missingIosAndCos ++ missingCoObjects
-      missingObjectsPaths <- allMissingObjects.traverse(download)
-      changedObjectsPaths <- missingAndChangedObjects.changedObjects.traverse(download)
+      missingObjectsPaths <- allMissingObjects.traverse(downloadFile)
+      changedObjectsPaths <- missingAndChangedObjects.changedObjects.traverse(downloadFile)
 
       _ <- ocflService.createObjects(missingObjectsPaths)
       _ <- logger.info(s"${missingObjectsPaths.length} objects created")

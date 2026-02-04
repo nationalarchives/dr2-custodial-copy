@@ -13,6 +13,7 @@ import io.ocfl.core.storage.OcflStorageBuilder
 import org.h2.jdbcx.JdbcDataSource
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
+import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.FileObject
 import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
 import uk.gov.nationalarchives.custodialcopy.OcflService.*
 import uk.gov.nationalarchives.utils.Utils.*
@@ -125,6 +126,18 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO
         nel => IO.raiseError(new Exception(nel.toList.mkString(","))),
         IO.pure
       )
+  }
+
+  def fileInRepository(fileObject: FileObject, ioId: UUID): IO[Boolean] = {
+    for
+      obj <- IO.blocking(ocflRepository.getObject(ioId.toHeadVersion))
+      checksumChanged <- obj.getFiles.asScala.toList
+        .find(_.getPath == fileObject.destinationFilePath)
+        .traverse(file => isChecksumUnchanged(file.getFixity.asScala.toMap, fileObject.checksums))
+    yield checksumChanged.exists(identity)
+  }.handleErrorWith {
+    case nfe: NotFoundException => IO.pure(false)
+    case e                      => IO.raiseError(e)
   }
 
   def getAllFilePathsOnAnObject(ioId: UUID): IO[List[String]] =

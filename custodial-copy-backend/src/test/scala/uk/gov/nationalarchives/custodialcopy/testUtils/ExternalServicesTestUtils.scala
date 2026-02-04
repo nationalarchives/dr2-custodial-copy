@@ -589,6 +589,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
 
       val ocflService = mock[OcflService]
       Mockito.reset(ocflService)
+      when(ocflService.fileInRepository(any(), any())).thenReturn(IO.pure(false))
       if throwErrorInMissingAndChangedObjects then
         when(ocflService.getMissingAndChangedObjects(any[List[MetadataObject]]))
           .thenThrow(new RuntimeException("Unexpected Error"))
