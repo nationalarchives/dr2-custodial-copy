@@ -89,12 +89,6 @@ lazy val reIndexer = (project in file("custodial-copy-re-indexer"))
   .settings(commonSettings)
   .settings(imageSettings)
   .dependsOn(utils)
-  .settings(
-    libraryDependencies ++= Seq(
-      declineEffect
-    ),
-    dockerCommands := dockerCommands.value.dropRight(1) :+ ExecCmd("ENTRYPOINT", "java", "-Xmx2g", "-jar", s"/opt/${(assembly / assemblyJarName).value}")
-  )
 
 lazy val builder = (project in file("custodial-copy-db-builder"))
   .enablePlugins(DockerPlugin)

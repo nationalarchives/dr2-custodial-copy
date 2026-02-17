@@ -1,16 +1,13 @@
 package uk.gov.nationalarchives.reindexer
 
-import cats.effect.{ExitCode, IO, Ref, Sync}
+import cats.effect.*
+import cats.implicits.*
+import fs2.{Stream, Chunk}
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
-import uk.gov.nationalarchives.reindexer.Configuration.{EntityType, ReIndexUpdate}
-import cats.implicits.*
-import uk.gov.nationalarchives.reindexer.Arguments.ReIndexArgs
-import fs2.Chunk
-import javax.xml.xpath.XPathExpression
 
 trait ReIndexer[F[_]: Sync]:
-  def reIndex(reindexArgs: ReIndexArgs)(using Database[F], Ocfl[F]): F[Unit]
+  def reIndex()(using Database[F], Ocfl[F], Concurrent[F]): F[Unit]
 
 object ReIndexer:
 
@@ -23,17 +20,18 @@ object ReIndexer:
       .getAndUpdate(_ + updatedCount)
       .flatMap(existing => Logger[F].info(s"Written rows $existing to ${existing + updatedCount - 1} to the database"))
 
-  given impl[F[_]: Sync: Ocfl: Database]: ReIndexer[F] = new ReIndexer[F]:
-    override def reIndex(reindexArgs: ReIndexArgs)(using Database[F], Ocfl[F]): F[Unit] =
-      val chunkSize = 100
+  given impl[F[_]: {Sync, Ocfl, Database}]: ReIndexer[F] = new ReIndexer[F]:
+    override def reIndex()(using Database[F], Ocfl[F], Concurrent[F]): F[Unit] =
+      val chunkSize = 10000
       val ocfl = Ocfl[F]
       for {
         ref <- Ref[F].of(0)
-        _ <- Database[F].getIds
-          .evalMap[F, List[ReIndexUpdate]](id => ocfl.readValue(id, reindexArgs.fileType, reindexArgs.xpath))
+        _ <- Ocfl[F]
+          .allObjects()
+          .parEvalMap(1000)(Ocfl[F].generateOcflObject)
+          .flatMap(Stream.emits)
           .chunkN(chunkSize)
-          .map(_.flatMap(Chunk.from))
-          .evalMap(Database[F].write(reindexArgs.columnName))
+          .evalMap(Database[F].write)
           .evalTap(logCount(ref, _))
           .compile
           .count
