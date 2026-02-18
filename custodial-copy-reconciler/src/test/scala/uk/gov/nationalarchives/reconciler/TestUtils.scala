@@ -41,7 +41,7 @@ object TestUtils:
         case Nil          => Nil
         case head :: tail => tail
       }
-      .map(e => EntitiesUpdated(false, e.filter(each => potentialEndDate.get.isAfter(each.date.toZonedDateTime)).map(_.entity)))
+      .map(e => EntitiesUpdated(false, e.filter(each => potentialEndDate.exists(_.isAfter(each.date.toZonedDateTime))).map(_.entity)))
 
     override def getBitstreamInfo(contentRef: UUID): IO[Seq[BitStreamInfo]] = IO.pure(bitstreams)
   }
