@@ -1,78 +1,71 @@
 package uk.gov.nationalarchives.reindexer
 
 import cats.effect.IO
-import org.scalatest.flatspec.AnyFlatSpec
-import uk.gov.nationalarchives.reindexer.Configuration.EntityType
-import uk.gov.nationalarchives.utils.TestUtils.*
 import cats.effect.unsafe.implicits.global
 import org.scalatest.EitherValues
+import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
+import uk.gov.nationalarchives.reindexer.Configuration.Config
+import uk.gov.nationalarchives.utils.TestUtils.{coRef, coRefTwo, initialiseRepo}
+import uk.gov.nationalarchives.utils.Utils.createOcflRepository
 
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 import java.util.UUID
-import javax.xml.xpath.{XPathExpression, XPathFactory}
 
 class OcflSpec extends AnyFlatSpec with EitherValues:
-  val ioXpath: XPathExpression = XPathFactory.newInstance.newXPath.compile("//Identifier[Type='BornDigitalRef']/Value")
-  val coXpath: XPathExpression = XPathFactory.newInstance.newXPath.compile("//ContentObject/Title")
 
-  private def getError(id: UUID, fileType: EntityType)(using Configuration) =
-    Ocfl[IO].readValue(id, fileType, ioXpath).attempt.map(_.left.value).unsafeRunSync().getMessage
-
-  "readValue" should "read the correct IO value" in {
+  "allObjectsIds" should "return all object ids in the repository" in {
     val id = UUID.randomUUID
     val (repoDir, workDir) = initialiseRepo(id)
+    val repository = createOcflRepository(repoDir, workDir)
+    case class IdPath(preservationId: UUID, path: Path)
+
     given Configuration = new Configuration:
-      override def config: Configuration.Config = Configuration.Config("test-database", repoDir, workDir)
+      override def config: Config = Config("test-database", repoDir, workDir)
 
-    val res = Ocfl[IO].readValue(id, EntityType.IO, ioXpath).unsafeRunSync().head
-
-    res.id should equal(ioRef)
-    res.value should equal("Zref")
+    val allObjects = Ocfl[IO].allObjectsIds().compile.toList.unsafeRunSync()
+    allObjects.length should equal(1)
+    allObjects.head should equal(id)
   }
 
-  "readValue" should "read the correct CO values" in {
+  "allObjectsIds" should "return an empty list for an empty repository" in {
+    val id = UUID.randomUUID
+    val (repoDir, workDir) = (Files.createTempDirectory("repo").toString, Files.createTempDirectory("work").toString)
+    val repository = createOcflRepository(repoDir, workDir)
+    case class IdPath(preservationId: UUID, path: Path)
+
+    given Configuration = new Configuration:
+      override def config: Config = Config("test-database", repoDir, workDir)
+
+    val allFiles = Ocfl[IO].allObjectsIds().compile.toList.unsafeRunSync()
+    allFiles.length should equal(0)
+  }
+
+  "generateOcflObject" should "return all content object rows in the repository" in {
     val id = UUID.randomUUID
     val (repoDir, workDir) = initialiseRepo(id)
+    val repository = createOcflRepository(repoDir, workDir)
+    case class IdPath(preservationId: UUID, path: Path)
 
     given Configuration = new Configuration:
-      override def config: Configuration.Config = Configuration.Config("test-database", repoDir, workDir)
+      override def config: Config = Config("test-database", repoDir, workDir)
 
-    val res = Ocfl[IO].readValue(id, EntityType.CO, coXpath).unsafeRunSync()
-
-    res.size should equal(2)
-
-    val coOne = res.find(_.id == coRef).get
-    val coTwo = res.find(_.id == coRefTwo).get
-
-    coOne.value should equal("Content Title")
-    coTwo.value should equal("Content Title2")
+    val ocflObjects = Ocfl[IO].generateOcflObject(id).unsafeRunSync()
+    ocflObjects.count(_.fileId == coRef) should equal(1)
+    ocflObjects.count(_.fileId == coRefTwo) should equal(1)
+    ocflObjects.count(_.fileName.contains("Content Title")) should equal(1)
+    ocflObjects.count(_.fileName.contains("Content Title2")) should equal(1)
   }
 
-  "readValue" should "raise an error of the id is not in the repository" in {
+  "generateOcflObject" should "error if the id doesn't exist" in {
     val id = UUID.randomUUID
-    val (repoDir, workDir) = initialiseRepo(id)
-    val invalidId = UUID.randomUUID()
-    val expectedErrorMessage = s"Object ObjectId{objectId='$invalidId', versionNum='null'} was not found."
+    val (repoDir, workDir) = (Files.createTempDirectory("repo").toString, Files.createTempDirectory("work").toString)
+    val repository = createOcflRepository(repoDir, workDir)
+    case class IdPath(preservationId: UUID, path: Path)
 
     given Configuration = new Configuration:
-      override def config: Configuration.Config = Configuration.Config("test-database", repoDir, workDir)
+      override def config: Config = Config("test-database", repoDir, workDir)
 
-    val errorMessage = getError(invalidId, EntityType.IO)
-
-    errorMessage should equal(expectedErrorMessage)
-  }
-
-  "readValue" should "initialise a new repository if one doesn't exist" in {
-    val id = UUID.randomUUID
-    val workDir = Files.createTempDirectory("work").toString
-    val repoDir = Files.createTempDirectory("repo").toString
-    val expectedErrorMessage = s"Object ObjectId{objectId='$id', versionNum='null'} was not found."
-
-    given Configuration = new Configuration:
-      override def config: Configuration.Config = Configuration.Config("test-database", repoDir, workDir)
-
-    val errorMessage = getError(id, EntityType.IO)
-
-    errorMessage should equal(expectedErrorMessage)
+    val error = Ocfl[IO].generateOcflObject(id).attempt.unsafeRunSync().left.value
+    error.getMessage should equal(s"Object ObjectId{objectId='$id', versionNum='null'} was not found.")
   }
