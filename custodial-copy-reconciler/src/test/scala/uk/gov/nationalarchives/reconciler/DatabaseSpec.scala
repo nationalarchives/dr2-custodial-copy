@@ -9,8 +9,9 @@ import fs2.Chunk
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
+import uk.gov.nationalarchives.reconciler.Database.CoRow
 import uk.gov.nationalarchives.reconciler.Main.Config
-import uk.gov.nationalarchives.reconciler.{CoRow, Configuration, Database}
+import uk.gov.nationalarchives.reconciler.{Configuration, Database}
 import uk.gov.nationalarchives.utils.TestUtils.*
 
 import java.net.URI

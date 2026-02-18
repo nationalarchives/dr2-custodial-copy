@@ -11,6 +11,7 @@ import uk.gov.nationalarchives.dp.client.Client.BitStreamInfo
 import uk.gov.nationalarchives.dp.client.Entities.Entity
 import uk.gov.nationalarchives.dp.client.EntityClient.EntitiesUpdated
 import uk.gov.nationalarchives.dp.client.{DataProcessor, Entities, EntityClient}
+import uk.gov.nationalarchives.reconciler.Database.CoRow
 import uk.gov.nationalarchives.utils.Detail
 import uk.gov.nationalarchives.utils.TestUtils.notImplemented
 

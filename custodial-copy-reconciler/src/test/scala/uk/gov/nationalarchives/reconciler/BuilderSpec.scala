@@ -8,6 +8,7 @@ import org.scalatest.matchers.should.Matchers.*
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.EntityClient.GenerationType.{Derived, Original}
 import uk.gov.nationalarchives.reconciler.Builder
+import uk.gov.nationalarchives.reconciler.Database.CoRow
 import uk.gov.nationalarchives.reconciler.Main.Config
 import uk.gov.nationalarchives.reconciler.TestUtils.{testEntityClient, testOcflService}
 import uk.gov.nationalarchives.utils.testOcflFileRetriever

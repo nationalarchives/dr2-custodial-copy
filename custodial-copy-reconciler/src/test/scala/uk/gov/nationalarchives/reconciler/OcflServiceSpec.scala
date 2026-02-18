@@ -6,6 +6,7 @@ import io.ocfl.api.model.{ObjectVersionId, VersionInfo}
 import org.apache.commons.codec.digest.DigestUtils
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
+import uk.gov.nationalarchives.reconciler.Database.CoRow
 import uk.gov.nationalarchives.reconciler.Main.Config
 import uk.gov.nationalarchives.utils.Utils.*
 
