@@ -14,7 +14,7 @@ import java.util.UUID
 
 class OcflSpec extends AnyFlatSpec with EitherValues:
 
-  "allObjects" should "return all object ids in the repository" in {
+  "allObjectsIds" should "return all object ids in the repository" in {
     val id = UUID.randomUUID
     val (repoDir, workDir) = initialiseRepo(id)
     val repository = createOcflRepository(repoDir, workDir)
@@ -23,9 +23,22 @@ class OcflSpec extends AnyFlatSpec with EitherValues:
     given Configuration = new Configuration:
       override def config: Config = Config("test-database", repoDir, workDir)
 
-    val allObjects = Ocfl[IO].allObjects().compile.toList.unsafeRunSync()
+    val allObjects = Ocfl[IO].allObjectsIds().compile.toList.unsafeRunSync()
     allObjects.length should equal(1)
     allObjects.head should equal(id)
+  }
+
+  "allObjectsIds" should "return an empty list for an empty repository" in {
+    val id = UUID.randomUUID
+    val (repoDir, workDir) = (Files.createTempDirectory("repo").toString, Files.createTempDirectory("work").toString)
+    val repository = createOcflRepository(repoDir, workDir)
+    case class IdPath(preservationId: UUID, path: Path)
+
+    given Configuration = new Configuration:
+      override def config: Config = Config("test-database", repoDir, workDir)
+
+    val allFiles = Ocfl[IO].allObjectsIds().compile.toList.unsafeRunSync()
+    allFiles.length should equal(0)
   }
 
   "generateOcflObject" should "return all content object rows in the repository" in {
@@ -42,19 +55,6 @@ class OcflSpec extends AnyFlatSpec with EitherValues:
     ocflObjects.count(_.fileId == coRefTwo) should equal(1)
     ocflObjects.count(_.fileName.contains("Content Title")) should equal(1)
     ocflObjects.count(_.fileName.contains("Content Title2")) should equal(1)
-  }
-
-  "allObjects" should "return an empty list for an empty repository" in {
-    val id = UUID.randomUUID
-    val (repoDir, workDir) = (Files.createTempDirectory("repo").toString, Files.createTempDirectory("work").toString)
-    val repository = createOcflRepository(repoDir, workDir)
-    case class IdPath(preservationId: UUID, path: Path)
-
-    given Configuration = new Configuration:
-      override def config: Config = Config("test-database", repoDir, workDir)
-
-    val allFiles = Ocfl[IO].allObjects().compile.toList.unsafeRunSync()
-    allFiles.length should equal(0)
   }
 
   "generateOcflObject" should "error if the id doesn't exist" in {

@@ -27,7 +27,7 @@ object ReIndexer:
       for {
         ref <- Ref[F].of(0)
         _ <- Ocfl[F]
-          .allObjects()
+          .allObjectsIds()
           .parEvalMap(1000)(Ocfl[F].generateOcflObject)
           .flatMap(Stream.emits)
           .chunkN(chunkSize)

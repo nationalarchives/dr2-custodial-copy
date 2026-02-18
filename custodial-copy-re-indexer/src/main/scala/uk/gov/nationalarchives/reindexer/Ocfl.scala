@@ -11,7 +11,7 @@ import scala.jdk.CollectionConverters.*
 
 trait Ocfl[F[_]: Sync]:
 
-  def allObjects(): Stream[F, UUID]
+  def allObjectsIds(): Stream[F, UUID]
 
   def generateOcflObject(id: UUID): F[List[OcflFile]]
 
@@ -25,7 +25,7 @@ object Ocfl:
     override def generateOcflObject(id: UUID): F[List[OcflFile]] =
       Sync[F].blocking(Utils.generateOcflObjects(id, ocflRepo, configuration.config.ocflRepoDir))
 
-    override def allObjects(): Stream[F, UUID] =
+    override def allObjectsIds(): Stream[F, UUID] =
       Stream
         .fromIterator(ocflRepo.listObjectIds().iterator().asScala, 10000)
         .map(UUID.fromString)

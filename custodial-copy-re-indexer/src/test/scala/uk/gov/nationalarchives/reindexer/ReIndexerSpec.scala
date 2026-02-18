@@ -29,7 +29,7 @@ class ReIndexerSpec extends AnyFlatSpec with EitherValues:
     given Ocfl[IO] = new Ocfl[IO]:
       override def generateOcflObject(id: UUID): IO[List[OcflFile]] = IO.pure(List(createOcflFile))
 
-      override def allObjects(): Stream[IO, UUID] = Stream.emit(id)
+      override def allObjectsIds(): Stream[IO, UUID] = Stream.emit(id)
 
     ReIndexer[IO].reIndex().unsafeRunSync()
   }
@@ -41,7 +41,7 @@ class ReIndexerSpec extends AnyFlatSpec with EitherValues:
       IO(10000)
 
     given Ocfl[IO] = new Ocfl[IO]:
-      override def allObjects(): Stream[IO, UUID] = Stream.emits(List.fill(20000)(id))
+      override def allObjectsIds(): Stream[IO, UUID] = Stream.emits(List.fill(20000)(id))
 
       override def generateOcflObject(id: UUID): IO[List[OcflFile]] = IO.pure(List.fill(1)(createOcflFile))
 
@@ -52,7 +52,7 @@ class ReIndexerSpec extends AnyFlatSpec with EitherValues:
     given Database[IO] = (files: Chunk[Utils.OcflFile]) => IO.stub
 
     given Ocfl[IO] = new Ocfl[IO]:
-      override def allObjects(): fs2.Stream[IO, UUID] = Stream.empty
+      override def allObjectsIds(): fs2.Stream[IO, UUID] = Stream.empty
 
       override def generateOcflObject(id: UUID): IO[List[OcflFile]] = IO.pure(Nil)
 
@@ -63,7 +63,7 @@ class ReIndexerSpec extends AnyFlatSpec with EitherValues:
     given Database[IO] = (files: Chunk[Utils.OcflFile]) => IO.stub
 
     given Ocfl[IO] = new Ocfl[IO]:
-      override def allObjects(): fs2.Stream[IO, UUID] =
+      override def allObjectsIds(): fs2.Stream[IO, UUID] =
         Stream.raiseError(new Exception("Error reading from OCFL"))
 
       override def generateOcflObject(id: UUID): IO[List[OcflFile]] = IO.stub
@@ -76,7 +76,7 @@ class ReIndexerSpec extends AnyFlatSpec with EitherValues:
     given Database[IO] = (files: Chunk[Utils.OcflFile]) => IO.raiseError(new Exception("Error writing to the database"))
 
     given Ocfl[IO] = new Ocfl[IO]:
-      override def allObjects(): fs2.Stream[IO, UUID] =
+      override def allObjectsIds(): fs2.Stream[IO, UUID] =
         Stream.emit(id)
 
       override def generateOcflObject(id: UUID): IO[List[OcflFile]] = IO.pure(List(createOcflFile))
