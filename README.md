@@ -349,8 +349,8 @@ If the object is not in the queue, nothing happens. The message will eventually 
 
 This is a service that retrieves all Content Object (CO) refs (ids), their checksums and parent Information Object (IO) refs that are 
 currently in Preservica.
-At the same time it gets a list of the same information from the OCFL repository.
-For both the Preservica and OCFL lists, we ignore the last 24 hours worth of updates. This means that we don't get false positive mismatches caused by in progress ingests. 
+At the same time, it gets a list of the same information from the OCFL repository.
+For both the Preservica and OCFL lists, we ignore the last `DAYS_TO_IGNORE` days worth of updates. This means that we don't get false positive mismatches caused by in progress ingests. 
 Once we have both lists, it writes each of them to a Preservica CO and an OCFL CO table respectively; it
 then compares the checksums and sends a message to Slack if there are any mismatches.
 
