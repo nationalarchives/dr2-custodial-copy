@@ -13,6 +13,7 @@ import fs2.Chunk
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
+import uk.gov.nationalarchives.reconciler.Database.{CoRow, Result}
 import uk.gov.nationalarchives.reconciler.Database.TableName.{OcflCOs, PreservicaCOs}
 import uk.gov.nationalarchives.utils.Utils.given
 
@@ -113,15 +114,15 @@ object Database:
       deleteUpdates.transact(xa)
   }
 
-case class CoRow(
-    id: UUID,
-    parent: Option[UUID],
-    sha256Checksum: String
-)
-
-case class Result(
-    psCOsCount: Int,
-    psCOsMissingFromCc: List[String],
-    ccCOsCount: Int,
-    ccCOsMissingFromPs: List[String]
-)
+  case class CoRow(
+      id: UUID,
+      parent: Option[UUID],
+      sha256Checksum: String
+  )
+  
+  case class Result(
+      psCOsCount: Int,
+      psCOsMissingFromCc: List[String],
+      ccCOsCount: Int,
+      ccCOsMissingFromPs: List[String]
+  )

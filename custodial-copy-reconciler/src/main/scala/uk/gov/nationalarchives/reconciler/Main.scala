@@ -15,6 +15,7 @@ import uk.gov.nationalarchives.dp.client.EntityClient
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.ContentObject
 import uk.gov.nationalarchives.dp.client.fs2.Fs2Client
 import uk.gov.nationalarchives.reconciler.Configuration.impl
+import uk.gov.nationalarchives.reconciler.Database.{CoRow, Result}
 import uk.gov.nationalarchives.reconciler.OcflService
 import uk.gov.nationalarchives.utils.Detail
 import uk.gov.nationalarchives.utils.DetailType.DR2DevMessage
