@@ -261,35 +261,15 @@ It can also be run using `sbt run`
 
 ## 4. Database re-indexer
 
-This is built as a docker image but is intended to be run periodically. The program takes a subcommand and three
-mandatory arguments.
-
-```bash
-reindex --file-type CO --column-name asdasd --xpath //Generation//EffectiveDate
-```
+This is built as a docker image but is intended to be run periodically. It recreates the full frontend database from scratch. 
 
 The program runs through these steps:
 
-* Select a distinct list of ids from the database.
-* For each ID, get the object from OCFL and find either the `IO_Metadata.xml` or all `CO_Metadata.xml` files.
-* Run the XPath against the metadata files and get the result. Get the ID from `<Ref>` field in the metadata XML.
-* For an `IO` update, write the value to the column name with a given `id`. For a CO, do this with the `fileId`
+* Get all OCFL object IDs from the repository
+* For each ID, get the object from OCFL and looks up the metadata from the metadata files
+* The metadata is written to the sqlite database.
 
 ### Arguments
-
-#### File type
-
-This can either be IO or CO and tells the reindexer whether the value for the database column we're updating is in
-`IO_Metadata.xml` or `CO_Metadata.xml`
-
-#### Column name
-
-The column in the database to write the value to
-
-#### XPath
-
-An XPath that will return a single value which will be written to the database column.
-The behaviour if the XPath expression returns more than one value is undefined.
 
 ### Environment Variables
 

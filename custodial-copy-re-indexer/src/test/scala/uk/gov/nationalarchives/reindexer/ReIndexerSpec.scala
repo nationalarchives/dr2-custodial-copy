@@ -2,131 +2,85 @@ package uk.gov.nationalarchives.reindexer
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import fs2.Chunk
+import cats.implicits.catsSyntaxOptionId
+import fs2.{Chunk, *}
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
-import uk.gov.nationalarchives.reindexer.Arguments.ReIndexArgs
-import uk.gov.nationalarchives.reindexer.Configuration.{EntityType, IoUpdate}
+import uk.gov.nationalarchives.utils.Utils
+import uk.gov.nationalarchives.utils.Utils.OcflFile
 
-import java.io.ByteArrayInputStream
+import java.time.Instant
 import java.util.UUID
-import javax.xml.parsers.DocumentBuilderFactory
-import javax.xml.xpath.{XPathExpression, XPathFactory}
 
 class ReIndexerSpec extends AnyFlatSpec with EitherValues:
-  val uuids: List[UUID] = List(UUID.randomUUID, UUID.randomUUID, UUID.randomUUID)
-  val xpath: XPathExpression = XPathFactory.newInstance.newXPath.compile("//B")
+  val id: UUID = UUID.randomUUID
+  val fileId: UUID = UUID.randomUUID
+  val instant: Instant = Instant.now
 
-  def expectedXPath(xPathExpression: XPathExpression, xpathToCheck: String): Boolean = {
-    val factory = DocumentBuilderFactory.newInstance
-    factory.setNamespaceAware(true)
-    val doc = factory.newDocumentBuilder.parse(new ByteArrayInputStream("<A><B>test</B></A>".getBytes))
-    xPathExpression.evaluate(doc) == XPathFactory.newInstance.newXPath.compile(xpathToCheck).evaluate(doc)
-  }
+  def createOcflFile =
+    OcflFile(1, id, "name".some, fileId, "ZREF".some, "path".some, "fileName".some, instant.some, "sourceId".some, "citation".some, "consignmentRef".some)
 
   "reIndex" should "pass the correct values to the OCFL and Database methods" in {
-    given Database[IO] = new Database[IO]:
-      override def getIds: fs2.Stream[IO, UUID] = fs2.Stream.emits(uuids)
-
-      override def write(columnName: String)(updates: Chunk[Configuration.ReIndexUpdate]): IO[Int] = {
-        updates.toList.sortBy(_.id) should equal(uuids.sorted.map(uuid => IoUpdate(uuid, s"$uuid-IO")))
-        IO(updates.size)
-      }
-
+    given Database[IO] = (files: Chunk[Utils.OcflFile]) =>
+      files.toList.size should equal(1)
+      files.head.get should equal(createOcflFile)
+      IO(1)
     given Ocfl[IO] = new Ocfl[IO]:
-      override def readValue(ioId: UUID, fileType: EntityType, xpath: XPathExpression)(using
-          configuration: Configuration
-      ): IO[List[Configuration.ReIndexUpdate]] = {
-        uuids.contains(ioId) should equal(true)
-        fileType should equal(EntityType.IO)
-        expectedXPath(xpath, "//B") should be(true)
-        IO(IoUpdate(ioId, s"$ioId-$fileType") :: Nil)
-      }
+      override def generateOcflObject(id: UUID): IO[List[OcflFile]] = IO.pure(List(createOcflFile))
 
-    ReIndexer[IO].reIndex(ReIndexArgs(EntityType.IO, "", xpath)).unsafeRunSync()
+      override def allObjectsIds(): Stream[IO, UUID] = Stream.emit(id)
+
+    ReIndexer[IO].reIndex().unsafeRunSync()
   }
 
   "reIndex" should "chunk the updates to the write method" in {
-    given Database[IO] = new Database[IO]:
-      override def getIds: fs2.Stream[IO, UUID] = fs2.Stream.emits(List.fill(1000)(UUID.randomUUID))
-
-      override def write(columnName: String)(updates: Chunk[Configuration.ReIndexUpdate]): IO[Int] = {
-        updates.toList.size should equal(100)
-        IO(updates.size)
-      }
+    given Database[IO] = (files: Chunk[Utils.OcflFile]) =>
+      files.toList.size should equal(10000)
+      files.foreach(file => file should equal(createOcflFile))
+      IO(10000)
 
     given Ocfl[IO] = new Ocfl[IO]:
-      override def readValue(ioId: UUID, fileType: EntityType, xpath: XPathExpression)(using
-          configuration: Configuration
-      ): IO[List[Configuration.ReIndexUpdate]] = {
-        IO(IoUpdate(ioId, s"$ioId-$fileType") :: Nil)
-      }
+      override def allObjectsIds(): Stream[IO, UUID] = Stream.emits(List.fill(20000)(id))
 
-    ReIndexer[IO].reIndex(ReIndexArgs(EntityType.IO, "", xpath)).unsafeRunSync()
+      override def generateOcflObject(id: UUID): IO[List[OcflFile]] = IO.pure(List.fill(1)(createOcflFile))
+
+    ReIndexer[IO].reIndex().unsafeRunSync()
   }
 
-  "reIndex" should "not call the OCFL repo or the write method if there are no ids returned" in {
-    given Database[IO] = new Database[IO]:
-      override def getIds: fs2.Stream[IO, UUID] = fs2.Stream.emits(Nil)
-
-      override def write(columnName: String)(updates: Chunk[Configuration.ReIndexUpdate]): IO[Int] =
-        IO.raiseError(new Exception("The 'write' method should not have been called since no ids were returned"))
+  "reIndex" should "not call the write method if there are no ids returned" in {
+    given Database[IO] = (files: Chunk[Utils.OcflFile]) => IO.stub
 
     given Ocfl[IO] = new Ocfl[IO]:
-      override def readValue(ioId: UUID, fileType: EntityType, xpath: XPathExpression)(using
-          configuration: Configuration
-      ): IO[List[Configuration.ReIndexUpdate]] =
-        IO.raiseError(new Exception("The 'readValue' method should not have been called since no ids were returned"))
+      override def allObjectsIds(): fs2.Stream[IO, UUID] = Stream.empty
 
-    ReIndexer[IO].reIndex(ReIndexArgs(EntityType.IO, "", xpath)).unsafeRunSync()
-  }
+      override def generateOcflObject(id: UUID): IO[List[OcflFile]] = IO.pure(Nil)
 
-  "reIndex" should "raise an error if there is an error getting the IDs" in {
-    given Database[IO] = new Database[IO]:
-      override def getIds: fs2.Stream[IO, UUID] = fs2.Stream.raiseError(new Exception("Error getting IDs"))
-
-      override def write(columnName: String)(updates: Chunk[Configuration.ReIndexUpdate]): IO[Int] = IO.pure(1)
-
-    given Ocfl[IO] = new Ocfl[IO]:
-      override def readValue(ioId: UUID, fileType: EntityType, xpath: XPathExpression)(using
-          configuration: Configuration
-      ): IO[List[Configuration.ReIndexUpdate]] =
-        IO(IoUpdate(UUID.randomUUID, "") :: Nil)
-
-    val err = ReIndexer[IO].reIndex(ReIndexArgs(EntityType.IO, "", xpath)).attempt.map(_.left.value).unsafeRunSync().getMessage
-    err should equal("Error getting IDs")
+    ReIndexer[IO].reIndex().unsafeRunSync()
   }
 
   "reIndex" should "raise an error if there is an error reading from OCFL" in {
-    given Database[IO] = new Database[IO]:
-      override def getIds: fs2.Stream[IO, UUID] = fs2.Stream.emits(uuids)
-
-      override def write(columnName: String)(updates: Chunk[Configuration.ReIndexUpdate]): IO[Int] = IO.pure(1)
+    given Database[IO] = (files: Chunk[Utils.OcflFile]) => IO.stub
 
     given Ocfl[IO] = new Ocfl[IO]:
-      override def readValue(ioId: UUID, fileType: EntityType, xpath: XPathExpression)(using
-          configuration: Configuration
-      ): IO[List[Configuration.ReIndexUpdate]] =
-        IO.raiseError(new Exception("Error reading from OCFL"))
+      override def allObjectsIds(): fs2.Stream[IO, UUID] =
+        Stream.raiseError(new Exception("Error reading from OCFL"))
 
-    val err = ReIndexer[IO].reIndex(ReIndexArgs(EntityType.IO, "", xpath)).attempt.map(_.left.value).unsafeRunSync().getMessage
+      override def generateOcflObject(id: UUID): IO[List[OcflFile]] = IO.stub
+
+    val err = ReIndexer[IO].reIndex().attempt.map(_.left.value).unsafeRunSync().getMessage
     err should equal("Error reading from OCFL")
   }
 
   "reIndex" should "raise an error if there is an error writing to the database" in {
-    given Database[IO] = new Database[IO]:
-      override def getIds: fs2.Stream[IO, UUID] = fs2.Stream.emits(uuids)
-
-      override def write(columnName: String)(updates: Chunk[Configuration.ReIndexUpdate]): IO[Int] =
-        IO.raiseError(new Exception("Error writing to the database"))
+    given Database[IO] = (files: Chunk[Utils.OcflFile]) => IO.raiseError(new Exception("Error writing to the database"))
 
     given Ocfl[IO] = new Ocfl[IO]:
-      override def readValue(ioId: UUID, fileType: EntityType, xpath: XPathExpression)(using
-          configuration: Configuration
-      ): IO[List[Configuration.ReIndexUpdate]] =
-        IO(IoUpdate(UUID.randomUUID, "") :: Nil)
+      override def allObjectsIds(): fs2.Stream[IO, UUID] =
+        Stream.emit(id)
 
-    val err = ReIndexer[IO].reIndex(ReIndexArgs(EntityType.IO, "", xpath)).attempt.map(_.left.value).unsafeRunSync().getMessage
+      override def generateOcflObject(id: UUID): IO[List[OcflFile]] = IO.pure(List(createOcflFile))
+
+    val err = ReIndexer[IO].reIndex().attempt.map(_.left.value).unsafeRunSync().getMessage
     err should equal("Error writing to the database")
   }

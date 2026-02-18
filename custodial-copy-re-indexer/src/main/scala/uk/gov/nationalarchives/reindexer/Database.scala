@@ -8,16 +8,12 @@ import doobie.util.log.LogHandler
 import doobie.util.transactor.Transactor
 import doobie.util.transactor.Transactor.Aux
 import doobie.util.{Put, Write}
-import fs2.{Chunk, Stream}
-import uk.gov.nationalarchives.reindexer.Configuration.{CoUpdate, IoUpdate, ReIndexUpdate}
-import uk.gov.nationalarchives.utils.Utils.given
-
-import java.util.UUID
+import fs2.Chunk
+import org.typelevel.log4cats.slf4j.Slf4jLogger
+import uk.gov.nationalarchives.utils.Utils.{OcflFile, given}
 
 trait Database[F[_]]:
-  def getIds: Stream[F, UUID]
-
-  def write(columnName: String)(updates: Chunk[ReIndexUpdate]): F[Int]
+  def write(files: Chunk[OcflFile]): F[Int]
 
 object Database:
   def apply[F[_]](using db: Database[F]): Database[F] = db
@@ -30,28 +26,13 @@ object Database:
       logHandler = Option(LogHandler.jdkLogHandler)
     )
 
-    override def getIds: Stream[F, UUID] = Stream.evals {
-      sql"select id from files group by 1"
-        .query[UUID]
-        .to[List]
-        .transact(xa)
-    }
+    override def write(files: Chunk[OcflFile]): F[Int] =
+      val insertSql =
+        "insert into files (version, id, name, fileId, zref, path, fileName, ingestDateTime, sourceId, citation, consignmentRef) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      for
+        logger <- Slf4jLogger.create[F]
+        insertCount <- Update[OcflFile](insertSql).updateMany(files).transact(xa)
+        _ <- logger.info(s"$insertCount rows inserted")
+      yield insertCount
 
-    given Write[ReIndexUpdate] = Write[(String, UUID)].contramap(field => (field.value, field.id))
-
-    override def write(columnName: String)(updates: Chunk[ReIndexUpdate]): F[Int] = {
-      val (ioUpdates, coUpdates) = updates.toList.partition {
-        case _: IoUpdate => true
-        case _: CoUpdate => false
-      }
-      val ioSql = s"update files set $columnName = ? where id = ?"
-      val coSql = s"update files set $columnName = ? where fileId = ?"
-      val allTransactions = for {
-        ioTransaction <- Update[ReIndexUpdate](ioSql).updateMany(ioUpdates)
-        coTransaction <- Update[ReIndexUpdate](coSql).updateMany(coUpdates)
-      } yield (ioTransaction, coTransaction)
-      allTransactions.transact(xa).map { case (ioCount, coCount) =>
-        ioCount + coCount
-      }
-    }
   }
