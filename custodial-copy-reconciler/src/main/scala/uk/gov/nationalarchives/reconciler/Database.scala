@@ -119,7 +119,7 @@ object Database:
       parent: Option[UUID],
       sha256Checksum: String
   )
-  
+
   case class Result(
       psCOsCount: Int,
       psCOsMissingFromCc: List[String],
