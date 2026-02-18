@@ -31,6 +31,7 @@ object Main extends IOApp {
       maxConcurrency: Int,
       ocflRepoDir: String,
       ocflWorkDir: String,
+      daysToIgnore: Int,
       proxyUrl: Option[URI] = None
   ) derives ConfigReader
 
@@ -82,7 +83,7 @@ object Main extends IOApp {
 
     val database = Database[IO]
     val builder = Builder[IO](client)
-    val endDate = ZonedDateTime.now(ZoneId.systemDefault())
+    val endDate = ZonedDateTime.now(ZoneId.systemDefault()).minusDays(configuration.config.daysToIgnore)
 
     val ocfl = ocflService.getAllObjectFiles
       .chunkN(10000)

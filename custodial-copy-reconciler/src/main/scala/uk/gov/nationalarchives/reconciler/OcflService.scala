@@ -15,6 +15,7 @@ import uk.gov.nationalarchives.reconciler.Main.Config
 import uk.gov.nationalarchives.utils.Utils.*
 
 import java.nio.file.Paths
+import java.time.OffsetDateTime
 import java.util.UUID
 import scala.jdk.CollectionConverters.*
 import scala.jdk.FunctionConverters.*
@@ -25,6 +26,7 @@ trait OcflService[F[_]] {
 object OcflService {
 
   def apply[F[_]: Async](config: Config): OcflService[F] = {
+    val startTime = OffsetDateTime.now
     val repoDir = Paths.get(config.ocflRepoDir)
     val workDir =
       Paths.get(
@@ -52,16 +54,19 @@ object OcflService {
 
     def filesForId(id: String) = {
       val ioRef = UUID.fromString(id)
-      val chunk = Chunk.from(repo.getObject(ioRef.toHeadVersion).getFiles.asScala).collect {
-        case coFile if isNotMetadataFile(coFile.getStorageRelativePath) =>
-          val pathAsList = coFile.getStorageRelativePath.split("/")
-          val pathStartingFromRepType = pathAsList.dropWhile(pathPart => !pathPart.startsWith("Preservation_") && !pathPart.startsWith("Access_"))
-          val coRef = UUID.fromString(pathStartingFromRepType(1))
-          val fixities = coFile.getFixity.asScala.toMap.map { case (digestAlgo, value) => (digestAlgo.getOcflName, value) }
-          val sha256 = fixities("sha256")
-          CoRow(coRef, Option(ioRef), sha256)
-      }
-      Async[F].pure(chunk)
+      val obj = repo.getObject(ioRef.toHeadVersion)
+      if obj.getCreated.isAfter(startTime.minusDays(config.daysToIgnore)) then Async[F].pure(Chunk.empty)
+      else
+        val chunk = Chunk.from(obj.getFiles.asScala).collect {
+          case coFile if isNotMetadataFile(coFile.getStorageRelativePath) =>
+            val pathAsList = coFile.getPath.split("/")
+            val pathStartingFromRepType = pathAsList.dropWhile(pathPart => !pathPart.startsWith("Preservation_") && !pathPart.startsWith("Access_"))
+            val coRef = UUID.fromString(pathStartingFromRepType(1))
+            val fixities = coFile.getFixity.asScala.toMap.map { case (digestAlgo, value) => (digestAlgo.getOcflName, value) }
+            val sha256 = fixities("sha256")
+            CoRow(coRef, Option(ioRef), sha256)
+        }
+        Async[F].pure(chunk)
     }
 
     new OcflService[F] {
@@ -71,6 +76,5 @@ object OcflService {
           .chunkN(50)
           .flatMap(chunk => Stream.evalUnChunk(chunk.parFlatTraverse(filesForId)))
     }
-
   }
 }

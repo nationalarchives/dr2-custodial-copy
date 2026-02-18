@@ -19,7 +19,7 @@ import scala.jdk.CollectionConverters.*
 class BuilderSpec extends AnyFlatSpec:
 
   "Builder run" should ", given a ContentObject, return all Preservica CoRows regardless of generation type and version" in {
-    val config = Config("", "", 5, Files.createTempDirectory("work").toString, Files.createTempDirectory("repo").toString)
+    val config = Config("", "", 5, Files.createTempDirectory("work").toString, Files.createTempDirectory("repo").toString, 0)
     val potentialParentRef = Some(UUID.randomUUID)
     val co1Ref = UUID.randomUUID
     val co2Ref = UUID.randomUUID

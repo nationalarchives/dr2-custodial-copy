@@ -14,7 +14,7 @@ import uk.gov.nationalarchives.dp.client.{DataProcessor, Entities, EntityClient}
 import uk.gov.nationalarchives.utils.Detail
 import uk.gov.nationalarchives.utils.TestUtils.notImplemented
 
-import java.time.ZonedDateTime
+import java.time.{OffsetDateTime, ZonedDateTime}
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
@@ -28,7 +28,7 @@ object TestUtils:
     override def getBitstreamInfo(contentRef: UUID): IO[Seq[BitStreamInfo]] = IO.pure(idToBitstreams.getOrElse(contentRef, Nil))
   }
 
-  def testEntityClient(entitiesRef: Ref[IO, List[Entity]], bitstreams: List[BitStreamInfo]): EntityClient[IO, Fs2Streams[IO]] = new TestEntityClient {
+  def testEntityClient(entitiesRef: Ref[IO, List[DatedEntity]], bitstreams: List[BitStreamInfo]): EntityClient[IO, Fs2Streams[IO]] = new TestEntityClient {
 
     override def entitiesUpdatedSince(
         dateTime: ZonedDateTime,
@@ -40,7 +40,7 @@ object TestUtils:
         case Nil          => Nil
         case head :: tail => tail
       }
-      .map(e => EntitiesUpdated(false, e))
+      .map(e => EntitiesUpdated(false, e.filter(each => potentialEndDate.get.isAfter(each.date.toZonedDateTime)).map(_.entity)))
 
     override def getBitstreamInfo(contentRef: UUID): IO[Seq[BitStreamInfo]] = IO.pure(bitstreams)
   }
@@ -50,10 +50,12 @@ object TestUtils:
       ref.update(existing => detail.asInstanceOf[Detail] :: existing).map(_ => PutEventsResponse.builder.build)
   }
 
-  def runTestReconciler(entities: List[Entity], bitstreams: List[BitStreamInfo])(using configuration: Configuration): List[Detail] = (for {
+  case class DatedEntity(date: OffsetDateTime, entity: Entity)
+
+  def runTestReconciler(entities: List[DatedEntity], bitstreams: List[BitStreamInfo])(using configuration: Configuration): List[Detail] = (for {
     detailRef <- Ref.of[IO, List[Detail]](Nil)
     ocflService = OcflService[IO](configuration.config)
-    entitiesRef <- Ref.of[IO, List[Entity]](entities)
+    entitiesRef <- Ref.of[IO, List[DatedEntity]](entities)
     _ <- Main.runReconciler(testEntityClient(entitiesRef, bitstreams), ocflService, eventBridgeClient(detailRef))
     eventBridgeDetails <- detailRef.get
   } yield eventBridgeDetails).unsafeRunSync()
