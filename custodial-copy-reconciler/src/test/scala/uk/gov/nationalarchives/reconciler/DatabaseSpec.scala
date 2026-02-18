@@ -9,8 +9,9 @@ import fs2.Chunk
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
+import uk.gov.nationalarchives.reconciler.Database.CoRow
 import uk.gov.nationalarchives.reconciler.Main.Config
-import uk.gov.nationalarchives.reconciler.{CoRow, Configuration, Database}
+import uk.gov.nationalarchives.reconciler.{Configuration, Database}
 import uk.gov.nationalarchives.utils.TestUtils.*
 
 import java.net.URI
@@ -61,7 +62,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
   override def afterEach(): Unit = Files.delete(Path.of(databaseName))
 
   given Configuration = new Configuration:
-    override def config: Config = Config("", databaseName, 5, "", "", Some(URI.create("http://localhost")))
+    override def config: Config = Config("", databaseName, 5, "", "", 0, Some(URI.create("http://localhost")))
 
   "writeToOcflCOsTable" should "should write the values to the OcflCOs table" in {
     createOcflCOsTable()

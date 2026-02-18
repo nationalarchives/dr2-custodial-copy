@@ -6,6 +6,7 @@ import io.ocfl.api.model.{ObjectVersionId, VersionInfo}
 import org.apache.commons.codec.digest.DigestUtils
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
+import uk.gov.nationalarchives.reconciler.Database.CoRow
 import uk.gov.nationalarchives.reconciler.Main.Config
 import uk.gov.nationalarchives.utils.Utils.*
 
@@ -36,7 +37,7 @@ class OcflServiceSpec extends AnyFlatSpec {
         }
     )
 
-    val config = Config("", "test-database", 1, repoDir, workDir)
+    val config = Config("", "test-database", 1, repoDir, workDir, 0)
     val allFiles = OcflService[IO](config).getAllObjectFiles.compile.toList.unsafeRunSync()
     allFiles.length should equal(100)
 
@@ -66,7 +67,7 @@ class OcflServiceSpec extends AnyFlatSpec {
           .addPath(preservationTestFile, s"$id/Preservation_1/$preservationId")
           .addPath(accessTestFile, s"$id/Access_1/$accessId")
     )
-    val config = Config("", "test-database", 1, repoDir, workDir)
+    val config = Config("", "test-database", 1, repoDir, workDir, 0)
     val allFiles = OcflService[IO](config).getAllObjectFiles.compile.toList.unsafeRunSync()
     allFiles.length should equal(2)
 

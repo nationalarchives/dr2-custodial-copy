@@ -4,6 +4,7 @@ import cats.effect.Async
 import cats.implicits.*
 import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.dp.client.EntityClient
+import uk.gov.nationalarchives.reconciler.Database.CoRow
 
 import java.util.UUID
 

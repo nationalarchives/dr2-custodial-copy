@@ -23,7 +23,7 @@ import uk.gov.nationalarchives.utils.Utils.{OcflFile, createOcflRepository, give
 import java.io.{ByteArrayInputStream, InputStream}
 import java.lang
 import java.nio.file.Files
-import java.time.Instant
+import java.time.{Instant, OffsetDateTime}
 import java.time.temporal.ChronoField
 import java.util.UUID
 import scala.concurrent.duration.Duration
@@ -186,7 +186,8 @@ object TestUtils:
       coMetadataContent: List[Elem] = completeCoMetadataContentElements,
       addFilesToRepo: Boolean = true,
       addContentFilesToRepo: Boolean = true,
-      metadataFileSuffix: String = "_Metadata"
+      metadataFileSuffix: String = "_Metadata",
+      createdBeforeDays: Int = 0
   ): (String, String) = {
     val repoDir = Files.createTempDirectory("repo")
     val workDir = Files.createTempDirectory("work")
@@ -198,10 +199,12 @@ object TestUtils:
 
     Files.write(ioMetadataFile, ioMetadataContent.toString.getBytes)
 
-    if (addFilesToRepo)
+    if (addFilesToRepo) {
+      val versionInfo = new VersionInfo()
+      versionInfo.setCreated(OffsetDateTime.now.minusDays(createdBeforeDays))
       createOcflRepository(repoDir.toString, workDir.toString).updateObject(
         id.toHeadVersion,
-        new VersionInfo(),
+        versionInfo,
         { (updater: OcflObjectUpdater) =>
           updater.addPath(ioMetadataFile, s"IO$metadataFileSuffix.xml", OcflOption.OVERWRITE)
           coMetadataContent.zipWithIndex.foreach { (elem, idx) =>
@@ -213,6 +216,7 @@ object TestUtils:
           }
         }.asJava
       )
+    }
     (repoDir.toString, workDir.toString)
   }
 

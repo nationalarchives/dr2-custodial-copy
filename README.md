@@ -348,23 +348,25 @@ If the object is not in the queue, nothing happens. The message will eventually 
 ## 6. Custodial Copy Reconciler
 
 This is a service that retrieves all Content Object (CO) refs (ids), their checksums and parent Information Object (IO) refs that are 
-currently in Preservica. Using each CO's parent (IO) ref, it then gets the corresponding CO refs
-and checksum in OCFL. Once we have both lists, it writes each of them to a Preservica CO and an OCFL CO table respectively; it
+currently in Preservica.
+At the same time, it gets a list of the same information from the OCFL repository.
+For both the Preservica and OCFL lists, we ignore the last `DAYS_TO_IGNORE` days worth of updates. This means that we don't get false positive mismatches caused by in progress ingests. 
+Once we have both lists, it writes each of them to a Preservica CO and an OCFL CO table respectively; it
 then compares the checksums and sends a message to Slack if there are any mismatches.
 
 The reason is that there are events such as failures or deletions (intentional or unintentional) that could cause the
-two storage mediums to become out of sync. We are only concerned with original non-"Access" COs.
+two storage mediums to become out of sync.
 
 ### The process
 
-1. Stream every entity from Preservica via paginated calls to the `updated-since` endpoint.
+1. Stream every entity from Preservica via paginated calls to the `updated-since` endpoint. Set the end date for the API call to the current date minus `DAYS_TO_IGNORE` days. 
 2. It will filter out anything that is not a CO ref.
 3. Splits the remaining object refs into Chunks:
 4. Run this process for each Chunk:
    1. get the bitstream info from Preservica
    2. retrieve the IO ref and sha256 checksum. If there is no checksum (as is the case for files extracted from email attachments), then this CO is ignored.
    3. Return these `CoRow`s
-5. There is a parallel process which streams all OCFL objects from the repository and writes them in chunks to the database. 
+5. There is a parallel process which streams all OCFL objects from the repository and writes them in chunks to the database. It will ignore any objects which were created more than `DAYS_TO_IGNORE` days before the current date ago.   
 6. Once both processes have completed and all rows have been written to the database, the stream can be drained (in order to discard anything returned)
 7. Find the missing COs in each table
    1. first parse the `PreservicaCOs` table and check if the checksum(s) appear in the `OcflCos` table
@@ -383,11 +385,12 @@ two storage mediums to become out of sync. We are only concerned with original n
    2. if the number of messages is greater than 10, then send a general message to EventBridge informing clients that
       there are more than 10 messages and to check the logs for more details
 
-| Name                   | Description                                                                 |
-|------------------------|-----------------------------------------------------------------------------|
-| PRESERVICA_SECRET_NAME | The Secrets Manager secret used to store the API credentials                |
-| DATABASE_PATH          | The path to the sqlite database                                             |
-| MAX_CONCURRENCY        | The maximum number of chunks to process concurrently                        |
-| OCFL_REPO_DIR          | The directory for the OCFL repository                                       |
-| OCFL_WORK_DIR          | The directory for the OCFL work directory                                   |
-| HTTPS_PROXY            | An optional proxy. This is needed running in TNA's network but not locally. |
+| Name                   | Description                                                                                    |
+|------------------------|------------------------------------------------------------------------------------------------|
+| PRESERVICA_SECRET_NAME | The Secrets Manager secret used to store the API credentials                                   |
+| DATABASE_PATH          | The path to the sqlite database                                                                |
+| MAX_CONCURRENCY        | The maximum number of chunks to process concurrently                                           |
+| OCFL_REPO_DIR          | The directory for the OCFL repository                                                          |
+| OCFL_WORK_DIR          | The directory for the OCFL work directory                                                      |
+| DAYS_TO_IGNORE         | The number of days before the current date to ignore entities from Preservica and OCFL objects |
+| HTTPS_PROXY            | An optional proxy. This is needed running in TNA's network but not locally.                    |

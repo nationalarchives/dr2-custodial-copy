@@ -8,6 +8,7 @@ import org.scalatest.matchers.should.Matchers.*
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.EntityClient.GenerationType.{Derived, Original}
 import uk.gov.nationalarchives.reconciler.Builder
+import uk.gov.nationalarchives.reconciler.Database.CoRow
 import uk.gov.nationalarchives.reconciler.Main.Config
 import uk.gov.nationalarchives.reconciler.TestUtils.{testEntityClient, testOcflService}
 import uk.gov.nationalarchives.utils.testOcflFileRetriever
@@ -19,7 +20,7 @@ import scala.jdk.CollectionConverters.*
 class BuilderSpec extends AnyFlatSpec:
 
   "Builder run" should ", given a ContentObject, return all Preservica CoRows regardless of generation type and version" in {
-    val config = Config("", "", 5, Files.createTempDirectory("work").toString, Files.createTempDirectory("repo").toString)
+    val config = Config("", "", 5, Files.createTempDirectory("work").toString, Files.createTempDirectory("repo").toString, 0)
     val potentialParentRef = Some(UUID.randomUUID)
     val co1Ref = UUID.randomUUID
     val co2Ref = UUID.randomUUID
