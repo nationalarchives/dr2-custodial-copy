@@ -30,7 +30,7 @@ object Database:
     override def write(files: List[OcflFile]): F[Unit] = {
       val deleteSql = "delete from files where id = ?"
       val insertSql =
-        "insert into files (version, id, name, fileId, zref, path, fileName, ingestDateTime, sourceId, citation, consignmentRef) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "insert into files (version, id, name, fileId, zref, path, fileName, ingestDateTime, sourceId, citation, consignmentRef, code) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       val deleteAndInsert: ConnectionIO[(Int, Int)] = for {
         deleteCount <- Update[UUID](deleteSql).updateMany(files.map(_.id))
         updateCount <- Update[OcflFile](insertSql).updateMany(files)
