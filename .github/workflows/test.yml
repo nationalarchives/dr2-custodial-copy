@@ -16,8 +16,9 @@ jobs:
       - run: |
           curl -o wizcli https://downloads.wiz.io/v1/wizcli/latest/wizcli-linux-amd64
           chmod +x ./wizcli
-          ./wizcli auth --id ${{ secrets.WIZ_CLIENT_ID }} --secret ${{ secrets.WIZ_CLIENT_SECRET }}
           sbt scalafmtCheckAll test Docker/publishLocal scanDockerImage
         env:
           MANAGEMENT_ACCOUNT_NUMBER: 1
           DOCKER_TAG: 1
+          WIZ_CLIENT_ID: ${{ secrets.WIZ_CLIENT_ID}}
+          WIZ_CLIENT_SECRET: ${{ secrets.WIZ_CLIENT_SECRET}}
