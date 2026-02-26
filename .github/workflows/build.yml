@@ -24,16 +24,7 @@ jobs:
         uses: nationalarchives/dr2-github-actions/.github/actions/get-next-version@917201e254f112ff041b952dae76ef767cae7378
         with:
           repo-name: dr2-custodial-copy
-      - name: Install Wiz CLI
-        run: |
-          curl -Lo wizcli https://downloads.wiz.io/v1/wizcli/latest/wizcli-linux-amd64
-          curl -Lo /tmp/wizcli-sha256 https://downloads.wiz.io/v1/wizcli/latest/wizcli-linux-amd64-sha256
-          curl -Lo /tmp/wizcli-sha256.sig https://downloads.wiz.io/v1/wizcli/latest/wizcli-linux-amd64-sha256.sig
-          chmod +x wizcli
-          curl -Lo public_key.asc https://downloads.wiz.io/wizcli/public_key.asc
-          gpg --import public_key.asc
-          gpg --verify /tmp/wizcli-sha256.sig /tmp/wizcli-sha256
-          echo "$(cat /tmp/wizcli-sha256) wizcli" | sha256sum --check
+      - uses: nationalarchives/ds-docker-actions/.github/actions/wiz-install-cli@a37bebac8d11fa61ca7a539863fe45cfa00cdfc6
       - id: build-image
         run: |
           sbt Docker/publish scanDockerImage tagScannedImage

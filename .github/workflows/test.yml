@@ -13,15 +13,8 @@ jobs:
         with:
           distribution: "temurin"
           java-version: "21"
+      - uses: nationalarchives/ds-docker-actions/.github/actions/wiz-install-cli@a37bebac8d11fa61ca7a539863fe45cfa00cdfc6
       - run: |
-          curl -Lo wizcli https://downloads.wiz.io/v1/wizcli/latest/wizcli-linux-amd64
-          curl -Lo /tmp/wizcli-sha256 https://downloads.wiz.io/v1/wizcli/latest/wizcli-linux-amd64-sha256
-          curl -Lo /tmp/wizcli-sha256.sig https://downloads.wiz.io/v1/wizcli/latest/wizcli-linux-amd64-sha256.sig
-          chmod +x wizcli
-          curl -Lo public_key.asc https://downloads.wiz.io/wizcli/public_key.asc
-          gpg --import public_key.asc
-          gpg --verify /tmp/wizcli-sha256.sig /tmp/wizcli-sha256
-          echo "$(cat /tmp/wizcli-sha256) wizcli" | sha256sum --check
           sbt scalafmtCheckAll test Docker/publishLocal scanDockerImage
         env:
           MANAGEMENT_ACCOUNT_NUMBER: 1
