@@ -26,11 +26,16 @@ jobs:
           repo-name: dr2-custodial-copy
       - name: Install Wiz CLI
         run: |
-          curl -o wizcli https://downloads.wiz.io/v1/wizcli/latest/wizcli-linux-amd64
+          curl -Lo wizcli https://downloads.wiz.io/v1/wizcli/latest/wizcli-linux-amd64
+          curl -Lo /tmp/wizcli-sha256 https://downloads.wiz.io/v1/wizcli/latest/wizcli-linux-amd64-sha256
+          curl -Lo /tmp/wizcli-sha256.sig https://downloads.wiz.io/v1/wizcli/latest/wizcli-linux-amd64-sha256.sig
           chmod +x wizcli
-          ./wizcli auth --id ${{ secrets.WIZ_CLIENT_ID }} --secret ${{ secrets.WIZ_CLIENT_SECRET }}
+          curl -Lo public_key.asc https://downloads.wiz.io/wizcli/public_key.asc
+          gpg --import public_key.asc
+          gpg --verify /tmp/wizcli-sha256.sig /tmp/wizcli-sha256
+          echo "$(cat /tmp/wizcli-sha256) wizcli" | sha256sum --check
       - id: build-image
-        run: | 
+        run: |
           sbt Docker/publish scanDockerImage tagScannedImage
           git tag ${{ steps.next-tag.outputs.next-version }}
           git push origin ${{ steps.next-tag.outputs.next-version }}
@@ -40,6 +45,8 @@ jobs:
           MANAGEMENT_ACCOUNT_NUMBER: ${{ secrets.MANAGEMENT_ACCOUNT }}
           DOCKER_TAG: ${{ steps.next-tag.outputs.next-version }}
           WIZ_CLI_PATH: ./wizcli
+          WIZ_CLIENT_ID: ${{ secrets.WIZ_CLIENT_ID }}
+          WIZ_CLIENT_SECRET: ${{ secrets.WIZ_CLIENT_SECRET }}
       - name: Send failure message
         uses: nationalarchives/dr2-github-actions/.github/actions/slack-send@917201e254f112ff041b952dae76ef767cae7378
         if: failure()
