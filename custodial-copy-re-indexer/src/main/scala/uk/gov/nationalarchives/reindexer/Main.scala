@@ -8,7 +8,9 @@ object Main extends IOApp:
   given Logger[IO] = Slf4jLogger.getLogger[IO]
 
   override def run(args: List[String]): IO[ExitCode] =
-    ReIndexer[IO].reIndex().map(_ => ExitCode.Success)
+    ReIndexer[IO]
+      .reIndex()
+      .map(_ => ExitCode.Success)
       .handleErrorWith { err =>
         for
           logger <- Slf4jLogger.create[IO]
