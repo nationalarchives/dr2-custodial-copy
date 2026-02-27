@@ -40,7 +40,7 @@ object TestUtils:
     )
 
     def createReIndexerTable(): Int =
-      sql"CREATE TABLE IF NOT EXISTS files(version int, id text, name text, fileId text, zref text, path text, fileName text, ingestDateTime numeric, sourceId text, citation text, consignmnetRef text);".update.run
+      sql"CREATE TABLE IF NOT EXISTS files(version int, id text, name text, fileId text, zref text, path text, fileName text, ingestDateTime numeric, sourceId text, citation text, consignmnetRef text, code text);".update.run
         .transact(xa)
         .unsafeRunSync()
 
@@ -48,7 +48,7 @@ object TestUtils:
       val transaction = for {
         _ <- sql"DROP TABLE IF EXISTS files".update.run
         _ <-
-          sql"CREATE TABLE files(version int, id text, name text, fileId text, zref text, path text, fileName text, ingestDateTime numeric, sourceId text, citation text, consignmentRef text);".update.run
+          sql"CREATE TABLE files(version int, id text, name text, fileId text, zref text, path text, fileName text, ingestDateTime numeric, sourceId text, citation text, consignmentRef text, code text);".update.run
       } yield ()
       transaction.transact(xa).unsafeRunSync()
     }
@@ -87,8 +87,8 @@ object TestUtils:
       (fr"select" ++ Fragment.const(columnName) ++ fr"from files where id = $id").query[String].unique.transact(xa).unsafeRunSync()
 
     def createFile(fileId: UUID = UUID.randomUUID, zref: String = "zref", id: UUID = UUID.randomUUID): IO[OcflFile] = {
-      sql"""INSERT INTO files (version, id, name, fileId, zref, path, fileName, ingestDateTime, sourceId, citation, consignmentRef)
-                   VALUES (1, ${id.toString}, 'name', ${fileId.toString}, $zref, 'path', 'fileName', '2024-07-03T11:39:15.372Z', 'sourceId', 'citation', 'consignmentRef')""".update.run
+      sql"""INSERT INTO files (version, id, name, fileId, zref, path, fileName, ingestDateTime, sourceId, citation, consignmentRef, code)
+                   VALUES (1, ${id.toString}, 'name', ${fileId.toString}, $zref, 'path', 'fileName', '2024-07-03T11:39:15.372Z', 'sourceId', 'citation', 'consignmentRef', 'code')""".update.run
         .transact(xa)
         .map(_ => ocflFile(id, fileId, zref))
     }
@@ -99,13 +99,14 @@ object TestUtils:
         sourceId: Option[String],
         citation: Option[String],
         ingestDateTime: Option[Instant],
-        consignmentRef: Option[String]
+        consignmentRef: Option[String],
+        code: Option[String]
     ): IO[OcflFile] = {
       val fileId = UUID.randomUUID
-      sql"""INSERT INTO files (version, id, name, fileId, zref, path, fileName, ingestDateTime, sourceId, citation, consignmentRef)
-                     VALUES (1, $id, 'name', $fileId, $zref, 'path', 'fileName', $ingestDateTime, $sourceId, $citation, $consignmentRef)""".update.run
+      sql"""INSERT INTO files (version, id, name, fileId, zref, path, fileName, ingestDateTime, sourceId, citation, consignmentRef, code)
+                     VALUES (1, $id, 'name', $fileId, $zref, 'path', 'fileName', $ingestDateTime, $sourceId, $citation, $consignmentRef, $code)""".update.run
         .transact(xa)
-        .map(_ => OcflFile(1, id, "name".some, fileId, zref, "path".some, "fileName".some, ingestDateTime, sourceId, citation, consignmentRef))
+        .map(_ => OcflFile(1, id, "name".some, fileId, zref, "path".some, "fileName".some, ingestDateTime, sourceId, citation, consignmentRef, code))
     }
 
     def readFiles(id: UUID): IO[List[OcflFile]] = {
@@ -127,7 +128,8 @@ object TestUtils:
       Instant.now().`with`(ChronoField.NANO_OF_SECOND, 0).some,
       "sourceId".some,
       "citation".some,
-      "consignmentRef".some
+      "consignmentRef".some,
+      "code".some
     )
 
   extension (uuid: UUID) def toHeadVersion: ObjectVersionId = ObjectVersionId.head(uuid.toString)

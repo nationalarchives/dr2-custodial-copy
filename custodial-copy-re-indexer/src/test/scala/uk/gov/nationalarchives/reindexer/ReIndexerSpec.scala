@@ -28,7 +28,20 @@ class ReIndexerSpec extends AnyFlatSpec with EitherValues:
   }
 
   def createOcflFile =
-    OcflFile(1, id, "name".some, fileId, "ZREF".some, "path".some, "fileName".some, instant.some, "sourceId".some, "citation".some, "consignmentRef".some)
+    OcflFile(
+      1,
+      id,
+      "name".some,
+      fileId,
+      "ZREF".some,
+      "path".some,
+      "fileName".some,
+      instant.some,
+      "sourceId".some,
+      "citation".some,
+      "consignmentRef".some,
+      "code".some
+    )
 
   "reIndex" should "pass the correct values to the OCFL and Database methods" in {
     given Database[IO] = (files: Chunk[Utils.OcflFile]) =>

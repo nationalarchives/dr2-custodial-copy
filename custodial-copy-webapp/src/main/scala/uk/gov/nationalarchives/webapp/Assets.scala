@@ -13,7 +13,7 @@ import pureconfig.{ConfigReader, ConfigSource}
 import uk.gov.nationalarchives.utils.Utils.{OcflFile, given}
 import uk.gov.nationalarchives.webapp.FrontEndRoutes.SearchResponse
 
-import java.time.{Instant, ZoneOffset}
+import java.time.ZoneOffset
 import java.util.UUID
 
 trait Assets[F[_]]:

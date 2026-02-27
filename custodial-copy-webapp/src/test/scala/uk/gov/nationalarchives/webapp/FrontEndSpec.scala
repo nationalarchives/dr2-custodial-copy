@@ -84,7 +84,8 @@ class FrontEndSpec extends AnyFlatSpec:
               ingestDateTime.some,
               "sourceId".some,
               "citation".some,
-              "TDR-2025-RNDM".some
+              "TDR-2025-RNDM".some,
+              "code".some
             )
           )
         )
@@ -125,7 +126,8 @@ class FrontEndSpec extends AnyFlatSpec:
               ingestDateTime.some,
               "sourceId".some,
               "citation".some,
-              "TDR-2025-RNDM".some
+              "TDR-2025-RNDM".some,
+              "code".some
             )
           )
         )
@@ -165,7 +167,8 @@ class FrontEndSpec extends AnyFlatSpec:
               ingestDateTime.some,
               "sourceId".some,
               "citation".some,
-              "TDR-2025-RNDM".some
+              "TDR-2025-RNDM".some,
+              "code".some
             )
           )
         )
@@ -212,7 +215,8 @@ class FrontEndSpec extends AnyFlatSpec:
               ingestDateTime.some,
               "sourceId".some,
               "citation".some,
-              "TDR-2025-RNDM".some
+              "TDR-2025-RNDM".some,
+              "code".some
             )
           )
         )
