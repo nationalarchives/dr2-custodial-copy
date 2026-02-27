@@ -16,4 +16,4 @@ object Configuration:
   given impl: Configuration = new Configuration:
     override def config: Config = configOrError
 
-  case class Config(databasePath: String, ocflRepoDir: String, ocflWorkDir: String) derives ConfigReader
+  case class Config(databasePath: String, ocflRepoDir: String, ocflWorkDir: String, maxConcurrency: Int) derives ConfigReader
