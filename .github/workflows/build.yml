@@ -24,13 +24,9 @@ jobs:
         uses: nationalarchives/dr2-github-actions/.github/actions/get-next-version@917201e254f112ff041b952dae76ef767cae7378
         with:
           repo-name: dr2-custodial-copy
-      - name: Install Wiz CLI
-        run: |
-          curl -o wizcli https://downloads.wiz.io/v1/wizcli/latest/wizcli-linux-amd64
-          chmod +x wizcli
-          ./wizcli auth --id ${{ secrets.WIZ_CLIENT_ID }} --secret ${{ secrets.WIZ_CLIENT_SECRET }}
+      - uses: nationalarchives/ds-docker-actions/.github/actions/wiz-install-cli@a37bebac8d11fa61ca7a539863fe45cfa00cdfc6
       - id: build-image
-        run: | 
+        run: |
           sbt Docker/publish scanDockerImage tagScannedImage
           git tag ${{ steps.next-tag.outputs.next-version }}
           git push origin ${{ steps.next-tag.outputs.next-version }}
@@ -40,6 +36,8 @@ jobs:
           MANAGEMENT_ACCOUNT_NUMBER: ${{ secrets.MANAGEMENT_ACCOUNT }}
           DOCKER_TAG: ${{ steps.next-tag.outputs.next-version }}
           WIZ_CLI_PATH: ./wizcli
+          WIZ_CLIENT_ID: ${{ secrets.WIZ_CLIENT_ID }}
+          WIZ_CLIENT_SECRET: ${{ secrets.WIZ_CLIENT_SECRET }}
       - name: Send failure message
         uses: nationalarchives/dr2-github-actions/.github/actions/slack-send@917201e254f112ff041b952dae76ef767cae7378
         if: failure()
