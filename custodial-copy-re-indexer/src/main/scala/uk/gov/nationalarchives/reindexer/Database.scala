@@ -28,7 +28,7 @@ object Database:
 
     override def write(files: Chunk[OcflFile]): F[Int] =
       val insertSql =
-        "insert into files (version, id, name, fileId, zref, path, fileName, ingestDateTime, sourceId, citation, consignmentRef) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "insert into files (version, id, name, fileId, zref, path, fileName, ingestDateTime, sourceId, citation, consignmentRef, code) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       for
         logger <- Slf4jLogger.create[F]
         insertCount <- Update[OcflFile](insertSql).updateMany(files).transact(xa)

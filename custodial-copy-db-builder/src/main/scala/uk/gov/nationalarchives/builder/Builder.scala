@@ -12,7 +12,7 @@ trait Builder[F[_]]:
 
 object Builder:
   def apply[F[_]: Async](using ev: Builder[F]): Builder[F] = ev
-  given impl[F[_]: Async: Ocfl: Database](using configuration: Configuration): Builder[F] = messages =>
+  given impl[F[_]: {Async, Ocfl, Database}](using configuration: Configuration): Builder[F] = messages =>
     for {
       files <- messages.map(_.message.id).map(Ocfl[F].generateOcflObjects).sequence
       _ <- Database[F].write(files.flatten)

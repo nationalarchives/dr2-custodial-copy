@@ -36,7 +36,8 @@ class BuilderSpec extends AnyFlatSpec:
             Instant.now.some,
             "sourceId".some,
             "citation".some,
-            "TDR-2025-RNDM".some
+            "TDR-2025-RNDM".some,
+            "code".some
           )
         )
       }

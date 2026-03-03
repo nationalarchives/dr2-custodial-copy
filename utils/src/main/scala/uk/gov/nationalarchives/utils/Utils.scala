@@ -40,7 +40,8 @@ object Utils:
       ingestDateTime: Option[Instant],
       sourceId: Option[String],
       citation: Option[String],
-      consignmentRef: Option[String]
+      consignmentRef: Option[String],
+      code: Option[String]
   )
 
   extension (uuid: UUID) def toHeadVersion: ObjectVersionId = ObjectVersionId.head(uuid.toString)
@@ -64,6 +65,7 @@ object Utils:
     val sourceId = getIdentifier("SourceID")
     val citation = getIdentifier("NeutralCitation")
     val consignmentRef = getIdentifier("ConsignmentReference")
+    val code = getIdentifier("Code")
 
     val title = ioMetadata
       .flatMap { metadata =>
@@ -97,7 +99,8 @@ object Utils:
         ingestDateTime,
         sourceId,
         citation,
-        consignmentRef
+        consignmentRef,
+        code
       )
     }
   }

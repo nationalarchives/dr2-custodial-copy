@@ -39,7 +39,8 @@ object FrontEndRoutes:
         form.value("sourceId"),
         form.value("citation"),
         form.toInstant,
-        form.value("consignmentRef")
+        form.value("consignmentRef"),
+        form.value("code")
       )
 
   given QueryParamDecoder[UUID] = QueryParamDecoder[String].map(UUID.fromString)
@@ -58,7 +59,8 @@ object FrontEndRoutes:
       sourceId: Option[String],
       citation: Option[String],
       ingestDateTime: Option[Instant],
-      consignmentRef: Option[String]
+      consignmentRef: Option[String],
+      code: Option[String]
   ) {
     private val params: Vector[(String, Option[String])] = Vector(
       ("id", id.map(_.toString)),
@@ -66,7 +68,8 @@ object FrontEndRoutes:
       ("sourceId", sourceId),
       ("citation", citation),
       ("ingestDate", ingestDateTime.map(_.toEpochMilli.toString)),
-      ("consignmentRef", consignmentRef)
+      ("consignmentRef", consignmentRef),
+      ("code", code)
     ).filter(_._2.nonEmpty)
 
     def toQuery: Query = Query.fromVector(params)
@@ -96,9 +99,9 @@ object FrontEndRoutes:
         } yield resp.asHtml
       case req @ GET -> Root / "search" :? IdQueryParam(id) +& ZrefQueryParam(zref) +& SourceIdQueryParam(sourceId) +& CitationQueryParam(
             citation
-          ) +& IngestDateQueryParam(ingestDate) +& ConsignmentRefQueryParam(consignmentRef) =>
+          ) +& IngestDateQueryParam(ingestDate) +& ConsignmentRefQueryParam(consignmentRef) +& ConsignmentRefQueryParam(code) =>
         for {
-          files <- Assets[F].findFiles(SearchResponse(id, zref, sourceId, citation, ingestDate, consignmentRef))
+          files <- Assets[F].findFiles(SearchResponse(id, zref, sourceId, citation, ingestDate, consignmentRef, code))
           resp <- Ok(results(files).body)
         } yield resp.asHtml
       case req @ POST -> Root / "search" =>
