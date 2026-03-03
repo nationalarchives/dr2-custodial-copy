@@ -230,7 +230,8 @@ create table files
     ingestDateTime datetime,
     sourceId       text,
     citation       text,
-    consignmentRef text
+    consignmentRef text,
+    code           text
 );
 ```
 
@@ -296,7 +297,8 @@ create table files
     ingestDateTime datetime,
     sourceId       text,
     citation       text,
-    consignmentRef text
+    consignmentRef text,
+    code           text
 );
 ```
 
