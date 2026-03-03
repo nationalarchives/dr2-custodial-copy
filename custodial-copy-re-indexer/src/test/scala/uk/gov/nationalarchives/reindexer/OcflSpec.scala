@@ -21,7 +21,7 @@ class OcflSpec extends AnyFlatSpec with EitherValues:
     case class IdPath(preservationId: UUID, path: Path)
 
     given Configuration = new Configuration:
-      override def config: Config = Config("test-database", repoDir, workDir)
+      override def config: Config = Config("test-database", repoDir, workDir, 100)
 
     val allObjects = Ocfl[IO].allObjectsIds().compile.toList.unsafeRunSync()
     allObjects.length should equal(1)
@@ -35,7 +35,7 @@ class OcflSpec extends AnyFlatSpec with EitherValues:
     case class IdPath(preservationId: UUID, path: Path)
 
     given Configuration = new Configuration:
-      override def config: Config = Config("test-database", repoDir, workDir)
+      override def config: Config = Config("test-database", repoDir, workDir, 100)
 
     val allFiles = Ocfl[IO].allObjectsIds().compile.toList.unsafeRunSync()
     allFiles.length should equal(0)
@@ -48,7 +48,7 @@ class OcflSpec extends AnyFlatSpec with EitherValues:
     case class IdPath(preservationId: UUID, path: Path)
 
     given Configuration = new Configuration:
-      override def config: Config = Config("test-database", repoDir, workDir)
+      override def config: Config = Config("test-database", repoDir, workDir, 100)
 
     val ocflObjects = Ocfl[IO].generateOcflObject(id).unsafeRunSync()
     ocflObjects.count(_.fileId == coRef) should equal(1)
@@ -64,7 +64,7 @@ class OcflSpec extends AnyFlatSpec with EitherValues:
     case class IdPath(preservationId: UUID, path: Path)
 
     given Configuration = new Configuration:
-      override def config: Config = Config("test-database", repoDir, workDir)
+      override def config: Config = Config("test-database", repoDir, workDir, 100)
 
     val error = Ocfl[IO].generateOcflObject(id).attempt.unsafeRunSync().left.value
     error.getMessage should equal(s"Object ObjectId{objectId='$id', versionNum='null'} was not found.")

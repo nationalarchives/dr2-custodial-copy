@@ -16,7 +16,7 @@ trait Ocfl[F[_]: Sync]:
   def generateOcflObject(id: UUID): F[List[OcflFile]]
 
 object Ocfl:
-  def apply[F[_]: Sync](using ev: Ocfl[F]): Ocfl[F] = ev
+  def apply[F[_]](using ev: Ocfl[F]): Ocfl[F] = ev
 
   given impl[F[_]: Sync](using configuration: Configuration): Ocfl[F] = new Ocfl[F]:
 
@@ -27,5 +27,5 @@ object Ocfl:
 
     override def allObjectsIds(): Stream[F, UUID] =
       Stream
-        .fromIterator(ocflRepo.listObjectIds().iterator().asScala, 10000)
+        .fromIterator(ocflRepo.listObjectIds().iterator().asScala, configuration.config.maxConcurrency)
         .map(UUID.fromString)

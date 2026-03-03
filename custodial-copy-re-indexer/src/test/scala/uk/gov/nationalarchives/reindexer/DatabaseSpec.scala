@@ -22,7 +22,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
   override def beforeEach(): Unit = createFilesTable()
 
   given Configuration = new Configuration:
-    override def config: Configuration.Config = Config("test-reindexer-database", "", "")
+    override def config: Configuration.Config = Config("test-reindexer-database", "", "", 100)
 
   "write" should "should write the values to the database" in {
     val id = UUID.randomUUID

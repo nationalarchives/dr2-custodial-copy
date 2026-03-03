@@ -7,6 +7,9 @@ import fs2.{Chunk, *}
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
+import org.typelevel.log4cats.Logger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
+import uk.gov.nationalarchives.reindexer.Configuration.Config
 import uk.gov.nationalarchives.utils.Utils
 import uk.gov.nationalarchives.utils.Utils.OcflFile
 
@@ -17,6 +20,12 @@ class ReIndexerSpec extends AnyFlatSpec with EitherValues:
   val id: UUID = UUID.randomUUID
   val fileId: UUID = UUID.randomUUID
   val instant: Instant = Instant.now
+
+  given Logger[IO] = Slf4jLogger.getLogger[IO]
+
+  given Configuration = new Configuration {
+    override def config: Configuration.Config = Config("test-database", "repoDir", "workDir", 100)
+  }
 
   def createOcflFile =
     OcflFile(
@@ -49,12 +58,12 @@ class ReIndexerSpec extends AnyFlatSpec with EitherValues:
 
   "reIndex" should "chunk the updates to the write method" in {
     given Database[IO] = (files: Chunk[Utils.OcflFile]) =>
-      files.toList.size should equal(10000)
+      files.toList.size should equal(100)
       files.foreach(file => file should equal(createOcflFile))
-      IO(10000)
+      IO(100)
 
     given Ocfl[IO] = new Ocfl[IO]:
-      override def allObjectsIds(): Stream[IO, UUID] = Stream.emits(List.fill(20000)(id))
+      override def allObjectsIds(): Stream[IO, UUID] = Stream.emits(List.fill(200)(id))
 
       override def generateOcflObject(id: UUID): IO[List[OcflFile]] = IO.pure(List.fill(1)(createOcflFile))
 
