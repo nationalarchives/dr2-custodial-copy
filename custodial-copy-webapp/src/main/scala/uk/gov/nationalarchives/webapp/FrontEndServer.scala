@@ -14,7 +14,6 @@ import org.http4s.server.staticcontent.resourceServiceBuilder
 import org.http4s.*
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.slf4j.Slf4jFactory
-import uk.gov.nationalarchives.webapp.FrontEndRoutes.*
 
 object FrontEndServer:
 

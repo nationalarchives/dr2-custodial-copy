@@ -13,6 +13,7 @@
                 <th scope="col" class="govuk-table__header">Ingest Date</th>
                 <th scope="col" class="govuk-table__header">Citation</th>
                 <th scope="col" class="govuk-table__header">Consignment Ref</th>
+                <th scope="col" class="govuk-table__header">Code</th>
                 <th scope="col" class="govuk-table__header"></th>
             </tr>
         </thead>
@@ -24,6 +25,7 @@
                     <td class="govuk-table__cell govuk-!-width-one-quarter">@file.ingestDateTime.map(date => ZonedDateTime.ofInstant(date, ZoneOffset.UTC).format(DateTimeFormatter.ISO_LOCAL_DATE)).getOrElse("")</td>
                     <td class="govuk-table__cell">@file.citation</td>
                     <td class="govuk-table__cell">@file.consignmentRef</td>
+                    <td class="govuk-table__cell">@file.code</td>
                     <td class="govuk-table__cell">
                         <a class="govuk-link" href="/download/@file.fileId" download="@file.fileName">Download</a>
                     </td>
