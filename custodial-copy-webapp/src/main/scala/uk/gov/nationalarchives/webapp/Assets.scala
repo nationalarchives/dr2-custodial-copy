@@ -51,7 +51,8 @@ object Assets:
         fr"ingestDateTime >= $i AND ingestDateTime <= $endOfDay"
       }
       val consignmentRefWhere = searchResponse.consignmentRef.map(c => fr"consignmentRef = $c")
-      val query = fr"SELECT * from files" ++ whereAndOpt(idWhere, zrefWhere, citationWhere, sourceIdWhere, ingestDateTimeWhere, consignmentRefWhere)
+      val codeWhere = searchResponse.code.map(c => fr"code = $c")
+      val query = fr"SELECT * from files" ++ whereAndOpt(idWhere, zrefWhere, citationWhere, sourceIdWhere, ingestDateTimeWhere, consignmentRefWhere, codeWhere)
       loadXa.flatMap { xa =>
         query.query[OcflFile].to[List].transact(xa)
       }
