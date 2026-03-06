@@ -21,9 +21,7 @@ jobs:
         with:
           registry: ${{ secrets.MANAGEMENT_ACCOUNT }}.dkr.ecr.eu-west-2.amazonaws.com
       - id: next-tag
-        uses: nationalarchives/dr2-github-actions/.github/actions/get-next-version@917201e254f112ff041b952dae76ef767cae7378
-        with:
-          repo-name: dr2-custodial-copy
+        run: echo next-version=$(curl -s $GITHUB_API_URL/repos/nationalarchives/dr2-custodial-copy/tags | jq -r '.[0].name' | awk -F. -v OFS=. '{ $3++; print }') >> "$GITHUB_OUTPUT"
       - uses: nationalarchives/ds-docker-actions/.github/actions/wiz-install-cli@a37bebac8d11fa61ca7a539863fe45cfa00cdfc6
       - id: build-image
         run: |
@@ -39,8 +37,7 @@ jobs:
           WIZ_CLIENT_ID: ${{ secrets.WIZ_CLIENT_ID }}
           WIZ_CLIENT_SECRET: ${{ secrets.WIZ_CLIENT_SECRET }}
       - name: Send failure message
-        uses: nationalarchives/dr2-github-actions/.github/actions/slack-send@917201e254f112ff041b952dae76ef767cae7378
+        run: python .github/scripts/send_message.py
         if: failure()
         with:
-          message: ":warning: Build failed for custodial copy <https://github.com/nationalarchives/dr2-custodial-copy/actions/runs/${{ github.run_id }}|View the failed workflow>"
-          slack-url: ${{ secrets.SLACK_WEBHOOK }}
+          MESSAGE: ":warning: Build failed for custodial copy <https://github.com/nationalarchives/dr2-custodial-copy/actions/runs/${{ github.run_id }}|View the failed workflow>"

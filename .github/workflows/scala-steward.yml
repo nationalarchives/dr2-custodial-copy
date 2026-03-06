@@ -1,0 +1,30 @@
+name: Run Scala Steward
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 8 */3 * *'
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  scala-steward:
+    runs-on: ubuntu-latest
+    name: Launch Scala Steward
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Import GPG key
+        id: import_gpg
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7.0.0
+        with:
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+      - name: Launch Scala Steward
+        uses: scala-steward-org/scala-steward-action@df2a4cec1721d0b48be3e1d1f0acdf7543ea0fb4 # v2.84.0
+        with:
+          github-token: ${{ secrets.WORKFLOW_TOKEN }}
+          sign-commits: true
+          signing-key: ${{ secrets.GPG_KEY_ID }}
+          author-email: ${{ steps.import_gpg.outputs.email }}
+          author-name: ${{ steps.import_gpg.outputs.name }}
