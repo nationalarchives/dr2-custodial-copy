@@ -48,10 +48,10 @@ jobs:
       - run: pip install boto3
       - name: Send success message
         run: python .github/scripts/send_message.py
-        with:
+        env:
           MESSAGE: "*custodial-copy-backend*, *custodial-copy-db-builder*, *custodial-copy-webapp* :whale: The '${{ github.event.inputs.to-deploy }}' image has been tagged with '${{ github.event.inputs.environment }}' in ECR"
       - name: Send failure message
         run: python .github/scripts/send_message.py
         if: failure()
-        with:
+        env:
           MESSAGE: ":warning: Build failed for custodial copy <https://github.com/nationalarchives/dr2-custodial-copy/actions/runs/${{ github.run_id }}|View the failed workflow>"
