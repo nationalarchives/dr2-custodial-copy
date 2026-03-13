@@ -1,6 +1,6 @@
 import Dependencies.*
 import com.typesafe.sbt.packager.docker.{Cmd, ExecCmd}
-import uk.gov.nationalarchives.sbt.Log4j2MergePlugin.log4j2MergeStrategy
+import sbtassembly.Log4j2MergeStrategy
 
 import scala.sys.process.*
 
@@ -175,7 +175,7 @@ lazy val commonSettings = Seq(
     "AWS_LAMBDA_FUNCTION_NAME" -> "test"
   ),
   (assembly / assemblyMergeStrategy) := {
-    case PathList(ps @ _*) if ps.last == "Log4j2Plugins.dat" => log4j2MergeStrategy
+    case PathList(ps @ _*) if ps.last == "Log4j2Plugins.dat" => Log4j2MergeStrategy.plugincache
     case PathList("META-INF", xs @ _*)                       =>
       xs map {
         _.toLowerCase
