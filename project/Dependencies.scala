@@ -1,15 +1,15 @@
 import sbt.*
 object Dependencies {
-  private lazy val daAwsClientsVersion = "0.1.149"
+  private lazy val daAwsClientsVersion = "0.1.150"
   private lazy val logbackVersion = "2.25.3"
-  private lazy val log4CatsVersion = "2.7.1"
+  private lazy val log4CatsVersion = "2.8.0"
   private lazy val pureConfigVersion = "0.17.10"
   private lazy val scalaTestVersion = "3.2.19"
   private lazy val http4sVersion = "1.0.0-M46"
 
   lazy val dynamoClient = "uk.gov.nationalarchives" %% "da-dynamodb-client" % daAwsClientsVersion
   lazy val eventbridgeClient = "uk.gov.nationalarchives" %% "da-eventbridge-client" % daAwsClientsVersion
-  lazy val fs2Core = "co.fs2" %% "fs2-core" % "3.12.2"
+  lazy val fs2Core = "co.fs2" %% "fs2-core" % "3.13.0"
   lazy val log4Cats = "org.typelevel" %% "log4cats-core" % log4CatsVersion
   lazy val h2 = "com.h2database" % "h2" % "2.4.240"
   lazy val log4CatsSlf4j = "org.typelevel" %% "log4cats-slf4j" % log4CatsVersion
@@ -18,7 +18,7 @@ object Dependencies {
   lazy val log4jTemplateJson = "org.apache.logging.log4j" % "log4j-layout-template-json" % logbackVersion
   lazy val mockito = "org.scalatestplus" %% "mockito-5-10" % "3.2.18.0"
   lazy val ocfl = "io.ocfl" % "ocfl-java-core" % "2.2.3"
-  lazy val preservicaClient = "uk.gov.nationalarchives" %% "preservica-client-fs2" % "0.0.164"
+  lazy val preservicaClient = "uk.gov.nationalarchives" %% "preservica-client-fs2" % "0.0.165"
   lazy val pureConfigCatsEffect = "com.github.pureconfig" %% "pureconfig-cats-effect" % pureConfigVersion
   lazy val pureConfig = "com.github.pureconfig" %% "pureconfig-core" % pureConfigVersion
   lazy val scalaCheck = "org.scalacheck" %% "scalacheck" % "1.19.0"
