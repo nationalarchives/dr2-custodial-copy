@@ -7,6 +7,7 @@ import fs2.io.file.Path
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doReturn, times, verify}
+import org.scalatest.BeforeAndAfterEach
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatestplus.mockito.MockitoSugar
@@ -20,11 +21,20 @@ import uk.gov.nationalarchives.custodialcopy.testUtils.ExternalServicesTestUtils
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.IoMetadata
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
+import uk.gov.nationalarchives.utils.TestUtils.DatabaseUtils
 
+import java.nio.file
 import java.util.UUID
 import scala.xml.Elem
 
-class ProcessorTest extends AnyFlatSpec with MockitoSugar {
+class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEach {
+  val databaseUtils = new DatabaseUtils(databaseName)
+
+  override def beforeEach(): Unit = {
+    file.Files.deleteIfExists(file.Path.of(databaseName))
+    databaseUtils.createDriFilesTable()
+  }
+
   "process" should "delete the file paths under an IO, if an IO message has 'deleted' set to 'true'" in {
     val paths = List("destinationPathToDelete", "destinationPath2ToDelete")
     val utils = new ProcessorTestUtils(InformationObject, pathsOfObjectsUnderIo = paths)

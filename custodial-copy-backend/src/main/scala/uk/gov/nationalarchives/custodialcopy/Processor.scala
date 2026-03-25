@@ -3,35 +3,34 @@ package uk.gov.nationalarchives.custodialcopy
 import cats.effect.IO
 import cats.implicits.*
 import fs2.Stream
-import fs2.io.file.{Files, Flags}
-
-import java.nio.file.{Files as JFiles, Path as JPath}
+import fs2.io.file.{Files, Flags, Path}
 import io.circe.Encoder
 import org.apache.commons.codec.digest.DigestUtils
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import software.amazon.awssdk.services.sqs.model.{ChangeMessageVisibilityResponse, DeleteMessageResponse}
 import sttp.capabilities.fs2.Fs2Streams
-import uk.gov.nationalarchives.{DASNSClient, DASQSClient}
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.*
 import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
 import uk.gov.nationalarchives.custodialcopy.Message.*
-import uk.gov.nationalarchives.custodialcopy.Processor.{ObjectStatus, Result}
-import uk.gov.nationalarchives.custodialcopy.Processor.Result.*
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Updated}
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Bitstream, Metadata}
-import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
+import uk.gov.nationalarchives.custodialcopy.Processor.Result.*
+import uk.gov.nationalarchives.custodialcopy.Processor.{ObjectStatus, Result}
 import uk.gov.nationalarchives.dp.client.Client.BitStreamInfo
-import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
-import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
-import uk.gov.nationalarchives.dp.client.EntityClient.*
 import uk.gov.nationalarchives.dp.client.Entities.{Entity, fromType}
+import uk.gov.nationalarchives.dp.client.EntityClient.*
+import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
+import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.ValidateXmlAgainstXsd.PreservicaSchema.XipXsdSchemaV7
+import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
+import uk.gov.nationalarchives.{DASNSClient, DASQSClient}
 
+import java.nio.file.{Files as JFiles, Path as JPath}
 import java.util.UUID
 import scala.annotation.tailrec
-import scala.xml.{Elem, Node}
 import scala.concurrent.duration.*
+import scala.xml.{Elem, Node}
 
 class Processor(
     config: Config,
@@ -249,10 +248,20 @@ class Processor(
           else
             for
               writePath <- fo.sourceFilePath(config.downloadDir)
-              _ <- entityClient.streamBitstreamContent[Unit](Fs2Streams.apply)(
-                fo.url,
-                s => s.through(Files[IO].writeAll(writePath, Flags.Write)).compile.drain
-              )
+              filePaths <- Database[IO](config).getPathFromDri(fo.id)
+              _ <-
+                if filePaths.nonEmpty then
+                  val filePath = filePaths.head
+                  Files[IO]
+                    .readAll(Path(s"${config.filesCacheDir}/$filePath"))
+                    .through(Files[IO].writeAll(writePath / filePath))
+                    .compile
+                    .drain
+                else
+                  entityClient.streamBitstreamContent[Unit](Fs2Streams.apply)(
+                    fo.url,
+                    s => s.through(Files[IO].writeAll(writePath, Flags.Write)).compile.drain
+                  )
             yield IdWithSourceAndDestPaths(fo.id, Option(writePath.toNioPath), fo.destinationFilePath)
         }
       else IO.pure(IdWithSourceAndDestPaths(fo.id, None, fo.destinationFilePath))

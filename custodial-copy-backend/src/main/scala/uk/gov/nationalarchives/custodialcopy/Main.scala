@@ -8,13 +8,13 @@ import io.circe.{Decoder, HCursor}
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import pureconfig.*
 import pureconfig.module.catseffect.syntax.*
-import uk.gov.nationalarchives.{DASNSClient, DASQSClient}
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.Message.*
 import uk.gov.nationalarchives.custodialcopy.Processor.Result
 import uk.gov.nationalarchives.custodialcopy.Processor.Result.*
 import uk.gov.nationalarchives.dp.client.fs2.Fs2Client
 import uk.gov.nationalarchives.utils.Utils.*
+import uk.gov.nationalarchives.{DASNSClient, DASQSClient}
 
 import java.net.URI
 import java.nio.file
@@ -32,7 +32,9 @@ object Main extends IOApp {
       proxyUrl: Option[URI],
       versionPath: String,
       topicArn: String,
-      queueTimeout: Duration
+      queueTimeout: Duration,
+      databasePath: String,
+      filesCacheDir: String
   ) derives ConfigReader
 
   given Decoder[ReceivedSnsMessage] = (c: HCursor) =>

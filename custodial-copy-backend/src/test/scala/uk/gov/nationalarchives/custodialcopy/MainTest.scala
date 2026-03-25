@@ -10,7 +10,7 @@ import org.apache.commons.codec.digest.DigestUtils
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.*
 import org.mockito.Mockito.*
-import org.scalatest.EitherValues
+import org.scalatest.{BeforeAndAfterEach, EitherValues}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers.*
 import org.scalatestplus.mockito.MockitoSugar
@@ -21,7 +21,7 @@ import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.Main.*
 import uk.gov.nationalarchives.custodialcopy.Message.{IoReceivedSnsMessage, ReceivedSnsMessage, SoReceivedSnsMessage}
 import uk.gov.nationalarchives.custodialcopy.Processor.Result
-import uk.gov.nationalarchives.custodialcopy.testUtils.ExternalServicesTestUtils.{MainTestUtils, TestProcessor}
+import uk.gov.nationalarchives.custodialcopy.testUtils.ExternalServicesTestUtils.{MainTestUtils, TestProcessor, databaseName}
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.Entity
 import uk.gov.nationalarchives.dp.client.EntityClient
@@ -29,6 +29,7 @@ import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.GenerationType.*
 import uk.gov.nationalarchives.utils.TestUtils.*
 
+import java.nio.file
 import java.nio.file.{Files, Path, Paths}
 import java.util.UUID
 import scala.jdk.CollectionConverters.*
@@ -36,8 +37,13 @@ import scala.concurrent.duration.*
 import scala.xml.Utility.trim
 import scala.xml.XML
 
-class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
+class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with BeforeAndAfterEach {
+  val databaseUtils = new DatabaseUtils(databaseName)
 
+  override def beforeEach(): Unit = {
+    file.Files.deleteIfExists(file.Path.of(databaseName))
+    databaseUtils.createDriFilesTable()
+  }
   private def getError(
       sqsClient: DASQSClient[IO],
       config: Config,
@@ -859,7 +865,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val messageIdOne = Option(UUID.randomUUID.toString)
     val messageIdTwo = Option(UUID.randomUUID.toString)
 
-    val config: Config = Config("", "https://queue", "", "", "", None, "", "", 2.seconds)
+    val config: Config = Config("", "https://queue", "", "", "", None, "", "", 2.seconds, databaseName, "")
     val sqsClient = mock[DASQSClient[IO]]
 
     val processor = new TestProcessor(
@@ -908,7 +914,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues {
     val delayedId = UUID.randomUUID
     val id = UUID.randomUUID
     val messageId = Option(UUID.randomUUID.toString)
-    val config: Config = Config("", "https://queue", "", "", "", None, "", "", 2.seconds)
+    val config: Config = Config("", "https://queue", "", "", "", None, "", "", 2.seconds, databaseName, "")
     val sqsClient = mock[DASQSClient[IO]]
 
     val processor = new TestProcessor(

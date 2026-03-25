@@ -60,6 +60,7 @@ import scala.xml.Utility.trim
 import scala.xml.{Elem, NodeBuffer, XML}
 
 object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
+  val databaseName = "test-dri-files-db.db"
   private val ioType = InformationObject.entityTypeShort
   private val coType = ContentObject.entityTypeShort
   private lazy val allRepresentationTypes: Map[String, RepresentationType] = Map(
@@ -292,7 +293,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val downloadDirPath: Path = Path.of(downloadDir)
     val workDir: String = Files.createTempDirectory("work").toString
     val repoDir: Path = Files.createTempDirectory("repo")
-    val config: Config = Config("", "", repoDir.toString, workDir, downloadDir, None, "", "", Duration("1s"))
+    val config: Config = Config("", "", repoDir.toString, workDir, downloadDir, None, "", "", Duration("1s"), databaseName, "")
 
     val bitstreamInfoResponsesWithSameName: Seq[BitStreamInfo] = bitstreamInfo1Responses.flatMap { bitstreamInfo1Response =>
       bitstreamInfo2Responses.filter { bitstreamInfo2Response =>
@@ -441,7 +442,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val downloadDir: String = Files.createTempDirectory("downloads").toString
     val workDir: String = Files.createTempDirectory("work").toString
     val repoDir: String = Files.createTempDirectory("repo").toString
-    val config: Config = Config("", "queueUrl", repoDir, workDir, downloadDir, Option(URI.create("https://example.com")), "", "topicArn", Duration("1s"))
+    val config: Config =
+      Config("", "queueUrl", repoDir, workDir, downloadDir, Option(URI.create("https://example.com")), "", "topicArn", Duration("1s"), databaseName, "")
     val ioId: UUID = UUID.randomUUID()
     val coId: UUID = UUID.randomUUID()
     val soId: UUID = UUID.randomUUID()

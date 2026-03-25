@@ -5,6 +5,7 @@ import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
 import doobie.implicits.*
 import doobie.util.transactor.Transactor.Aux
+import doobie.util.update.Update
 import doobie.{Fragment, Transactor}
 import io.circe.{Decoder, Encoder}
 import io.ocfl.api.io.FixityCheckInputStream
@@ -31,6 +32,7 @@ import scala.jdk.FunctionConverters.*
 import scala.xml.Elem
 
 object TestUtils:
+  case class DriFile(filePath: String, fileId: String)
 
   class DatabaseUtils(val databaseName: String):
     val xa: Aux[IO, Unit] = Transactor.fromDriverManager[IO](
@@ -114,6 +116,19 @@ object TestUtils:
         .query[OcflFile]
         .to[List]
         .transact(xa)
+    }
+
+    def createDriFilesTable(): Unit = {
+      val transaction = for {
+        _ <- sql"DROP TABLE IF EXISTS dri_files;".update.run
+        _ <- sql"CREATE TABLE dri_files (file_path text, file_id text);".update.run
+      } yield ()
+      transaction.transact(xa).unsafeRunSync()
+    }
+
+    def addFilesToDriFilesTable(file: List[DriFile]): Unit = { // THIS IS ONLY NECESSARY FOR TESTING
+      val insert = "INSERT INTO dri_files (file_path, file_id) values (?, ?);"
+      Update[DriFile](insert).updateMany(file).transact(xa).unsafeRunSync()
     }
 
   def ocflFile(id: UUID, fileId: UUID, zref: String = "zref"): OcflFile =
