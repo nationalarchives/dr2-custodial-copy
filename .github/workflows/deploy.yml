@@ -39,8 +39,8 @@ jobs:
       - name: Tag image
         run: |
           sbt tagImage
-          git branch -f release-${{ github.event.inputs.environment }} HEAD
-          git push -f origin release-${{ github.event.inputs.environment }}
+          git tag $DOCKER_TAG
+          git push --tags
         env:
           MANAGEMENT_ACCOUNT_NUMBER: ${{ secrets.MANAGEMENT_ACCOUNT }}
           DOCKER_TAG: ${{ github.event.inputs.to-deploy }}
