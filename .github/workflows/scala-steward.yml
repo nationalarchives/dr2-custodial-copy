@@ -2,7 +2,7 @@ name: Run Scala Steward
 on:
   workflow_dispatch:
   schedule:
-    - cron: '15 8 */3 * *'
+    - cron: '15 8 1 * *'
 permissions:
   contents: write
   pull-requests: write
