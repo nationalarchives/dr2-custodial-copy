@@ -1,0 +1,13 @@
+---
+- name: run services
+  meta: noop
+
+- name: Start cloudwatch
+  systemd_service:
+    name: amazon-cloudwatch-agent
+    enabled: true
+    state: started
+
+- name: Start custodial copy services
+  debug:
+    msg: Ansible doesn't start it right now - run start-cc-services.bash on there as poduser

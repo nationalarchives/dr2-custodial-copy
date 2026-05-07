@@ -1,0 +1,211 @@
+### {{ ansible_managed }}
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: custodial-copy
+  labels:
+    app: custodial-copy
+  annotations:
+# don't want iamra container to auto-update
+    io.containers.autoupdate/backend: registry
+    io.containers.autoupdate/builder: registry
+    io.containers.autoupdate/confirmer: registry
+    io.containers.autoupdate/webapp: registry
+spec:
+  restartPolicy: OnFailure
+  containers:
+  - name: backend
+    env:
+    - name: VERSION_PATH
+      value: /poduser/version
+    - name: REPO_DIR
+      value: /poduser/repo
+    - name: DOWNLOAD_DIR
+      value: /poduser/work/backend/downloads
+    - name: WORK_DIR
+      value: /poduser/work
+    - name: HTTP_PROXY
+      value: {{ proxy }}
+    - name: HTTPS_PROXY
+      value: {{ proxy }}
+    - name: NO_PROXY
+      value: 127.0.0.1
+    - name: AWS_EC2_METADATA_SERVICE_ENDPOINT
+      value: http://127.0.0.1:9911
+    - name: PRESERVICA_URL
+      value: https://tna.preservica.com
+    - name: PRESERVICA_SECRET_NAME
+      value: {{ cc_aws_env }}-preservica-api-read-metadata-read-content
+    - name: SNS_TOPIC_ARN
+      value: arn:aws:sns:{{ cc_aws_region }}:{{ cc_account_number }}:{{ cc_aws_env }}-dr2-cc-notifications
+    - name: SQS_QUEUE_URL
+      value: https://sqs.{{ cc_aws_region }}.amazonaws.com/{{ cc_account_number }}/{{ cc_aws_env }}-dr2-custodial-copy.fifo
+    image: {{ ecr_hostname }}/dr2-custodial-copy-backend:{{ cc_aws_env }}
+    securityContext:
+      runAsNonRoot: true
+    volumeMounts:
+    - mountPath: /poduser/version:z
+      name: var-local-custodial-copy-version
+    - mountPath: /poduser/logs:z
+      name: var-log-custodial-copy
+    - mountPath: /poduser/repo
+      name: mnt-dr2-repo
+    - mountPath: /poduser/work
+      name: mnt-dr2-work
+    - mountPath: /poduser/log-config/log4j2.properties:z
+      name: var-local-custodial-copy-backend-log-config
+  - name: builder
+    env:
+    - name: DATABASE_PATH
+      value: /poduser/database/builder
+    - name: OCFL_WORK_DIR
+      value: /poduser/work
+    - name: OCFL_REPO_DIR
+      value: /poduser/repo
+    - name: HTTP_PROXY
+      value: {{ proxy }}
+    - name: HTTPS_PROXY
+      value: {{ proxy }}
+    - name: NO_PROXY
+      value: 127.0.0.1
+    - name: AWS_EC2_METADATA_SERVICE_ENDPOINT
+      value: http://127.0.0.1:9911
+    - name: QUEUE_URL
+      value: https://sqs.{{ cc_aws_region }}.amazonaws.com/{{ cc_account_number }}/{{ cc_aws_env }}-dr2-custodial-copy-db-builder
+    image: {{ ecr_hostname }}/dr2-custodial-copy-db-builder:{{ cc_aws_env }}
+    securityContext:
+      runAsNonRoot: true
+    volumeMounts:
+    - mountPath: /poduser/repo
+      name: mnt-dr2-repo
+    - mountPath: /poduser/work
+      name: mnt-dr2-work
+    - mountPath: /poduser/logs:z
+      name: var-log-custodial-copy
+    - mountPath: /poduser/database:z
+      name: var-local-custodial-copy-database
+    - mountPath: /poduser/log-config/log4j2.properties:z
+      name: var-local-custodial-copy-builder-log-config
+  - name: webapp
+    env:
+    - name: DATABASE_PATH
+      value: /poduser/database/builder
+    image: {{ ecr_hostname }}/dr2-custodial-copy-webapp:{{ cc_aws_env }}
+    ports:
+    - containerPort: 8080
+      hostPort: 8080
+    securityContext:
+      runAsNonRoot: true
+    volumeMounts:
+    - mountPath: /poduser/repo
+      name: mnt-dr2-repo
+    - mountPath: /poduser/logs:z
+      name: var-log-custodial-copy
+    - mountPath: /poduser/database:z
+      name: var-local-custodial-copy-database
+    - mountPath: /poduser/log-config/log4j2.properties:z
+      name: var-local-custodial-copy-webapp-log-config
+  - name: confirmer
+    env:
+    - name: OCFL_WORK_DIR
+      value: /poduser/work
+    - name: OCFL_REPO_DIR
+      value: /poduser/repo
+    - name: HTTP_PROXY
+      value: {{ proxy }}
+    - name: HTTPS_PROXY
+      value: {{ proxy }}
+    - name: NO_PROXY
+      value: 127.0.0.1
+    - name: AWS_EC2_METADATA_SERVICE_ENDPOINT
+      value: http://127.0.0.1:9911
+    - name: SQS_QUEUE_URL
+      value: https://sqs.{{ cc_aws_region }}.amazonaws.com/{{ cc_account_number }}/{{ cc_aws_env }}-dr2-custodial-copy-confirmer
+    - name: DYNAMO_TABLE_NAME
+      value: {{ cc_aws_env }}-dr2-postingest-state
+    - name: DYNAMO_ATTRIBUTE_NAME
+      value: result_CC
+    image: {{ ecr_hostname }}/dr2-custodial-copy-confirmer:{{ cc_aws_env }}
+    securityContext:
+      runAsNonRoot: true
+    volumeMounts:
+    - mountPath: /poduser/repo
+      name: mnt-dr2-repo
+    - mountPath: /poduser/work
+      name: mnt-dr2-work
+    - mountPath: /poduser/logs:z
+      name: var-log-custodial-copy
+    - mountPath: /poduser/log-config/log4j2.properties:z
+      name: var-local-custodial-copy-confirmer-log-config
+#  initContainers:
+  - name: iamra
+#    restartPolicy: Always
+# podman kube play doesn't support sidecar containers (initContainers with restartPolicy) or readinessProbe until RHEL9
+# But your kids are gonna love it
+#    readinessProbe:
+#      tcpSocket:
+#        port: 9911
+#      initialDelaySeconds: 1
+#      periodSeconds: 1
+    args:
+    - serve
+    - --trust-anchor-arn
+    - {{ iamra_trust_anchor_arn }}
+    - --profile-arn
+    - {{ iamra_profile_arn }}
+    - --role-arn
+    - {{ iamra_role_arn }}
+    - --certificate
+    - /certs/current/{{ iamra_certificate }}
+    - --private-key
+    - /certs/current/{{ iamra_privatekey }}
+    env:
+    - name: HTTPS_PROXY
+      value: {{ proxy }}
+    image: public.ecr.aws/rolesanywhere/credential-helper:latest-amd64
+    securityContext: {}
+    volumeMounts:
+    - mountPath: /certs:z
+      name: localhome-poduser-iamra-certs
+  volumes:
+  - hostPath:
+      path: /var/local/custodial-copy/database
+      type: Directory
+    name: var-local-custodial-copy-database
+  - hostPath:
+      path: /mnt/dr2_cc/repo
+      type: Directory
+    name: mnt-dr2-repo
+  - hostPath:
+      path: /mnt/dr2_cc/work
+      type: Directory
+    name: mnt-dr2-work
+  - hostPath:
+      path: /localhome/poduser/iamra/certs
+      type: Directory
+    name: localhome-poduser-iamra-certs
+  - hostPath:
+      path: /var/log/custodial-copy
+      type: Directory
+    name: var-log-custodial-copy
+  - hostPath:
+      path: /var/local/custodial-copy/version
+      type: Directory
+    name: var-local-custodial-copy-version
+  - hostPath:
+      path: /var/local/custodial-copy/log-config/backend-log4j2.properties
+      type: File
+    name: var-local-custodial-copy-backend-log-config
+  - hostPath:
+      path: /var/local/custodial-copy/log-config/confirmer-log4j2.properties
+      type: File
+    name: var-local-custodial-copy-confirmer-log-config
+  - hostPath:
+      path: /var/local/custodial-copy/log-config/webapp-log4j2.properties
+      type: File
+    name: var-local-custodial-copy-webapp-log-config
+  - hostPath:
+      path: /var/local/custodial-copy/log-config/builder-log4j2.properties
+      type: File
+    name: var-local-custodial-copy-builder-log-config

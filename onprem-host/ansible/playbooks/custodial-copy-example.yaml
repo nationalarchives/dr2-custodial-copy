@@ -1,0 +1,6 @@
+---
+- name: Custodial copy
+  hosts: dri-s-dockerX.<ENV>
+  become: yes
+  roles:
+    - { role: custodial-copy }

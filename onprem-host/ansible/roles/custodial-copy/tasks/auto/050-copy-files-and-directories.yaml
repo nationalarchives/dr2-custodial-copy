@@ -1,0 +1,127 @@
+---
+- name: install files
+  meta: noop
+
+- name: copy system directories over
+  file:
+    path: '/{{ item.path }}'
+    state: '{{ item.state }}'
+  with_filetree: 'templates/files/root'
+  when: item.state != 'file'
+
+# mostly /usr/local/bin
+- name: copy system files over
+  template:
+    src: '{{ item.src }}'
+    dest: '/{{ item.path }}'
+  with_filetree: 'templates/files/root'
+  when: item.state == 'file'
+
+# /usr/local/bin
+- name: copy binary system files over
+  copy:
+    src: '{{ item.src }}'
+    dest: '/{{ item.path }}'
+  with_filetree: 'files/root'
+  when: item.state == 'file'
+
+- name: chmod +x /usr/local/bin/*
+  file:
+    path: '/usr/local/bin'
+    state: directory
+    mode: +x
+    recurse: true
+
+- name: copy dotfile directories over
+  file:
+    path: '~/.{{ item.path }}'
+    state: '{{ item.state }}'
+  become_user: poduser
+  with_filetree: 'templates/files/poduser-dotfiles'
+  when: item.state != 'file'
+
+# container files for quadlet and systemd overrides
+- name: copy dotfiles over
+  template:
+    src: '{{ item.src }}'
+    dest: '~/.{{ item.path }}'
+  become_user: poduser
+  with_filetree: 'templates/files/poduser-dotfiles'
+  when: item.state == 'file'
+  register: dotfiles_copied
+
+# systemd variables, proxy, and things
+- name: .bash_profile
+  blockinfile:
+    path: ~/.bash_profile
+    create: true
+    block: '{{ item }}'
+  become_user: poduser
+  with_items:
+    - "{{ lookup('ansible.builtin.template', 'templates/bash_profile_block') }}"
+
+# aws profile used by aws-login-for-podman.service and for ad hoc testing
+- name: .aws/config
+  blockinfile:
+    path: ~/.aws/config
+    create: true
+    block: '{{ item }}'
+  become_user: poduser
+  with_items:
+    - "{{ lookup('ansible.builtin.template', 'templates/aws_config_profile_block') }}"
+
+- name: systemctl --user daemon-reload
+  systemd_service:
+    scope: user
+    daemon-reload: true
+  become_user: poduser
+  when: dotfiles_copied.changed
+  
+- name: set up base directories for container volumes
+  file:
+    path: '{{ item }}'
+    state: directory
+    owner: cont_poduser
+    group: poduser
+    mode: u+rwX,g+rwsX,o-rwx
+  loop:
+    - /var/local/custodial-copy
+    - /var/log/custodial-copy
+    - /mnt/dr2_cc/repo
+    - /mnt/dr2_cc/work
+
+# changed by default in storage.conf to avoid filling up root partition    
+- name: set up container storage overlay area
+  file:
+    path: /var/local/poduser
+    state: directory
+    owner: poduser
+    group: poduser
+
+- name: copy container volume directories over
+  file:
+    path: '/{{ item.path }}'
+    state: '{{ item.state }}'
+  become_user: cont_poduser
+  with_filetree: 'templates/files/cont_poduser'
+  when: item.state != 'file'
+
+# log4j2.properties files
+- name: copy container volume files over
+  template:
+    src: '{{ item.src }}'
+    dest: '/{{ item.path }}'
+  become_user: cont_poduser
+  with_filetree: 'templates/files/cont_poduser'
+  when: item.state == 'file'
+
+- name: random useful junk (not overwritten)
+  template:
+    src: '{{ item.src }}'
+    dest: '~/{{ item.path }}'
+    force: no
+    mode: +x
+  become_user: poduser
+  with_filetree: 'files/poduser'
+  when: item.state == 'file'
+

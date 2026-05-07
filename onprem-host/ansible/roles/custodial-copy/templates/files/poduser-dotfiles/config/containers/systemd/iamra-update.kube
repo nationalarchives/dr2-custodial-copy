@@ -1,0 +1,18 @@
+### {{ ansible_managed }}
+
+[Unit]
+Description=roles anywhere credential helper only running for amazon cloudwatch; updates /localhome/poduser/iamra/aws-credentials
+Wants=network-online.target
+After=network-online.target
+# doesn't work because user systemd can't see system systemd smh
+#Requires=localhome-poduser-container_vols-nfs.mount
+
+[Kube]
+Yaml=iamra-update.kube.yaml
+
+[Service]
+Environment=HTTPS_PROXY={{ proxy }}
+
+[Install]
+# Start by default on boot
+WantedBy=multi-user.target default.target

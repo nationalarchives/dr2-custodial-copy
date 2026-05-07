@@ -1,0 +1,17 @@
+### {{ ansible_managed }}
+
+[Unit]
+Description=Service to log in to aws ecr for podman auto-update to work
+Wants=network-online.target
+After=network-online.target
+Before=podman-auto-update.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'aws ecr get-login-password | podman login --password-stdin --username AWS {{ ecr_hostname }}'
+Environment="HTTP_PROXY={{ proxy }}"
+Environment="HTTPS_PROXY={{ proxy }}"
+Environment="AWS_PROFILE=DA-dp-{{ cc_aws_env }}_ra"
+
+[Install]
+WantedBy=default.target

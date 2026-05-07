@@ -1,0 +1,16 @@
+### {{ ansible_managed }}
+
+[Unit]
+Description=DR2 custodial copy reconciler.  Finds bad stuff
+Wants=network-online.target
+After=network-online.target
+# doesn't work because user systemd can't see system systemd smh
+#Requires=localhome-poduser-container_vols-nfs.mount
+
+[Kube]
+Yaml=cc-reconciler.kube.yaml
+
+[Service]
+Environment=HTTPS_PROXY={{ proxy }}
+
+[Install]

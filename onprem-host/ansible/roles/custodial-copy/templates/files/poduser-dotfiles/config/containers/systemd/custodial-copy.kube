@@ -1,0 +1,19 @@
+### {{ ansible_managed }}
+
+[Unit]
+Description=DR2 custodial copy recipient.  Downloads records and metadata from an s3 bucket and writes them to tape-backed storage.
+Wants=network-online.target
+After=network-online.target
+# doesn't work because user systemd can't see system systemd smh
+#Requires=localhome-poduser-container_vols-nfs.mount
+
+[Kube]
+Yaml=custodial-copy.kube.yaml
+
+[Service]
+Environment=HTTPS_PROXY={{ proxy }}
+
+[Install]
+# Start by default on boot
+WantedBy=multi-user.target default.target
+

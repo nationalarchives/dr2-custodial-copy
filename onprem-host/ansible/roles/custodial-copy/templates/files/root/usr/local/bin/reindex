@@ -1,0 +1,6 @@
+#!/bin/bash
+
+### {{ ansible_managed }}
+
+podman image pull {{ ecr_hostname }}/dr2-custodial-copy-re-indexer:"$CC_AWS_ENV"
+/usr/bin/podman run --rm --cgroups=split --sdnotify=conmon --userns keep-id  --env-file /opt/custodial-copy/custodial-copy-re-indexer-env -v /var/local/custodial-copy/database/:/poduser/database:Z --mount type=bind,source=/mnt/dr2_cc/repo/,destination=/poduser/repo --mount type=bind,source=/mnt/dr2_cc/work/,destination=/poduser/work --cgroups=enabled {{ ecr_hostname }}/dr2-custodial-copy-re-indexer:"$CC_AWS_ENV" reindex "$@"

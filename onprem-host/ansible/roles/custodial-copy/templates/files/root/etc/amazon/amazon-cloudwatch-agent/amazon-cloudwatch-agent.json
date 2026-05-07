@@ -1,0 +1,106 @@
+  {
+    "__comment": "{{ ansible_managed }}",
+    "agent": {
+      "run_as_user": "poduser",
+      "region": "{{ cc_aws_region }}"
+    },
+    "metrics": {
+      "namespace": "CustodialCopy",
+      "metrics_collected": {
+        "cpu": {
+          "resources": [
+            "*"
+          ],
+          "measurement": [
+            {"name": "cpu_usage_idle", "rename": "CPU_USAGE_IDLE", "unit": "Percent"},
+            {"name": "cpu_usage_nice", "unit": "Percent"}
+          ],
+          "totalcpu": false,
+          "metrics_collection_interval": 10
+        },
+        "disk": {
+          "resources": [
+            "/",
+            "/tmp"
+          ],
+          "measurement": [
+            {"name": "free", "rename": "DISK_FREE", "unit": "Gigabytes"},
+            "total",
+            "used"
+          ],
+          "ignore_file_system_types": [
+            "sysfs", "devtmpfs"
+          ],
+          "metrics_collection_interval": 60
+        },
+        "diskio": {
+          "resources": [
+            "*"
+          ],
+          "measurement": [
+            "reads",
+            "writes",
+            "read_time",
+            "write_time",
+            "io_time"
+          ],
+          "metrics_collection_interval": 60
+        },
+        "swap": {
+          "measurement": [
+            "swap_used",
+            "swap_free",
+            "swap_used_percent"
+          ]
+        },
+        "mem": {
+          "measurement": [
+            "mem_used",
+            "mem_cached",
+            "mem_total"
+          ],
+          "metrics_collection_interval": 1
+        }
+      }
+    },
+    "logs": {
+      "logs_collected": {
+        "files": {
+          "collect_list": [
+            {
+              "file_path": "/var/log/custodial-copy/custodial-copy.log",
+              "log_group_name": "/custodial-copy-backend",
+              "log_stream_name": "{hostname}",
+              "retention_in_days": 30
+            },
+            {
+              "file_path": "/var/log/custodial-copy/custodial-copy-builder.log",
+              "log_group_name": "/custodial-copy-db-builder",
+              "log_stream_name": "{hostname}",
+              "retention_in_days": 30
+            },
+            {
+              "file_path": "/var/log/custodial-copy/custodial-copy-webapp.log",
+              "log_group_name": "/custodial-copy-webapp",
+              "log_stream_name": "{hostname}",
+              "retention_in_days": 30
+            },
+            {
+              "file_path": "/var/log/custodial-copy/custodial-copy-confirmer.log",
+              "log_group_name": "/custodial-copy-confirmer",
+              "log_stream_name": "{hostname}",
+              "retention_in_days": 30
+            },
+            {
+              "file_path": "/var/log/custodial-copy/custodial-copy-reconciler.log",
+              "log_group_name": "/custodial-copy-reconciler",
+              "log_stream_name": "{hostname}",
+              "retention_in_days": 30
+            }
+
+          ]
+        }
+      }
+    }
+  }
+

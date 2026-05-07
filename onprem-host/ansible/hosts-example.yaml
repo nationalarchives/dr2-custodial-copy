@@ -1,0 +1,19 @@
+all:
+  children:
+    custodial_copy:
+      vars:
+        proxy: http://<proxy>:8080
+        cc_aws_region: eu-west-2
+        ecr_hostname: <mgmt-acc-num>.dkr.ecr.eu-west-2.amazonaws.com
+      hosts:
+        dri-s-dockerX.<ENV>:
+          cc_aws_env: <ENV>
+          cc_account_number: <ENV-acc-num>
+          cc_dr2_mount_opts: vers=4.0,noatime,nodiratime
+          cc_dr2_src: <nas-hostname>:<share-path>
+          iamra_trust_anchor_arn: arn:aws:rolesanywhere:eu-west-2:<ENV-acc-num>:trust-anchor/<anchor-id>
+          iamra_profile_arn: arn:aws:rolesanywhere:eu-west-2:<ENV-acc-num>:profile/<profile-id>
+          iamra_role_arn: arn:aws:iam::<ENV-acc-num>:role/<ENV>-dr2-custodial-copy
+          iamra_certificate: poduser@<ENV-domain> custodial-copy.cert.pem
+          iamra_privatekey: poduser@<ENV-domain> custodial-copy.key
+

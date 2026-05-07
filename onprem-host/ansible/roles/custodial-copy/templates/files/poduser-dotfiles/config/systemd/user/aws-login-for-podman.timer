@@ -1,0 +1,14 @@
+### {{ ansible_managed }}
+
+[Unit]
+Description=Service to aws login for podman auto-update timer
+
+[Timer]
+# AWS token lasts 12h, so refresh it every 8h
+OnUnitActiveSec=8h
+RandomizedDelaySec=900
+# Run immediately after reboot if one was due
+Persistent=true
+
+[Install]
+WantedBy=timers.target
