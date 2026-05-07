@@ -1,0 +1,19 @@
+---
+- name: mount volumes
+  meta: noop
+
+- import_tasks: tasks/safer-mount.yaml
+  vars: 
+    path: /mnt/dr2_cc
+    src: '{{ hostvars[inventory_hostname].cc_dr2_src }}'
+    fstype: nfs
+    opts: '{{ hostvars[inventory_hostname].cc_dr2_mount_opts }}'
+
+- name: fix up mount permissions
+  file:
+    path: /mnt/dr2_cc
+    state: directory
+    owner: cont_poduser
+    group: poduser
+    mode: ug+rwX,o-rwX
+

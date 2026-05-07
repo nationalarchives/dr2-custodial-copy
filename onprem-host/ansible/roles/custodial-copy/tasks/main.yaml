@@ -1,0 +1,13 @@
+---
+- name: Get environment fact
+  set_fact:
+    aws_env: "{{ hostvars[inventory_hostname].cc_aws_env }}"
+
+- name: What aws environment are we using for this host?
+  debug: msg="{{ aws_env }}"
+
+- name: Include task files
+  include_tasks: "{{ each_task }}"
+  loop: "{{ query('fileglob', 'tasks/auto/*.yaml') | sort }}"
+  loop_control:
+    loop_var: each_task

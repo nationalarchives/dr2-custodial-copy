@@ -1,0 +1,44 @@
+---
+- name: set up misc system settings
+  meta: noop
+
+- name: setsebool -P virt_use_nfs 1
+  ansible.posix.seboolean:
+    name: virt_use_nfs
+    state: true
+    persistent: true
+    
+- name: setsebool -P container_manage_cgroup on
+  ansible.posix.seboolean:
+    name: container_manage_cgroup
+    state: true
+    persistent: true
+    
+- name: check if poduser can linger
+  command: loginctl -p Linger --value show-user poduser
+  ignore_errors: true
+  register: poduser_linger
+  changed_when: false
+
+- name: loginctl enable-linger poduser
+  shell: loginctl enable-linger poduser
+  when: poduser_linger.stdout != "yes"
+
+- name: Firewall rule to access custodial copy webapp from mgmt (permanent)
+  ansible.posix.firewalld:
+    port: 8080/tcp
+    permanent: true
+    state: enabled
+
+- name: Firewall rule to access custodial copy webapp from mgmt (now)
+  ansible.posix.firewalld:
+    port: 8080/tcp
+    state: enabled
+
+- name: Create config on Squid !?
+  debug:
+    msg: Remember! squid update not implemented, needs to be done manually
+
+- name: Create config on NFS server !?
+  debug:
+    msg: Remember! NFS server setup not implemented, needs to be done manually

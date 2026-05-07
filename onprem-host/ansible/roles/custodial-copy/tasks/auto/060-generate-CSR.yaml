@@ -1,0 +1,35 @@
+---
+- name: generate the CSR for the roles anywhere certificat
+  meta: noop
+
+- name: create certs directory with sticky bit and cont_iamra group
+  file:
+    path: '~poduser/iamra/certs'
+    state: directory
+    owner: poduser
+    group: cont_iamra
+    mode: u+rwX,g+rs,o-rwx
+
+- name: create cloudwatch credentials file with cont_iamra group
+  file:
+    path: '~poduser/iamra/aws-credentials'
+    state: touch
+    owner: poduser
+    group: cont_iamra
+    mode: u+r,g+rw,o-rwx
+    modification_time: preserve
+    access_time: preserve
+
+- name: Generate CSR
+  command:
+    cmd: /usr/local/bin/gen-cert.bash custodial-copy
+    chdir: ~/iamra/certs
+    creates: ~/iamra/certs/current/*.csr
+  become_user: poduser
+  register: generated_csr
+
+- name: CSR was generated! You need to take a copy and request a certificate with it
+  pause:
+    prompt: '{{ generated_csr.stdout }}'
+    seconds: 60
+  when: generated_csr.changed

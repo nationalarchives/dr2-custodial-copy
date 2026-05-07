@@ -1,0 +1,32 @@
+.\" {{ ansible_managed }}
+.\"
+.\"Modified from man(1) of FreeBSD, the NetBSD mdoc.template, and mdoc.samples.
+.\"See Also:
+.\"man mdoc.samples for a complete listing of options
+.\"man mdoc for the short list of editing options
+.\"/usr/share/misc/mdoc.template
+.Dd 8/4/10               \" DATE
+.Dt reindex 1
+.Os Darwin
+.Sh NAME                 \" Section Header - required - don't modify
+.Nm reindex
+.\" The following lines are read in generating the apropos(man -k) database. Use only key
+.\" words here as the database is built based on the words here and in the .ND line.
+.Nd Writes new values to a database column. The values are retrieved from a list of XML files in an OCFL repository
+.Sh SYNOPSIS             \" Section Header - required - don't modify
+.Nm
+.Ar --entity-type
+.Ar --column-name
+.Ar --xpath
+.Sh DESCRIPTION          \" Section Header - required - don't modify
+.Nm
+.Bl -tag -width -indent  \" Differs from above in tag removed
+.It Fl --entity-type                 \"-a flag as a list item
+Either IO or CO. Determines which metadata file the value is read from
+.It Fl --column-name
+The column name in the database to write the value to
+.It Fl --xpath
+The xpath expression used to find the value. This should return a single value.
+.El                      \" Ends the list
+.\" .Sh BUGS              \" Document known, unremedied bugs
+.\" .Sh HISTORY           \" Document history if command behaves in a unique manner

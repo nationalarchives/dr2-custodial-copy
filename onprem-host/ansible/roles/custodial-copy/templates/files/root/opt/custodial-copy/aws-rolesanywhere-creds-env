@@ -1,0 +1,7 @@
+### {{ ansible_managed }}
+
+anchor='{{ iamra_trust_anchor_arn }}'
+profile='{{ iamra_profile_arn }}'
+role='{{ iamra_role_arn }}'
+key='/localhome/poduser/iamra/certs/current/{{ iamra_privatekey }}'
+cert='/localhome/poduser/iamra/certs/current/{{ iamra_certificate }}'

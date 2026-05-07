@@ -1,0 +1,13 @@
+### {{ ansible_managed }}
+
+[Unit]
+Description=Stop reconciler 5 hours before it runs again
+
+[Timer]
+OnCalendar=Saturday 00:00 UTC
+# Don't run immediately after reboot if one was due
+Persistent=false
+
+[Install]
+WantedBy=timers.target
+

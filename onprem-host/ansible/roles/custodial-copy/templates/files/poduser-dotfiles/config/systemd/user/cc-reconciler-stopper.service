@@ -1,0 +1,9 @@
+### {{ ansible_managed }}
+
+[Unit]
+Description=Stops the reconciler so it can start again on time (because it's in a pod it keeps running)
+Conflicts=cc-reconciler.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/true

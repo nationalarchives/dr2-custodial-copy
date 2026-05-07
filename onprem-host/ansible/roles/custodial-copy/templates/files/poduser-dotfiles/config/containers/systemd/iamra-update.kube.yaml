@@ -1,0 +1,55 @@
+### {{ ansible_managed }}
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+  creationTimestamp: "2026-04-29T10:59:25Z"
+  labels:
+    app: iamra-update
+  name: iamra-update
+spec:
+#  restartPolicy: Never
+  containers:
+  - args:
+    - update
+    - --trust-anchor-arn
+    - {{ iamra_trust_anchor_arn }}
+    - --profile-arn
+    - {{ iamra_profile_arn }}
+    - --role-arn
+    - {{ iamra_role_arn }}
+    - --certificate
+    - /certs/current/{{ iamra_certificate }}
+    - --private-key
+    - /certs/current/{{ iamra_privatekey }}
+    - --profile
+    - AmazonCloudWatchAgent
+    env:
+    - name: HTTP_PROXY
+      value: {{ proxy }}
+    - name: HTTPS_PROXY
+      value: {{ proxy }}
+    - name: NO_PROXY
+      value: web.local,localhost,169.254.0.0/16,127.0.0.1
+    - name: AWS_SHARED_CREDENTIALS_FILE
+      value: /aws-credentials
+    image: public.ecr.aws/rolesanywhere/credential-helper:latest-amd64
+    name: main
+    securityContext:
+      runAsNonRoot: true
+    volumeMounts:
+    - mountPath: /aws-credentials:z
+      name: localhome-poduser-iamra-aws-credentials
+    - mountPath: /certs:z
+      name: localhome-poduser-iamra-certs
+  volumes:
+  - hostPath:
+      path: /localhome/poduser/iamra/aws-credentials
+      type: File
+    name: localhome-poduser-iamra-aws-credentials
+  - hostPath:
+      path: /localhome/poduser/iamra/certs
+      type: Directory
+    name: localhome-poduser-iamra-certs
