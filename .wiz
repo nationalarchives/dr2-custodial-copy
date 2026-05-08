@@ -42,3 +42,10 @@ ignore:
       /onprem-host/ansible/roles/custodial-copy/templates/files/poduser-dotfiles/config/containers/systemd/*.kube.yaml:
         reason: BY_DESIGN
 
+    # Wiz doesn't detect that the become:true is inherited from main.yaml via include_tasks:apply:var and I'm simply
+    # not going to put it in every task just to mollify it
+    # Ansible playbook should have become set to true
+    9d80d145-1608-40d0-81d5-3beade293a54:
+      /onprem-host/ansible/roles/custodial-copy/tasks/auto/*.yaml:
+        reason: FALSE_POSITIVE
+
