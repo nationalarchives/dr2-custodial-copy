@@ -8,7 +8,6 @@
 ##            Instance role is used for EC2 case by default.
 ##            AmazonCloudWatchAgent profile is used for the on-premises case by default.
 [credentials]
-  shared_credential_profile = "AmazonCloudWatchAgent"
   shared_credential_file= "/localhome/poduser/iamra/aws-credentials"
 
 ## Configuration for proxy.
