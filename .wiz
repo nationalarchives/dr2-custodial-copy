@@ -1,0 +1,34 @@
+ignore:
+  iac:
+
+    # Host Aliases Undefined Or Empty
+	# The only network hostname we're using is the proxy, and there's no point loading that from a hosts file - it's
+	# on our controlled DNS.  Hostnames like .amazonaws.com stuff are looked up by DNS on the proxy host, so there's
+	# no reason to use a host aliases file
+    a3043d8c-ea20-4c30-baca-f6ccb0be6aea:
+      /onprem-host/ansible/roles/custodial-copy/templates/files/poduser-dotfiles/config/containers/systemd/*.kube.yaml:
+        reason: BY_DESIGN
+
+    # Pod or Container Without LimitRange
+	# podman kube play doesn't support this - it doesn't have k8s namespaces
+    365563b6-27a5-45be-904a-292d54ab198e:
+      /onprem-host/ansible/roles/custodial-copy/templates/files/poduser-dotfiles/config/containers/systemd/*.kube.yaml:
+        reason: BY_DESIGN
+
+	# Kubernetes Resource without ResourceQuota
+	# podman kube play doesn't support this - it doesn't have k8s namespaces
+    ae1fc83a-4709-4e6a-9338-feec23e0d3fa:
+      /onprem-host/ansible/roles/custodial-copy/templates/files/poduser-dotfiles/config/containers/systemd/*.kube.yaml:
+        reason: BY_DESIGN
+
+    # Pod should not run containers that use HostPath volumes (PSS Baseline)
+	# It would be lovely to not use HostPath, but everything I try hasn't worked with the nfs mount.  The closest I got
+	# was setting up a bind mount podman volume then accessing it as a PVC, but then I hit a permissions issue that
+	# seems to be fixed in this patch which isn't in the RHEL8 podman version:
+	# https://github.com/containers/podman/issues/20801
+	# And here is Red Hat's official stance on this area (TLDR: just don't):
+	# https://access.redhat.com/solutions/7012735
+    2ba29e07-7a5a-400e-bf8f-7c377e288730:
+      /onprem-host/ansible/roles/custodial-copy/templates/files/poduser-dotfiles/config/containers/systemd/*.kube.yaml:
+        reason: BY_DESIGN
+
