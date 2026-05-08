@@ -1,4 +1,16 @@
+### {{ ansible_managed }}
+
+$include /etc/inputrc
+
+set colored-stats On
+set completion-ignore-case On
+set mark-symlinked-directories On
+set show-all-if-ambiguous On
+set show-all-if-unmodified On
+set visible-stats On
+
 set bell-style none
+
 "\e[5~": history-search-backward
 "\e[6~": history-search-forward
 "\e[7~": beginning-of-line
