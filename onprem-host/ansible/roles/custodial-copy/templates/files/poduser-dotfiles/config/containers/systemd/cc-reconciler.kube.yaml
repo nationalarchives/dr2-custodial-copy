@@ -39,7 +39,13 @@ spec:
       value: http://127.0.0.1:9911
     image: {{ ecr_hostname }}/dr2-custodial-copy-reconciler:{{ cc_aws_env }}
     securityContext:
+      capabilities:
+        drop:
+          - ALL
       runAsNonRoot: true
+      capabilities:
+        drop:
+          - ALL
     volumeMounts:
     - mountPath: /poduser/repo
       name: mnt-dr2-repo
@@ -76,7 +82,10 @@ spec:
     - name: HTTPS_PROXY
       value: {{ proxy }}
     image: public.ecr.aws/rolesanywhere/credential-helper:latest-amd64
-    securityContext: {}
+    securityContext:
+      capabilities:
+        drop:
+          - ALL
     volumeMounts:
     - mountPath: /certs
       name: localhome-poduser-iamra-certs

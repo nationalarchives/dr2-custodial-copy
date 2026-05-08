@@ -41,6 +41,9 @@ spec:
     image: public.ecr.aws/rolesanywhere/credential-helper:latest-amd64
     name: main
     securityContext:
+      capabilities:
+        drop:
+          - ALL
       runAsNonRoot: true
     volumeMounts:
     - mountPath: /aws-credentials:z

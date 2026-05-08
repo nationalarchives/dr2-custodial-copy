@@ -47,6 +47,9 @@ spec:
     image: {{ ecr_hostname }}/dr2-custodial-copy-backend:{{ cc_aws_env }}
     securityContext:
       runAsNonRoot: true
+      capabilities:
+        drop:
+          - ALL
     volumeMounts:
     - mountPath: /poduser/version:z
       name: var-local-custodial-copy-version
@@ -79,6 +82,9 @@ spec:
     image: {{ ecr_hostname }}/dr2-custodial-copy-db-builder:{{ cc_aws_env }}
     securityContext:
       runAsNonRoot: true
+      capabilities:
+        drop:
+          - ALL
     volumeMounts:
     - mountPath: /poduser/repo
       name: mnt-dr2-repo
@@ -100,6 +106,9 @@ spec:
       hostPort: 8080
     securityContext:
       runAsNonRoot: true
+      capabilities:
+        drop:
+          - ALL
     volumeMounts:
     - mountPath: /poduser/repo
       name: mnt-dr2-repo
@@ -132,6 +141,9 @@ spec:
     image: {{ ecr_hostname }}/dr2-custodial-copy-confirmer:{{ cc_aws_env }}
     securityContext:
       runAsNonRoot: true
+      capabilities:
+        drop:
+          - ALL
     volumeMounts:
     - mountPath: /poduser/repo
       name: mnt-dr2-repo
@@ -167,7 +179,10 @@ spec:
     - name: HTTPS_PROXY
       value: {{ proxy }}
     image: public.ecr.aws/rolesanywhere/credential-helper:latest-amd64
-    securityContext: {}
+    securityContext:
+      capabilities:
+        drop:
+          - ALL
     volumeMounts:
     - mountPath: /certs:z
       name: localhome-poduser-iamra-certs
