@@ -11,6 +11,9 @@ metadata:
     io.containers.autoupdate/reconciler: registry
 spec:
   restartPolicy: Never
+  # podman kube play doesn't support these, but it shuts Wiz up
+  serviceAccountName: custodial-copy
+  automountServiceAccountToken: false
   containers:
   - name: reconciler
     # future version of podman kube play will support this - for now it doesn't break anything

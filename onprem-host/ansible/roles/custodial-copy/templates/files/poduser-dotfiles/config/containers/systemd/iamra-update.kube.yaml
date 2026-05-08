@@ -11,6 +11,9 @@ metadata:
   name: iamra-update
 spec:
 #  restartPolicy: Never
+  # podman kube play doesn't support these, but it shuts Wiz up
+  serviceAccountName: custodial-copy
+  automountServiceAccountToken: false
   containers:
   - args:
     - update

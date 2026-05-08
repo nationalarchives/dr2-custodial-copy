@@ -5,6 +5,7 @@
 - name: mkdir /localhome
   file:
     path: /localhome
+    mode: u=rwX,go=rX
     state: directory
 
 # stat.get_selinux_context not added until ansible-core-2.20

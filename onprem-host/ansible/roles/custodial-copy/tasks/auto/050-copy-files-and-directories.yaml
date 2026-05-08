@@ -2,26 +2,30 @@
 - name: install files
   meta: noop
 
+# technicall the cloudwatch dirs will change perms and this will continuously revert them
+# will fix that in future using cloudwatch container
 - name: copy system directories over
   file:
-    path: '/{{ item.path }}'
-    state: '{{ item.state }}'
+    path: '/{{ item.path | dirname }}'
+    state: directory
+    mode: u=rwX,go=rX
   with_filetree: 'templates/files/root'
-  when: item.state != 'file'
+  when: item.state != 'directory'
 
-# mostly /usr/local/bin
 - name: copy system files over
   template:
     src: '{{ item.src }}'
     dest: '/{{ item.path }}'
+    mode: u+rw,go+r-w
   with_filetree: 'templates/files/root'
-  when: item.state == 'file'
+  when: item.state != 'directory'
 
-# /usr/local/bin
+  # /usr/local/bin - we know dirs already exist
 - name: copy binary system files over
   copy:
     src: '{{ item.src }}'
     dest: '/{{ item.path }}'
+    mode: u+rw,go+r-w
   with_filetree: 'files/root'
   when: item.state == 'file'
 
@@ -34,17 +38,19 @@
 
 - name: copy dotfile directories over
   file:
-    path: '~/.{{ item.path }}'
-    state: '{{ item.state }}'
+    path: '~/.{{ item.path | dirname }}'
+    state: directory
+    mode: u=rwX,g=rX,o=
   become_user: poduser
   with_filetree: 'templates/files/poduser-dotfiles'
-  when: item.state != 'file'
+  when: item.state != 'directory'
 
 # container files for quadlet and systemd overrides
 - name: copy dotfiles over
   template:
     src: '{{ item.src }}'
     dest: '~/.{{ item.path }}'
+    mode: u=rw,g=r,o=
   become_user: poduser
   with_filetree: 'templates/files/poduser-dotfiles'
   when: item.state == 'file'
@@ -55,6 +61,7 @@
   blockinfile:
     path: ~/.bash_profile
     create: true
+    mode: u=rw,g=r,o=
     block: '{{ item }}'
   become_user: poduser
   with_items:
@@ -65,6 +72,7 @@
   blockinfile:
     path: ~/.aws/config
     create: true
+    mode: u=rw,g=r,o=
     block: '{{ item }}'
   become_user: poduser
   with_items:
@@ -83,7 +91,7 @@
     state: directory
     owner: cont_poduser
     group: poduser
-    mode: u+rwX,g+rwsX,o-rwx
+    mode: u=rwX,g=rwXs,o=
   loop:
     - /var/local/custodial-copy
     - /var/log/custodial-copy
@@ -97,30 +105,33 @@
     state: directory
     owner: poduser
     group: poduser
+    mode: u=rwX,g=rX,o=
 
 - name: copy container volume directories over
   file:
-    path: '/{{ item.path }}'
-    state: '{{ item.state }}'
+    path: '/{{ item.path | dirname }}'
+    state: directory
+    mode: u=rwX,g=rwXs,o=
   become_user: cont_poduser
   with_filetree: 'templates/files/cont_poduser'
-  when: item.state != 'file'
+  when: item.state != 'directory'
 
 # log4j2.properties files
 - name: copy container volume files over
   template:
     src: '{{ item.src }}'
     dest: '/{{ item.path }}'
+    mode: u=rw,g=rw,o=
   become_user: cont_poduser
   with_filetree: 'templates/files/cont_poduser'
-  when: item.state == 'file'
+  when: item.state != 'directory'
 
 - name: random useful junk (not overwritten)
   template:
     src: '{{ item.src }}'
     dest: '~/{{ item.path }}'
     force: no
-    mode: +x
+    mode: u=rwx,g=rx,o=
   become_user: poduser
   with_filetree: 'files/poduser'
   when: item.state == 'file'

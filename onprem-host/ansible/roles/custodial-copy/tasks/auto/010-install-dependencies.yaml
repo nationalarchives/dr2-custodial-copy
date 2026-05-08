@@ -6,6 +6,7 @@
   copy:
     src: files/amazon-cloudwatch-agent.rpm
     dest: /var/tmp/
+    mode: u=rw,go=r
   register: aws_cli_copied
 
 - name: Install dependencies with yum
@@ -26,6 +27,7 @@
   copy:
     src: files/awscli-exe-linux-x86_64.zip
     dest: /var/tmp/
+    mode: u=rw,go=r
   register: aws_cli_copied
 
 - name: Unarchive awscli installer

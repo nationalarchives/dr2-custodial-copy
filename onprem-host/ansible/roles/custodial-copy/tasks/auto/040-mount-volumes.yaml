@@ -15,5 +15,5 @@
     state: directory
     owner: cont_poduser
     group: poduser
-    mode: ug+rwX,o-rwX
+    mode: ug=rwX,o=
 

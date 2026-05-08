@@ -8,6 +8,9 @@
 
 - name: Include task files
   include_tasks: "{{ each_task }}"
+  args:
+    apply:
+     become: true
   loop: "{{ query('fileglob', 'tasks/auto/*.yaml') | sort }}"
   loop_control:
     loop_var: each_task
