@@ -4,17 +4,23 @@
 
 set -x
 
-systemctl --user stop iamra-update
-systemctl --user stop custodial-copy
-systemctl --user stop cc-reconciler.timer
+systemctl --user stop iamra-update.service
+systemctl --user stop custodial-copy.service
 systemctl --user stop cc-reconciler.service
-systemctl --user start cc-reconciler-stopper.service
 
-# can't be disabled because generated :(
-#systemctl --user disable iamra-update
-#systemctl --user disable custodial-copy
-#systemctl --user disable cc-reconciler.service
+systemctl --user stop cc-reconciler.timer
+systemctl --user stop cc-reconciler-stopper.timer
+systemctl --user stop aws-login-for-podman.timer
+systemctl --user stop podman-auto-update.timer
+
+# can't be enabled or disabled because generated :(
+#systemctl --user enable iamra-update.service
+#systemctl --user enable custodial-copy.service
+
 systemctl --user disable cc-reconciler.timer
+systemctl --user disable cc-reconciler-stopper.timer
+systemctl --user disable aws-login-for-podman.timer
+systemctl --user disable podman-auto-update.timer
 
 sleep 3
 
