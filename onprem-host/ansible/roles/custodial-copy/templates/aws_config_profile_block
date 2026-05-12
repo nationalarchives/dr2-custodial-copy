@@ -1,0 +1,4 @@
+[profile DA-dp-{{ cc_aws_env }}_ra]
+region = {{ cc_aws_region }}
+output = json
+credential_process = /usr/local/bin/aws-login.bash credential-process /opt/custodial-copy/aws-rolesanywhere-creds-env

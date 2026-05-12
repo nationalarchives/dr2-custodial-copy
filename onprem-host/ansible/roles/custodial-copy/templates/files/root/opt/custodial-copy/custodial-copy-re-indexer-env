@@ -1,0 +1,5 @@
+### {{ ansible_managed }}
+
+DATABASE_PATH=/poduser/database/builder
+OCFL_REPO_DIR=/poduser/repo
+OCFL_WORK_DIR=/poduser/work

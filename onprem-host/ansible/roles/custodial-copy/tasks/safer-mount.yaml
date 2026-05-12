@@ -1,0 +1,26 @@
+- name: Check if {{ path }} exists
+  stat:
+    path: "{{ path }}"
+  register: st_mount
+  ignore_errors: "yes"
+
+- name: Create and set no-access perms on {{ path }} if it's non-existent
+  file:
+    path: "{{ path }}"
+    state: directory
+    owner: nobody
+    group: nobody
+    mode: 0000
+  when:
+    # doesn't work?
+    #- "{{ \"{{ path }}\" is not mount }}"
+    - st_mount.stat is defined
+    - st_mount.stat.exists == false
+
+- name: Mount {{ path }}
+  mount:
+    src: "{{ src }}"
+    path: "{{ path }}"
+    state: mounted
+    fstype: "{{ fstype }}"
+    opts: "{{ opts }}"

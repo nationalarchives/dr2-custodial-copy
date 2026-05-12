@@ -1,0 +1,44 @@
+---
+- name: create users and groups
+  meta: noop
+
+- name: mkdir /localhome
+  file:
+    path: /localhome
+    mode: u=rwX,go=rX
+    state: directory
+
+# stat.get_selinux_context not added until ansible-core-2.20
+- name: Check SELinux tags on /localhome
+  command: stat -c %C /localhome
+  register: localhome_selinux_tags
+  changed_when: false
+
+- name: Tell SELinux to treat /localhome like /home
+  shell: semanage fcontext -a -e /home /localhome && restorecon -v /localhome
+  when: not localhome_selinux_tags.stdout | regex_search(":home_root_t:")
+
+- name: useradd cont_poduser
+  user:
+    name: cont_poduser
+    # TODO: read /etc/subuid and calculate this value (original 1002)
+    uid: 101001
+    create_home: false
+    local: true
+
+- name: group cont_iamra
+  group:
+    name: cont_iamra
+    # TODO: read /etc/subdid and calculate this value (original is 65532)
+    gid: 165531
+    local: true
+
+- name: useradd -m -d /localhome/poduser poduser
+  user:
+    name: poduser
+    home: /localhome/poduser
+    groups:
+      - systemd-journal
+      - cont_iamra
+      - cont_poduser
+

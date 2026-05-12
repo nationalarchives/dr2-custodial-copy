@@ -1,0 +1,12 @@
+### {{ ansible_managed }}
+
+/var/log/custodial-copy/*.log {
+    daily
+    copytruncate
+    rotate 14
+    missingok
+    notifempty
+    compress
+    delaycompress
+    su cont_poduser poduser
+}

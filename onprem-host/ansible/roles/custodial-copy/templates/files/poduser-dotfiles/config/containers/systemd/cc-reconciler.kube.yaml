@@ -1,0 +1,116 @@
+### {{ ansible_managed }}
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cc-reconciler
+  labels:
+    app: cc-reconciler
+  annotations:
+# don't want iamra container to auto-update
+    io.containers.autoupdate/reconciler: registry
+spec:
+  restartPolicy: Never
+  # podman kube play doesn't support these, but it shuts Wiz up
+  serviceAccountName: custodial-copy
+  automountServiceAccountToken: false
+  containers:
+  - name: reconciler
+    # future version of podman kube play will support this - for now it doesn't break anything
+    restartPolicy: TerminatePod
+    env:
+    - name: DATABASE_PATH
+      value: /poduser/database/reconciler
+    - name: OCFL_WORK_DIR
+      value: /poduser/work
+    - name: OCFL_REPO_DIR
+      value: /poduser/repo
+    - name: HTTP_PROXY
+      value: {{ proxy }}
+    - name: HTTPS_PROXY
+      value: {{ proxy }}
+    - name: NO_PROXY
+      value: 127.0.0.1
+    - name: PRESERVICA_URL
+      value: https://tna.preservica.com
+    - name: PRESERVICA_SECRET_NAME
+      value: {{ cc_aws_env }}-preservica-api-read-metadata-read-content
+    - name: AWS_EC2_METADATA_SERVICE_ENDPOINT
+      value: http://127.0.0.1:9911
+    image: {{ ecr_hostname }}/dr2-custodial-copy-reconciler:{{ cc_aws_env }}
+    securityContext:
+      capabilities:
+        drop:
+          - ALL
+      runAsNonRoot: true
+      capabilities:
+        drop:
+          - ALL
+    volumeMounts:
+    - mountPath: /poduser/repo
+      name: mnt-dr2-repo
+    - mountPath: /poduser/work
+      name: mnt-dr2-work
+    - mountPath: /poduser/logs:z
+      name: var-log-custodial-copy
+    - mountPath: /poduser/database:z
+      name: var-local-custodial-copy-database
+    - mountPath: /poduser/log-config/log4j2.properties:z
+      name: var-local-custodial-copy-reconciler-log-config
+#  initContainers:
+  - name: iamra
+    restartPolicy: always
+# podman kube play doesn't support sidecar containers with readiness probes yet.  But your children will love it.
+#    readinessProbe:
+#      tcpSocket:
+#        port: 9911
+#      initialDelaySeconds: 1
+#      periodSeconds: 1
+    args:
+    - serve
+    - --trust-anchor-arn
+    - {{ iamra_trust_anchor_arn }}
+    - --profile-arn
+    - {{ iamra_profile_arn }}
+    - --role-arn
+    - {{ iamra_role_arn }}
+    - --certificate
+    - /certs/current/{{ iamra_certificate }}
+    - --private-key
+    - /certs/current/{{ iamra_privatekey }}
+    env:
+    - name: HTTPS_PROXY
+      value: {{ proxy }}
+    image: public.ecr.aws/rolesanywhere/credential-helper:latest-amd64
+    securityContext:
+      capabilities:
+        drop:
+          - ALL
+    volumeMounts:
+    - mountPath: /certs
+      name: localhome-poduser-iamra-certs
+  volumes:
+  - hostPath:
+      path: /var/local/custodial-copy/database
+      type: Directory
+    name: var-local-custodial-copy-database
+  - hostPath:
+      path: /mnt/dr2_cc/repo
+      type: Directory
+    name: mnt-dr2-repo
+  - hostPath:
+      path: /mnt/dr2_cc/work
+      type: Directory
+    name: mnt-dr2-work
+  - hostPath:
+      path: /localhome/poduser/iamra/certs
+      type: Directory
+    name: localhome-poduser-iamra-certs
+  - hostPath:
+      path: /var/log/custodial-copy
+      type: Directory
+    name: var-log-custodial-copy
+  - hostPath:
+      path: /var/local/custodial-copy/log-config/reconciler-log4j2.properties
+      type: File
+    name: var-local-custodial-copy-reconciler-log-config

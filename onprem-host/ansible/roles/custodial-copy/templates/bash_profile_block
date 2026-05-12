@@ -1,0 +1,8 @@
+export SYSTEMD_PAGER=
+export HTTPS_PROXY='{{ proxy }}'
+export HTTP_PROXY='{{ proxy }}'
+export NO_PROXY=web.local,localhost,169.254.0.0/16,127.0.0.1
+# otherwise systemctl doesn't work
+export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+export CC_AWS_ENV="{{ cc_aws_env }}"

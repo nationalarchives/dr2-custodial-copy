@@ -1,0 +1,45 @@
+---
+- name: install dependencies
+  meta: noop
+
+- name: Copy over the cloudwatch rpm
+  copy:
+    src: files/amazon-cloudwatch-agent.rpm
+    dest: /var/tmp/
+    mode: u=rw,go=r
+  register: aws_cli_copied
+
+- name: Install dependencies with yum
+  dnf:
+    name:
+      - podman
+      - sendmail
+      - jq
+      - sqlite
+      - groff
+      - unzip
+      - python3-libxml2
+      # - awscli - need version 2 not 1
+      - /var/tmp/amazon-cloudwatch-agent.rpm
+    disable_gpg_check: true
+
+- name: Copy over the awscli archive
+  copy:
+    src: files/awscli-exe-linux-x86_64.zip
+    dest: /var/tmp/
+    mode: u=rw,go=r
+  register: aws_cli_copied
+
+- name: Unarchive awscli installer
+  unarchive:
+    src: /var/tmp/awscli-exe-linux-x86_64.zip
+    dest: /var/tmp/
+    remote_src: yes
+  when: aws_cli_copied.changed
+
+- name: Install awscli package
+  shell: /var/tmp/aws/install -u
+  args:
+    creates: /usr/local/bin/aws
+  when: aws_cli_copied.changed
+

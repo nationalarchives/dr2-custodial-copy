@@ -1,0 +1,4 @@
+grep -iF 'error' /var/log/custodial-copy/*.log | sed -e 's/stack_trace.*//'
+zgrep -F 'GOAWAY received' /var/log/custodial-copy/* | cut -d':' -f1 | uniq -c
+zgrep '"[1-9][0-9]* messages out of [0-9]\+ unique messages failed"' /var/log/custodial-copy/* | cut -d: -f1 | uniq -c
+

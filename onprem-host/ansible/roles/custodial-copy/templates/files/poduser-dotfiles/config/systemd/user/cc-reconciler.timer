@@ -1,0 +1,12 @@
+### {{ ansible_managed }}
+
+[Unit]
+Description=Run reconciler once a week, out of hours
+
+[Timer]
+OnCalendar=Saturday 05:00 UTC
+# Don't run immediately after reboot if one was due
+Persistent=false
+
+[Install]
+WantedBy=timers.target

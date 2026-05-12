@@ -1,0 +1,51 @@
+ignore:
+  iac:
+
+    # The only network hostname we're using is the proxy, and there's no point loading that from a hosts file - it's
+    # on our controlled DNS.  Hostnames like .amazonaws.com stuff are looked up by DNS on the proxy host, so there's
+    # no reason to use a host aliases file
+    # Host Aliases Undefined Or Empty
+    a3043d8c-ea20-4c30-baca-f6ccb0be6aea:
+      /onprem-host/ansible/roles/custodial-copy/templates/files/poduser-dotfiles/config/containers/systemd/*.kube.yaml:
+        reason: BY_DESIGN
+
+    # podman kube play doesn't support this - it doesn't have k8s namespaces
+    # Kubernetes Resource without ResourceQuota
+    ae1fc83a-4709-4e6a-9338-feec23e0d3fa:
+      /onprem-host/ansible/roles/custodial-copy/templates/files/poduser-dotfiles/config/containers/systemd/*.kube.yaml:
+        reason: BY_DESIGN
+    # Pod or Container Without LimitRange
+    365563b6-27a5-45be-904a-292d54ab198e:
+      /onprem-host/ansible/roles/custodial-copy/templates/files/poduser-dotfiles/config/containers/systemd/*.kube.yaml:
+        reason: BY_DESIGN
+
+    # It would be lovely to not use HostPath, but everything I try hasn't worked with the nfs mount.  The closest I got
+    # was setting up a bind mount podman volume then accessing it as a PVC, but then I hit a permissions issue that
+    # seems to be fixed in this patch which isn't in the RHEL8 podman version:
+    # https://github.com/containers/podman/issues/20801
+    # And here is Red Hat's official stance on this area (TLDR: just don't):
+    # https://access.redhat.com/solutions/7012735
+    # Pod should not run containers that use HostPath volumes (PSS Baseline)
+    2ba29e07-7a5a-400e-bf8f-7c377e288730:
+      /onprem-host/ansible/roles/custodial-copy/templates/files/poduser-dotfiles/config/containers/systemd/*.kube.yaml:
+        reason: BY_DESIGN
+    # StatefulSet should not run containers that use HostPath volumes (PSS Baseline)
+    36804234-17da-4cac-8a1f-fcdbd10bee7b:
+      /onprem-host/ansible/roles/custodial-copy/templates/files/poduser-dotfiles/config/containers/systemd/*.kube.yaml:
+        reason: BY_DESIGN
+    # DaemonSet should not run containers that use HostPath volumes (PSS Baseline)
+    6d43dc56-80df-47e5-ad73-0786597c58c1:
+      /onprem-host/ansible/roles/custodial-copy/templates/files/poduser-dotfiles/config/containers/systemd/*.kube.yaml:
+        reason: BY_DESIGN
+    # Deployment should run containers that do not use HostPath volumes (PSS Baseline)
+    1f0f4cf6-c33b-40f4-86bf-778db1a35d9d:
+      /onprem-host/ansible/roles/custodial-copy/templates/files/poduser-dotfiles/config/containers/systemd/*.kube.yaml:
+        reason: BY_DESIGN
+
+    # Wiz doesn't detect that the become:true is inherited from main.yaml via include_tasks:apply:var and I'm simply
+    # not going to put it in every task just to mollify it
+    # Ansible playbook should have become set to true
+    9d80d145-1608-40d0-81d5-3beade293a54:
+      /onprem-host/ansible/roles/custodial-copy/tasks/auto/*.yaml:
+        reason: FALSE_POSITIVE
+
