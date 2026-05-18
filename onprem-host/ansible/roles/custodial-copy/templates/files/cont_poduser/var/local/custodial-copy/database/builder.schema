@@ -1,0 +1,3 @@
+### {{ ansible_managed }}
+
+CREATE TABLE files(version int, id text, name text, fileId text, zref text, path text, fileName text, ingestDateTime datetime, sourceId text, citation text, consignmentRef text, code);

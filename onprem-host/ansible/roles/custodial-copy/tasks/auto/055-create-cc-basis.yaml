@@ -1,0 +1,23 @@
+---
+- name: create custodial copy basis
+  meta: noop
+
+- name: Check existing builder sqlite DB
+  stat:
+    path: /var/local/custodial-copy/database/builder
+  register: builder_db
+
+- name: Create empty builder sqlite DB
+  shell: sqlite3 /var/local/custodial-copy/database/builder < /var/local/custodial-copy/database/builder.schema
+  become_user: cont_poduser
+  when: not builder_db.stat.exists or builder_db.stat.size == 0
+
+- name: Check existing reconciler sqlite DB
+  stat:
+    path: /var/local/custodial-copy/database/reconciler
+  register: reconciler_db
+
+- name: Create empty reconciler sqlite DB
+  shell: sqlite3 /var/local/custodial-copy/database/reconciler < /var/local/custodial-copy/database/reconciler.schema
+  become_user: cont_poduser
+  when: not reconciler_db.stat.exists or reconciler_db.stat.size == 0

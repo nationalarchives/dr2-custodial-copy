@@ -1,0 +1,5 @@
+### {{ ansible_managed }}
+
+CREATE TABLE PreservicaCOs(id, parent, sha256Checksum);
+CREATE TABLE OcflCOs(id, parent, sha256Checksum);
+
