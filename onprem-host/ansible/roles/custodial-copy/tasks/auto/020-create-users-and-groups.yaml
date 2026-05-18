@@ -18,14 +18,6 @@
   shell: semanage fcontext -a -e /home /localhome && restorecon -v /localhome
   when: not localhome_selinux_tags.stdout | regex_search(":home_root_t:")
 
-- name: useradd cont_poduser
-  user:
-    name: cont_poduser
-    # TODO: read /etc/subuid and calculate this value (original 1002)
-    uid: 101001
-    create_home: false
-    local: true
-
 - name: group cont_iamra
   group:
     name: cont_iamra
@@ -40,5 +32,14 @@
     groups:
       - systemd-journal
       - cont_iamra
-      - cont_poduser
+    local: true
+
+- name: useradd cont_poduser
+  user:
+    name: cont_poduser
+    # TODO: read /etc/subuid and calculate this value (original 1002)
+    uid: 101001
+    group: poduser
+    create_home: false
+    local: true
 
