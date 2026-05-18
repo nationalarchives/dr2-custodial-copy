@@ -2,6 +2,12 @@
 - name: run services
   meta: noop
 
+- name: Stop cloudwatch if changes detected
+  systemd_service:
+    name: amazon-cloudwatch-agent
+    state: stopped
+  when: aws_cloudwatch_agent_copied.changed or root_files_copied.changed
+
 - name: Start cloudwatch
   systemd_service:
     name: amazon-cloudwatch-agent

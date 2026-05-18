@@ -11,6 +11,7 @@
     mode: u=rwX,go=rX
   with_filetree: 'templates/files/root'
   when: item.state != 'directory'
+  register: root_files_copied
 
 - name: copy system files over
   template:
