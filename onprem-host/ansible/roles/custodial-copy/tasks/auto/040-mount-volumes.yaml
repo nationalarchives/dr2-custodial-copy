@@ -16,4 +16,5 @@
     owner: cont_poduser
     group: poduser
     mode: ug=rwX,o=
+  ignore_errors: true
 

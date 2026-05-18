@@ -97,6 +97,7 @@
     - /var/log/custodial-copy
     - /mnt/dr2_cc/repo
     - /mnt/dr2_cc/work
+  ignore_errors: true
 
 # changed by default in storage.conf to avoid filling up root partition    
 - name: set up container storage overlay area
