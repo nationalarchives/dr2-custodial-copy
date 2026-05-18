@@ -22,7 +22,7 @@
 
 - name: Generate CSR
   command:
-    cmd: /usr/local/bin/gen-cert.bash custodial-copy
+    cmd: /usr/local/bin/gen-cert.bash custodial-copy '{{ iamra_cn | default('') }}'
     chdir: ~/iamra/certs
     creates: ~/iamra/certs/current/*.csr
   become_user: poduser
