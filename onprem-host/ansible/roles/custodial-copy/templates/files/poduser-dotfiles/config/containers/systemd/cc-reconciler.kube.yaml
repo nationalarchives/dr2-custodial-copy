@@ -43,9 +43,6 @@ spec:
         drop:
           - ALL
       runAsNonRoot: true
-      capabilities:
-        drop:
-          - ALL
     volumeMounts:
     - mountPath: /poduser/repo
       name: mnt-dr2-repo
