@@ -10,10 +10,20 @@
     state: directory
     owner: nobody
     group: nobody
-    mode: 0000
+    mode: a-rwx
   when:
-    # doesn't work?
-    #- "{{ \"{{ path }}\" is not mount }}"
+    - st_mount.stat is defined
+    - st_mount.stat.exists == false
+
+
+- name: Create dummy file in underlying mountpoint
+  file:
+    path: "{{ path }}/NOT MOUNTED!!"
+    state: file
+    owner: nobody
+    group: nobody
+    mode: a-rwx
+  when:
     - st_mount.stat is defined
     - st_mount.stat.exists == false
 
@@ -24,3 +34,9 @@
     state: mounted
     fstype: "{{ fstype }}"
     opts: "{{ opts }}"
+  register: mounted
+
+- name: systemctl daemon-reload
+  systemd_service:
+    daemon-reload: true
+  when: mounted.changed
