@@ -129,20 +129,23 @@ Once a message has been processed, the fiber is cancelled.
                     * If they are different, add the metadata object to the list of "changed" files
 * If a MetadataObject (IO) is missing, then it, as well as the COs that belong to it, need to be downloaded so that we
   can be sure that we have at least one version of the IO (and its COs) saved.
-    * In order to do this, the steps from
-      the [CO Messages](#handling-non-deleted-content-object-co-messages-if-entity-has-not-been-deleted),
-      starting from the "getting the URLs of the representations" step, are followed
-* Once the list of all "missing" and "changed" files are generated, for the ones that are bitstreams, stream them from
-  Preservica
-  to a tmp directory or if it's a metadata update, convert the XML to a String and save it to a tmp directory
-    * For "missing" files:
-        * Call `createObjects` on the OCFL repository in order to:
-            * insert a new object into the `destinationPath` provided
-            * add a new version to the OCFL repository
-    * For "changed" files:
-        * Call `createObjects` on the OCFL repository in order to:
-            * overwrite the current file stored at the `destinationPath` provided
-            * add a new version to the OCFL repository
+  * In order to do this, the steps from the [CO Messages](#handling-non-deleted-content-object-co-messages-if-entity-has-not-been-deleted), starting from the "getting the URLs of the representations"
+    step, are followed
+* Once the list of all "missing" and "changed" files are generated, for each FileObject:
+  * Use the id to query the Intelligent Caching database and return the local file path
+  * If a file path is found:
+    * Stream the file from that path...
+  * If a file path is **not** found
+    * Use the FileObject's bitstream URL to stream it from Preservica...
+  * ...to a tmp directory or if it's a metadata update, convert the XML to a String and save it to the tmp directory
+  * For "missing" files:
+    * Call `createObjects` on the OCFL repository in order to:
+      * insert a new object into the `destinationPath` provided
+      * add a new version to the OCFL repository
+  * For "changed" files:
+    * Call `createObjects` on the OCFL repository in order to:
+      * overwrite the current file stored at the `destinationPath` provided
+      * add a new version to the OCFL repository
 * Once these files are added to the OCFL repository, they can be deleted from the `work` directory in order to reduce
   space
     * Even though files get deleted when the container restarts, there is a possibility that the container is active for
@@ -184,15 +187,17 @@ repository to store the Docker image.
 
 ### Environment Variables
 
-| Name                   | Description                                                                 |
-|------------------------|-----------------------------------------------------------------------------|
-| PRESERVICA_URL         | The URL of the Preservica server                                            |
-| PRESERVICA_SECRET_NAME | The Secrets Manager secret used to store the API credentials                |
-| SQS_QUEUE_URL          | The queue the service will poll                                             |
-| REPO_DIR               | The directory for the OCFL repository                                       |
-| WORK_DIR               | The directory for the OCFL work directory                                   |
-| DOWNLOAD_DIR           | The directory to use for downloading files                                  |
-| HTTPS_PROXY            | An optional proxy. This is needed running in TNA's network but not locally. |
+| Name                   | Description                                                                              |
+|------------------------|------------------------------------------------------------------------------------------|
+| PRESERVICA_URL         | The URL of the Preservica server                                                         |
+| PRESERVICA_SECRET_NAME | The Secrets Manager secret used to store the API credentials                             |
+| SQS_QUEUE_URL          | The queue the service will poll                                                          |
+| REPO_DIR               | The directory for the OCFL repository                                                    |
+| WORK_DIR               | The directory for the OCFL work directory                                                |
+| DOWNLOAD_DIR           | The directory to use for downloading files                                               |
+| HTTPS_PROXY            | An optional proxy. This is needed running in TNA's network but not locally.              |
+| IC_DATABASE_PATH       | The Path of the Intelligent Caching database                                             |
+| FILES_CACH_DIR         | The directory where the files are held (as an alternative to downlading from Preservica) |
 
 ## 2. Frontend database builder
 

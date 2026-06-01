@@ -32,7 +32,9 @@ object Main extends IOApp {
       proxyUrl: Option[URI],
       versionPath: String,
       topicArn: String,
-      queueTimeout: Duration
+      queueTimeout: Duration,
+      icDatabasePath: String,
+      filesCacheDir: String
   ) derives ConfigReader
 
   given Decoder[ReceivedSnsMessage] = (c: HCursor) =>
