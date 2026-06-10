@@ -197,7 +197,7 @@ repository to store the Docker image.
 | DOWNLOAD_DIR           | The directory to use for downloading files                                               |
 | HTTPS_PROXY            | An optional proxy. This is needed running in TNA's network but not locally.              |
 | IC_DATABASE_PATH       | The Path of the Intelligent Caching database                                             |
-| FILES_CACH_DIR         | The directory where the files are held (as an alternative to downlading from Preservica) |
+| FILES_CACHE_DIR        | The directory where the files are held (as an alternative to downlading from Preservica) |
 
 ## 2. Frontend database builder
 
