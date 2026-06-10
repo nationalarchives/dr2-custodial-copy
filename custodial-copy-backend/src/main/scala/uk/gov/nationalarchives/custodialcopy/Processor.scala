@@ -254,7 +254,7 @@ class Processor(
               potentialFilePath match
                 case Some(filePath) =>
                   Files[IO]
-                    .readAll(Path(filePath))
+                    .readAll(Path(config.filesCacheDir).resolve(Path(filePath)))
                     .through(Files[IO].writeAll(writePath, Flags.Write))
                     .compile
                     .drain
