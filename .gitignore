@@ -32,3 +32,4 @@ metals.sbt
 /.worksheet/
 
 test-database
+test-ic-database.db

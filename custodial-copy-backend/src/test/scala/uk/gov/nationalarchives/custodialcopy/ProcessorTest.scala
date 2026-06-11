@@ -7,6 +7,7 @@ import fs2.io.file.Path
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doReturn, times, verify}
+import org.scalatest.BeforeAndAfterEach
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatestplus.mockito.MockitoSugar
@@ -20,11 +21,19 @@ import uk.gov.nationalarchives.custodialcopy.testUtils.ExternalServicesTestUtils
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.IoMetadata
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
+import uk.gov.nationalarchives.utils.TestUtils.{DatabaseUtils, DriFile}
 
 import java.util.UUID
 import scala.xml.Elem
 
-class ProcessorTest extends AnyFlatSpec with MockitoSugar {
+class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEach {
+  val databaseUtils = new DatabaseUtils(databaseName)
+  databaseUtils.createDriFilesTable()
+
+  override def beforeEach(): Unit = {
+    databaseUtils.emptyDriFilesTable()
+  }
+
   "process" should "delete the file paths under an IO, if an IO message has 'deleted' set to 'true'" in {
     val paths = List("destinationPathToDelete", "destinationPath2ToDelete")
     val utils = new ProcessorTestUtils(InformationObject, pathsOfObjectsUnderIo = paths)
@@ -80,6 +89,42 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar {
       entityTypesToGetMetadataFrom = List(ContentObject),
       xmlRequestsToValidate = List(utils.coXmlToValidate),
       numOfStreamBitstreamContentCalls = bitstreamCalls,
+      createdIdSourceAndDestinationPathAndId = List(
+        List(IdWithSourceAndDestPaths(id, Path(s"$id/missing").toNioPath.some, "destinationPath")),
+        List(IdWithSourceAndDestPaths(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath"))
+      ),
+      drosToLookup = List(
+        List(
+          s"$parentRef/Preservation_1/$id/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+          s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
+        )
+      ),
+      snsMessagesToSend = List(
+        SendSnsMessage(ContentObject, id, Bitstream, Created, tableItemIdentifier),
+        SendSnsMessage(ContentObject, id, Metadata, Created, tableItemIdentifier)
+      )
+    )
+  }
+
+  "process" should "source the file locally instead of downloading it, if it is found in the DB" in {
+    val utils = new ProcessorTestUtils(ContentObject, cacheDir = true)
+    val id = utils.coId
+    val parentRef = utils.ioId
+
+    databaseUtils.addFilesToDriFilesTable(List(DriFile(id.toString, utils.cachedFilePath.toString, parentRef.toString)))
+
+    utils.processMessage.unsafeRunSync()
+
+    val bitstreamCalls = 1
+    val tableItemIdentifier = "90dfb573-7419-4e89-8558-6cfa29f8fb16"
+
+    utils.verifyCallsAndArguments(
+      bitstreamCalls,
+      1,
+      1,
+      idsOfEntityToGetMetadataFrom = List(id),
+      entityTypesToGetMetadataFrom = List(ContentObject),
+      xmlRequestsToValidate = List(utils.coXmlToValidate),
       createdIdSourceAndDestinationPathAndId = List(
         List(IdWithSourceAndDestPaths(id, Path(s"$id/missing").toNioPath.some, "destinationPath")),
         List(IdWithSourceAndDestPaths(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath"))

@@ -3,7 +3,7 @@ package uk.gov.nationalarchives.custodialcopy
 import cats.effect.IO
 import cats.implicits.*
 import fs2.Stream
-import fs2.io.file.{Files, Flags}
+import fs2.io.file.{Files, Flags, Path}
 
 import java.nio.file.{Files as JFiles, Path as JPath}
 import io.circe.Encoder
@@ -243,19 +243,34 @@ class Processor(
 
   private def download(custodialCopyObject: CustodialCopyObject, ioId: UUID) = custodialCopyObject match {
     case fo: FileObject =>
-      if fo.url.nonEmpty then
-        ocflService.fileInRepository(fo, ioId).flatMap { isFileInRepository =>
-          if isFileInRepository then IO.pure(IdWithSourceAndDestPaths(fo.id, None, fo.destinationFilePath))
-          else
-            for
-              writePath <- fo.sourceFilePath(config.downloadDir)
-              _ <- entityClient.streamBitstreamContent[Unit](Fs2Streams.apply)(
-                fo.url,
-                s => s.through(Files[IO].writeAll(writePath, Flags.Write)).compile.drain
-              )
-            yield IdWithSourceAndDestPaths(fo.id, Option(writePath.toNioPath), fo.destinationFilePath)
-        }
-      else IO.pure(IdWithSourceAndDestPaths(fo.id, None, fo.destinationFilePath))
+      ocflService.fileInRepository(fo, ioId).flatMap { isFileInRepository =>
+        if isFileInRepository then IO.pure(IdWithSourceAndDestPaths(fo.id, None, fo.destinationFilePath))
+        else
+          for
+            potentialFilePath <- Database[IO](config).getPathFromDri(fo.id)
+            writePath <- fo.sourceFilePath(config.downloadDir)
+            potentialWritePath <- {
+              lazy val nioWritePath = Option(writePath.toNioPath)
+              potentialFilePath match
+                case Some(filePath) =>
+                  Files[IO]
+                    .readAll(Path(config.filesCacheDir).resolve(Path(filePath)))
+                    .through(Files[IO].writeAll(writePath, Flags.Write))
+                    .compile
+                    .drain
+                    .map(_ => nioWritePath)
+                case None =>
+                  if fo.url.nonEmpty then
+                    entityClient
+                      .streamBitstreamContent[Unit](Fs2Streams.apply)(
+                        fo.url,
+                        s => s.through(Files[IO].writeAll(writePath, Flags.Write)).compile.drain
+                      )
+                      .map(_ => nioWritePath)
+                  else IO.pure(None)
+            }
+          yield IdWithSourceAndDestPaths(fo.id, potentialWritePath, fo.destinationFilePath)
+      }
 
     case mo: MetadataObject =>
       val metadataXmlAsString = mo.metadata.toString
@@ -348,7 +363,6 @@ class Processor(
 
       createdObjsSnsMessages = missingAndChangedObjects.missingObjects.flatMap(generateSnsMessage(_, messageResponse.message, Created))
       updatedObjsSnsMessages = missingAndChangedObjects.changedObjects.flatMap(generateSnsMessage(_, messageResponse.message, Updated))
-
     } yield createdObjsSnsMessages ++ updatedObjsSnsMessages
 
   @tailrec
