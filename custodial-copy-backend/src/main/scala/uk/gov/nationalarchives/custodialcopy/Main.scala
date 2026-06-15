@@ -29,7 +29,7 @@ object Main extends IOApp {
       repoDir: String,
       workDir: String,
       downloadDir: String,
-      proxyUrl: Option[URI],
+      potentialProxyUrl: Option[URI],
       versionPath: String,
       topicArn: String,
       queueTimeout: Duration,
@@ -63,11 +63,11 @@ object Main extends IOApp {
       config <- ConfigSource.default.loadF[IO, Config]()
       client <- Fs2Client.entityClient(
         config.preservicaSecretName,
-        potentialProxyUrl = config.proxyUrl
+        potentialProxyUrl = config.potentialProxyUrl
       )
       semaphore <- Semaphore[IO](1)
       service <- OcflService(config, semaphore)
-      sqs = sqsClient[IO](config.proxyUrl)
+      sqs = sqsClient[IO](config.potentialProxyUrl)
       sns = DASNSClient[IO]()
       processor <- Processor(config, sqs, service, client, sns)
       _ <- {

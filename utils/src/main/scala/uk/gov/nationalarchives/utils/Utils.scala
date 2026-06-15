@@ -136,9 +136,9 @@ object Utils:
     collectMessages(Nil)
   }
 
-  def sqsClient[F[_]: Async](proxyUrl: Option[URI]): DASQSClient[F] =
-    proxyUrl
-      .map(proxy => DASQSClient[F](proxy))
+  def sqsClient[F[_]: Async](potentialProxyUrl: Option[URI]): DASQSClient[F] =
+    potentialProxyUrl
+      .map(proxyUrl => DASQSClient[F](proxyUrl))
       .getOrElse(DASQSClient[F]())
 
   def logError[F[_]: Sync](err: Throwable): F[Unit] = for {
