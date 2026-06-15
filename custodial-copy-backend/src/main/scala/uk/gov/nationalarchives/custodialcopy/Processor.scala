@@ -393,7 +393,7 @@ class Processor(
         snsClient.publish[SendSnsMessage](config.topicArn)(snsMessages).void
       }
       _ <- logger.info(s"${snsMessages.length} 'created/updated objects' messages published to SNS")
-    } yield Success(messageResponse.message.ref)
+    } yield Success(messageResponse.message.ref, snsMessages.map(_.tableItemIdentifier))
   }.handleError(err => Failure(err))
 
   def commitStagedChanges(id: UUID): IO[Unit] = ocflService.commitStagedChanges(id)
@@ -422,6 +422,6 @@ object Processor {
 
     def isError: Boolean = !isSuccess
 
-    case Success(id: UUID)
+    case Success(id: UUID, icIds: List[String])
     case Failure(ex: Throwable)
 }

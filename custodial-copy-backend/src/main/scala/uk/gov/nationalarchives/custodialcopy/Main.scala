@@ -89,13 +89,13 @@ object Main extends IOApp {
           .parTraverse { case (potentialMessageGroupId, responses) =>
             potentialMessageGroupId match
               case Some(groupId) =>
-                processMessages(processor, responses, groupId)
+                processMessages(processor, responses, groupId, config)
               case None => IO.raiseError(new Exception("Message Group ID is missing"))
           }
           .map(_.flatten)
       }
 
-  private def processMessages(processor: Processor, responses: List[MessageResponse[ReceivedSnsMessage]], groupId: String) = {
+  private def processMessages(processor: Processor, responses: List[MessageResponse[ReceivedSnsMessage]], groupId: String, config: Config) = {
     for {
       logger <- Slf4jLogger.create[IO]
       _ <- logger.info(s"Processing ${responses.length} messages")
@@ -108,22 +108,23 @@ object Main extends IOApp {
         .map(_.toMap)
 
       results <- dedupedMessages.retainedMessages.traverse(processor.process)
-      removedResults = dedupedMessages.removedMessages.map(_.message.ref).map(Success.apply)
+      removedResults = dedupedMessages.removedMessages.map(r => Success(r.message.ref, Nil))
 
       _ <- processor.commitStagedChanges(UUID.fromString(groupId))
       _ <- logger.info(s"${results.count(_.isSuccess)} out of ${results.length} unique messages processed successfully")
       _ <- logger.info(s"${results.count(_.isError)} out of ${results.length} unique messages failed")
 
       _ <- (results ++ removedResults).parTraverse {
-        case Failure(e)   => logError[IO](e)
-        case Success(ref) =>
-          responses
-            .filter(_.message.ref == ref)
-            .map(_.receiptHandle)
-            .parTraverse(receiptHandle =>
-              logger.info(s"Deleting message with receipt handle $receiptHandle") >> processor
-                .deleteMessage(receiptHandle) >> heartbeats.get(receiptHandle).traverse(_.cancel)
-            )
+        case Failure(e)          => logError[IO](e)
+        case Success(ref, icIds) =>
+          Database[IO](config).setAsDownloaded(icIds) >>
+            responses
+              .filter(_.message.ref == ref)
+              .map(_.receiptHandle)
+              .parTraverse(receiptHandle =>
+                logger.info(s"Deleting message with receipt handle $receiptHandle") >> processor
+                  .deleteMessage(receiptHandle) >> heartbeats.get(receiptHandle).traverse(_.cancel)
+              )
       }
     } yield results
   }

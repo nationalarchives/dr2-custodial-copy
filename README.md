@@ -162,6 +162,10 @@ Once the process completes successfully, a message per OCFL update is sent to SN
 * `ObjectType`: `Bitstream`, `Metadata`, `MetadataAndPotentialBitstreams`
 * `tableItemIdentifier` - the reference that can be used to find it in the files table
 
+#### Updating the downloaded status in the Intelligent Caching database
+If a file has been copied from the cache, we update the Intelligent Caching database with a boolean flag to show it has 
+been downloaded and the date it was downloaded. This will allow us to identify which files can be deleted from the cache. 
+
 #### Deleting Received SQS messages
 
 If the Custodial Copy process completes successfully, the messages that were received from SQS are then deleted from the
