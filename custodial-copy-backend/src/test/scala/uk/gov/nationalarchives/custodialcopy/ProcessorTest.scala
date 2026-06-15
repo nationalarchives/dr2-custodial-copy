@@ -110,8 +110,9 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
     val utils = new ProcessorTestUtils(ContentObject, cacheDir = true)
     val id = utils.coId
     val parentRef = utils.ioId
+    val bitstreamId = utils.bitstreamFromApi.name.split("\\.").head
 
-    databaseUtils.addFilesToDriFilesTable(List(DriFile(id.toString, utils.cachedFilePath.toString, parentRef.toString)))
+    databaseUtils.addFilesToDriFilesTable(List(DriFile(bitstreamId, utils.cachedFilePath, parentRef.toString)))
 
     utils.processMessage.unsafeRunSync()
 

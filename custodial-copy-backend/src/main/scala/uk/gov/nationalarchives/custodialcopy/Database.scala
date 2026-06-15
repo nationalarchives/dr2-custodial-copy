@@ -10,10 +10,9 @@ import doobie.util.{Get, Read}
 import uk.gov.nationalarchives.custodialcopy.Main.Config
 
 import java.time.LocalDateTime
-import java.util.UUID
 
 trait Database[F[_]]:
-  def getPathFromDri(fileId: UUID): F[Option[String]]
+  def getPathFromDri(fileId: String): F[Option[String]]
 
   def setAsDownloaded(fileIds: List[String]): F[Int]
 
@@ -26,8 +25,8 @@ object Database:
       logHandler = Option(LogHandler.jdkLogHandler)
     )
 
-    override def getPathFromDri(fileId: UUID): F[Option[String]] = {
-      val selectSql = sql"select file_path from dri_files where file_id = ${fileId.toString}"
+    override def getPathFromDri(fileId: String): F[Option[String]] = {
+      val selectSql = sql"select file_path from dri_files where file_id = $fileId"
       selectSql.query[String].option.transact(xa)
     }
 
