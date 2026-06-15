@@ -121,7 +121,7 @@ object TestUtils:
     def createDriFilesTable(): Unit = {
       val transaction = for {
         _ <- sql"DROP TABLE IF EXISTS dri_files;".update.run
-        _ <- sql"CREATE TABLE dri_files (file_id text, file_path text, asset_id text);".update.run
+        _ <- sql"CREATE TABLE dri_files (file_id text, file_path text, asset_id text, completed integer);".update.run
       } yield ()
       transaction.transact(xa).unsafeRunSync()
     }
@@ -134,6 +134,12 @@ object TestUtils:
     def addFilesToDriFilesTable(file: List[DriFile]): Unit = {
       val insert = "INSERT INTO dri_files (file_id, file_path, asset_id) values (?, ?, ?);"
       Update[DriFile](insert).updateMany(file).transact(xa).unsafeRunSync()
+    }
+
+    def getCompletedStatus(fileId: String): Option[Int] = {
+      val sql = sql"SELECT completed FROM dri_files where file_id = $fileId"
+      sql.query[Option[Int]].unique.transact(xa).unsafeRunSync()
+
     }
 
   def ocflFile(id: UUID, fileId: UUID, zref: String = "zref"): OcflFile =

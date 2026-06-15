@@ -154,6 +154,17 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
       )
     }
 
+  "runCustodialCopy" should "set completed to true for any rows in the intelligent cache database" in {
+    val utils = new MainTestUtils(List((ContentObject, false)), objectVersion = 0)
+    val parentRef = utils.ioId
+    val bitstreamId = "90dfb573-7419-4e89-8558-6cfa29f8fb16"
+    databaseUtils.addFilesToDriFilesTable(List(DriFile(bitstreamId, Files.createTempFile("dir", "file").toString, utils.ioId.toString)))
+    runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
+
+    val completedStatus = databaseUtils.getCompletedStatus(bitstreamId)
+    completedStatus.get must equal(1)
+  }
+
   "runCustodialCopy" should "only download a file once if there are IO and CO messages for the same IO" in {
     val utils = new MainTestUtils(
       List((ContentObject, false), (InformationObject, false)),
@@ -872,8 +883,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
       config,
       sqsClient,
       { messageResponse =>
-        if messageResponse.receiptHandle == "receiptHandleDelayed" then IO.sleep(4.seconds) >> IO.pure(Result.Success(delayedId))
-        else IO.pure(Result.Success(id))
+        if messageResponse.receiptHandle == "receiptHandleDelayed" then IO.sleep(4.seconds) >> IO.pure(Result.Success(delayedId, Nil))
+        else IO.pure(Result.Success(id, Nil))
       }
     )
 
@@ -921,8 +932,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
       config,
       sqsClient,
       { messageResponse =>
-        if messageResponse.receiptHandle == "receiptHandleDelayed" then IO.sleep(4.seconds) >> IO.pure(Result.Success(delayedId))
-        else IO.pure(Result.Success(id))
+        if messageResponse.receiptHandle == "receiptHandleDelayed" then IO.sleep(4.seconds) >> IO.pure(Result.Success(delayedId, Nil))
+        else IO.pure(Result.Success(id, Nil))
       }
     )
 
