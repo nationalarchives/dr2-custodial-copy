@@ -164,7 +164,7 @@ Once the process completes successfully, a message per OCFL update is sent to SN
 
 #### Updating the downloaded status in the Intelligent Caching database
 If a file has been copied from the cache, we update the Intelligent Caching database with a boolean flag to show it has 
-been downloaded and the date it was downloaded.  
+been downloaded and the date it was downloaded. This will allow us to identify which files can be deleted from the cache. 
 
 #### Deleting Received SQS messages
 
