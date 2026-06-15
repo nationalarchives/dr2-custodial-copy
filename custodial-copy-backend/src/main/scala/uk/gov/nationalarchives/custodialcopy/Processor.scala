@@ -32,6 +32,7 @@ import java.util.UUID
 import scala.annotation.tailrec
 import scala.xml.{Elem, Node}
 import scala.concurrent.duration.*
+import scala.util.chaining.scalaUtilChainingOps
 
 class Processor(
     config: Config,
@@ -41,6 +42,8 @@ class Processor(
     xmlValidator: ValidateXmlAgainstXsd[IO],
     snsClient: DASNSClient[IO]
 ) {
+  lazy val potentialIcDatabase: Option[Database[IO]] = config.potentialIcDbPath.map(Database[IO])
+
   private val newlineAndIndent = "\n          "
 
   private val changeVisibilityTimeout: (String, Duration) => IO[ChangeMessageVisibilityResponse] = sqsClient.changeVisibilityTimeout(config.sqsQueueUrl)
@@ -248,8 +251,10 @@ class Processor(
         else
           for
             logger <- Slf4jLogger.create[IO]
-            potentialFilePath <- Database[IO](config).getPathFromDri(fo.tableItemIdentifier)
-            _ <- logger.info(s"Found path for bitstream name ${fo.tableItemIdentifier} in local cache")
+            potentialFilePath <-
+              potentialIcDatabase
+                .flatTraverse(_.getPathFromDri(fo.tableItemIdentifier))
+                .tap(_ => logger.info(s"Found path for bitstream name ${fo.tableItemIdentifier} in local cache"))
             writePath <- fo.sourceFilePath(config.downloadDir)
             potentialWritePath <- {
               lazy val nioWritePath = Option(writePath.toNioPath)

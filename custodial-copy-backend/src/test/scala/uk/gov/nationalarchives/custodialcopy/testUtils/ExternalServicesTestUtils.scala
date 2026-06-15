@@ -268,6 +268,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
   class MainTestUtils(
       typesOfSqsMsgAndDeletionStatus: List[(EntityType, Boolean)] = List((InformationObject, false)),
       objectVersion: Int = 2,
+      useCacheDir: Boolean = false,
       typesOfMetadataFilesInRepo: List[EntityType] = Nil,
       fileContentToWriteToEachFileInRepo: List[String] = Nil,
       entityDeleted: Boolean = false,
@@ -293,7 +294,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val downloadDirPath: Path = Path.of(downloadDir)
     val workDir: String = Files.createTempDirectory("work").toString
     val repoDir: Path = Files.createTempDirectory("repo")
-    val config: Config = Config("", "", repoDir.toString, workDir, downloadDir, None, "", "", Duration("1s"), databaseName, "")
+    val potentialDbName: Option[String] = if useCacheDir then Some(databaseName) else None
+    val config: Config = Config("", "", repoDir.toString, workDir, downloadDir, None, "", "", Duration("1s"), potentialDbName, "")
 
     val bitstreamInfoResponsesWithSameName: Seq[BitStreamInfo] = bitstreamInfo1Responses.flatMap { bitstreamInfo1Response =>
       bitstreamInfo2Responses.filter { bitstreamInfo2Response =>
@@ -458,7 +460,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         "",
         "topicArn",
         Duration("1s"),
-        databaseName,
+        if cacheDir then Some(databaseName) else None,
         filesCacheDir.toString
       )
     val ioId: UUID = UUID.randomUUID()

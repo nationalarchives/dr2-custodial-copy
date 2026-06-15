@@ -33,7 +33,7 @@ object Main extends IOApp {
       versionPath: String,
       topicArn: String,
       queueTimeout: Duration,
-      icDatabasePath: String,
+      potentialIcDbPath: Option[String],
       filesCacheDir: String
   ) derives ConfigReader
 
@@ -117,7 +117,7 @@ object Main extends IOApp {
       _ <- (results ++ removedResults).parTraverse {
         case Failure(e)          => logError[IO](e)
         case Success(ref, icIds) =>
-          Database[IO](config).setAsDownloaded(icIds) >>
+          processor.potentialIcDatabase.traverse(_.setAsDownloaded(icIds)) >>
             responses
               .filter(_.message.ref == ref)
               .map(_.receiptHandle)
