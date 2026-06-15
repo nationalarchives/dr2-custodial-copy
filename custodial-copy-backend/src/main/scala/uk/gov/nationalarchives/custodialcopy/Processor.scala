@@ -247,7 +247,9 @@ class Processor(
         if isFileInRepository then IO.pure(IdWithSourceAndDestPaths(fo.id, None, fo.destinationFilePath))
         else
           for
-            potentialFilePath <- Database[IO](config).getPathFromDri(fo.id)
+            logger <- Slf4jLogger.create[IO]
+            potentialFilePath <- Database[IO](config).getPathFromDri(fo.tableItemIdentifier)
+            _ <- logger.info(s"Found path for bitstream name ${fo.tableItemIdentifier} in local cache")
             writePath <- fo.sourceFilePath(config.downloadDir)
             potentialWritePath <- {
               lazy val nioWritePath = Option(writePath.toNioPath)
