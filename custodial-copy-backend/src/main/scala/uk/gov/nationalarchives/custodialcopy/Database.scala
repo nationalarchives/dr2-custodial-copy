@@ -9,12 +9,13 @@ import doobie.util.transactor.Transactor.Aux
 import doobie.util.{Get, Read}
 import uk.gov.nationalarchives.custodialcopy.Main.Config
 
+import java.time.LocalDateTime
 import java.util.UUID
 
 trait Database[F[_]]:
   def getPathFromDri(fileId: UUID): F[Option[String]]
 
-  def setAsDone(fileIds: List[String]): F[Int]
+  def setAsDownloaded(fileIds: List[String]): F[Int]
 
 object Database:
 
@@ -30,8 +31,10 @@ object Database:
       selectSql.query[String].option.transact(xa)
     }
 
-    override def setAsDone(fileIds: List[String]): F[Int] =
-      val updateSql = "update dri_files set completed = true where file_id = ?"
-      Update[String](updateSql).updateMany(fileIds).transact(xa)
+    override def setAsDownloaded(fileIds: List[String]): F[Int] =
+      val currentDate = LocalDateTime.now.toString
+      val updates = fileIds.map(id => currentDate -> id)
+      val updateSql = "update dri_files set downloaded = true, downloaded_at = ? where file_id = ?"
+      Update[(String, String)](updateSql).updateMany(updates).transact(xa)
 
   }

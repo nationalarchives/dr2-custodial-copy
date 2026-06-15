@@ -420,10 +420,6 @@ object Processor {
 
     def isError: Boolean = !isSuccess
 
-    def getIcIds: List[String] = this match
-      case s: Result.Success => s.icIds
-      case _                 => Nil
-
     case Success(id: UUID, icIds: List[String])
     case Failure(ex: Throwable)
 }

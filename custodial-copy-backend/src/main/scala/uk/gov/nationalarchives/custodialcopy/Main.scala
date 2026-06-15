@@ -108,7 +108,7 @@ object Main extends IOApp {
         .map(_.toMap)
 
       results <- dedupedMessages.retainedMessages.traverse(processor.process)
-      removedResults = dedupedMessages.removedMessages.map(r => (r.message.ref, Nil)).map(Success.apply)
+      removedResults = dedupedMessages.removedMessages.map(r => Success(r.message.ref, Nil))
 
       _ <- processor.commitStagedChanges(UUID.fromString(groupId))
       _ <- logger.info(s"${results.count(_.isSuccess)} out of ${results.length} unique messages processed successfully")
@@ -117,7 +117,7 @@ object Main extends IOApp {
       _ <- (results ++ removedResults).parTraverse {
         case Failure(e)          => logError[IO](e)
         case Success(ref, icIds) =>
-          Database[IO](config).setAsDone(icIds) >>
+          Database[IO](config).setAsDownloaded(icIds) >>
             responses
               .filter(_.message.ref == ref)
               .map(_.receiptHandle)

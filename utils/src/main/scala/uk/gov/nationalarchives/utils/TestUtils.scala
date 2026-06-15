@@ -34,6 +34,8 @@ import scala.xml.Elem
 object TestUtils:
   case class DriFile(fileId: String, filePath: String, assetId: String)
 
+  case class DownloadedStatus(downloaded: Option[Int], downloadedAt: Option[String])
+
   class DatabaseUtils(val databaseName: String):
     val xa: Aux[IO, Unit] = Transactor.fromDriverManager[IO](
       driver = "org.sqlite.JDBC",
@@ -121,7 +123,7 @@ object TestUtils:
     def createDriFilesTable(): Unit = {
       val transaction = for {
         _ <- sql"DROP TABLE IF EXISTS dri_files;".update.run
-        _ <- sql"CREATE TABLE dri_files (file_id text, file_path text, asset_id text, completed integer);".update.run
+        _ <- sql"CREATE TABLE dri_files (file_id text, file_path text, asset_id text, downloaded integer, downloaded_at);".update.run
       } yield ()
       transaction.transact(xa).unsafeRunSync()
     }
@@ -136,9 +138,9 @@ object TestUtils:
       Update[DriFile](insert).updateMany(file).transact(xa).unsafeRunSync()
     }
 
-    def getCompletedStatus(fileId: String): Option[Int] = {
-      val sql = sql"SELECT completed FROM dri_files where file_id = $fileId"
-      sql.query[Option[Int]].unique.transact(xa).unsafeRunSync()
+    def getDownloadedStatus(fileId: String): DownloadedStatus = {
+      val sql = sql"SELECT downloaded, downloaded_at FROM dri_files where file_id = $fileId"
+      sql.query[DownloadedStatus].unique.transact(xa).unsafeRunSync()
 
     }
 
