@@ -249,7 +249,7 @@ class Processor(
           for
             logger <- Slf4jLogger.create[IO]
             potentialFilePath <- Database[IO](config).getPathFromDri(fo.tableItemIdentifier)
-            _ <- logger.info(s"Potential file path $potentialFilePath")
+            _ <- logger.info(s"Found path for bitstream name ${fo.tableItemIdentifier} in local cache")
             writePath <- fo.sourceFilePath(config.downloadDir)
             potentialWritePath <- {
               lazy val nioWritePath = Option(writePath.toNioPath)
