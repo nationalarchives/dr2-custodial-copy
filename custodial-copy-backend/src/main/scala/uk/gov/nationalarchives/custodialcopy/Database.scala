@@ -7,7 +7,6 @@ import doobie.util.log.LogHandler
 import doobie.util.transactor.Transactor
 import doobie.util.transactor.Transactor.Aux
 import doobie.util.{Get, Read}
-import uk.gov.nationalarchives.custodialcopy.Main.Config
 
 import java.time.LocalDateTime
 
@@ -18,10 +17,10 @@ trait Database[F[_]]:
 
 object Database:
 
-  def apply[F[_]: Async](config: Config): Database[F] = new Database[F] {
+  def apply[F[_]: Async](icDbPath: String): Database[F] = new Database[F] {
     val xa: Aux[F, Unit] = Transactor.fromDriverManager[F](
       driver = "org.sqlite.JDBC",
-      url = s"jdbc:sqlite:${config.icDatabasePath}",
+      url = s"jdbc:sqlite:$icDbPath",
       logHandler = Option(LogHandler.jdkLogHandler)
     )
 

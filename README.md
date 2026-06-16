@@ -127,25 +127,27 @@ Once a message has been processed, the fiber is cancelled.
                 * Compare the calculated checksum with the one in the OCFL repository.
                     * If they are the same, do nothing.
                     * If they are different, add the metadata object to the list of "changed" files
-* If a MetadataObject (IO) is missing, then it, as well as the COs that belong to it, need to be downloaded so that we
+* If a MetadataObject (IO) is missing, then it, as well as the COs that belong to it, needs to be downloaded so that we
   can be sure that we have at least one version of the IO (and its COs) saved.
   * In order to do this, the steps from the [CO Messages](#handling-non-deleted-content-object-co-messages-if-entity-has-not-been-deleted), starting from the "getting the URLs of the representations"
     step, are followed
-* Once the list of all "missing" and "changed" files are generated, for each FileObject:
-  * Use the id to query the Intelligent Caching database and return the local file path
-  * If a file path is found:
-    * Stream the file from that path...
-  * If a file path is **not** found
-    * Use the FileObject's bitstream URL to stream it from Preservica...
-  * ...to a tmp directory or if it's a metadata update, convert the XML to a String and save it to the tmp directory
-  * For "missing" files:
-    * Call `createObjects` on the OCFL repository in order to:
-      * insert a new object into the `destinationPath` provided
-      * add a new version to the OCFL repository
-  * For "changed" files:
-    * Call `createObjects` on the OCFL repository in order to:
-      * overwrite the current file stored at the `destinationPath` provided
-      * add a new version to the OCFL repository
+* Once the list of all "missing" and "changed" objects are generated,
+  * For each FileObject:
+    * If a path to the Intelligent Caching (IC) database was passed in as an environment variable
+      * Use the id to query the IC files table to determine if a local version of the file exists and return the local file path
+      * If a file path is found:
+        * Stream the file from that path to a tmp directory
+    * If a file path is **not** found or a path to the Intelligent Caching database was not passed in as an environment variable
+      * Use the FileObject's bitstream URL to stream it from Preservica to a tmp directory
+  * For each MetadataObject update, convert the XML to a String and save it to the tmp directory
+* For "missing" objects:
+  * Call `createObjects` on the OCFL repository in order to:
+    * insert a new object into the `destinationPath` provided
+    * add a new version to the OCFL repository
+* For "changed" objects:
+  * Call `createObjects` on the OCFL repository in order to:
+    * overwrite the current file stored at the `destinationPath` provided
+    * add a new version to the OCFL repository
 * Once these files are added to the OCFL repository, they can be deleted from the `work` directory in order to reduce
   space
     * Even though files get deleted when the container restarts, there is a possibility that the container is active for

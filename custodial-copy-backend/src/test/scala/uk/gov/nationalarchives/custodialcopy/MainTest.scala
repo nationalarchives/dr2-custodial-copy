@@ -156,7 +156,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     }
 
   "runCustodialCopy" should "set downloaded to true for the rows found in the intelligent cache database" in {
-    val utils = new MainTestUtils(List((ContentObject, false)), objectVersion = 0)
+    val utils = new MainTestUtils(List((ContentObject, false)), objectVersion = 0, true)
     val parentRef = utils.ioId
     val bitstreamId = "90dfb573-7419-4e89-8558-6cfa29f8fb16"
     val unusedBitstreamId = UUID.randomUUID.toString
@@ -883,7 +883,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     val messageIdOne = Option(UUID.randomUUID.toString)
     val messageIdTwo = Option(UUID.randomUUID.toString)
 
-    val config: Config = Config("", "https://queue", "", "", "", None, "", "", 2.seconds, databaseName, "")
+    val config: Config = Config("", "https://queue", "", "", "", None, "", "", 2.seconds, Some(databaseName), "")
     val sqsClient = mock[DASQSClient[IO]]
 
     val processor = new TestProcessor(
@@ -932,7 +932,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     val delayedId = UUID.randomUUID
     val id = UUID.randomUUID
     val messageId = Option(UUID.randomUUID.toString)
-    val config: Config = Config("", "https://queue", "", "", "", None, "", "", 2.seconds, databaseName, "")
+    val config: Config = Config("", "https://queue", "", "", "", None, "", "", 2.seconds, Some(databaseName), "")
     val sqsClient = mock[DASQSClient[IO]]
 
     val processor = new TestProcessor(

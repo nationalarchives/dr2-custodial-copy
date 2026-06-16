@@ -29,11 +29,11 @@ object Main extends IOApp {
       repoDir: String,
       workDir: String,
       downloadDir: String,
-      proxyUrl: Option[URI],
+      potentialProxyUrl: Option[URI],
       versionPath: String,
       topicArn: String,
       queueTimeout: Duration,
-      icDatabasePath: String,
+      potentialIcDbPath: Option[String],
       filesCacheDir: String
   ) derives ConfigReader
 
@@ -63,11 +63,11 @@ object Main extends IOApp {
       config <- ConfigSource.default.loadF[IO, Config]()
       client <- Fs2Client.entityClient(
         config.preservicaSecretName,
-        potentialProxyUrl = config.proxyUrl
+        potentialProxyUrl = config.potentialProxyUrl
       )
       semaphore <- Semaphore[IO](1)
       service <- OcflService(config, semaphore)
-      sqs = sqsClient[IO](config.proxyUrl)
+      sqs = sqsClient[IO](config.potentialProxyUrl)
       sns = DASNSClient[IO]()
       processor <- Processor(config, sqs, service, client, sns)
       _ <- {
@@ -117,7 +117,7 @@ object Main extends IOApp {
       _ <- (results ++ removedResults).parTraverse {
         case Failure(e)          => logError[IO](e)
         case Success(ref, icIds) =>
-          Database[IO](config).setAsDownloaded(icIds) >>
+          processor.potentialIcDatabase.traverse(_.setAsDownloaded(icIds)) >>
             responses
               .filter(_.message.ref == ref)
               .map(_.receiptHandle)
