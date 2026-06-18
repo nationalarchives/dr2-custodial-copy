@@ -440,7 +440,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       pathsOfObjectsUnderIo: List[String] = Nil,
       throwErrorInMissingAndChangedObjects: Boolean = false,
       bitstreamUrl: String = "url",
-      cacheDir: Boolean = false
+      cacheDir: Boolean = false,
+      fileChecksum: String = "fileChecksum"
   ) {
     val downloadDir: String = Files.createTempDirectory("downloads").toString
     val workDir: String = Files.createTempDirectory("work").toString
@@ -491,7 +492,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
       1,
       bitstreamUrl,
-      List(Fixity("sha256", "checksum")),
+      List(Fixity("sha256", fileChecksum)),
       genVersion,
       genType,
       Some("CoTitle"),
@@ -583,7 +584,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
                 FileObject(
                   coId,
                   missingOrChanged,
-                  List(Checksum("sha256", "checksum")),
+                  List(Checksum("sha256", fileChecksum)),
                   bitstreamUrl,
                   "destinationPath",
                   identifier

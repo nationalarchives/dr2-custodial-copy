@@ -106,7 +106,44 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
     )
   }
 
-  "process" should "source the file locally instead of downloading it, if it is found in the DB" in {
+  "process" should "source the file locally instead of downloading it, if it's found in the DB and its checksum matches Preservica's" in {
+    val utils = new ProcessorTestUtils(ContentObject, cacheDir = true, fileChecksum = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+    val id = utils.coId
+    val parentRef = utils.ioId
+    val bitstreamId = utils.bitstreamFromApi.name.split("\\.").head
+
+    databaseUtils.addFilesToDriFilesTable(List(DriFile(bitstreamId, utils.cachedFilePath, parentRef.toString)))
+
+    utils.processMessage.unsafeRunSync()
+
+    val bitstreamCalls = 1
+    val tableItemIdentifier = "90dfb573-7419-4e89-8558-6cfa29f8fb16"
+
+    utils.verifyCallsAndArguments(
+      bitstreamCalls,
+      1,
+      1,
+      idsOfEntityToGetMetadataFrom = List(id),
+      entityTypesToGetMetadataFrom = List(ContentObject),
+      xmlRequestsToValidate = List(utils.coXmlToValidate),
+      createdIdSourceAndDestinationPathAndId = List(
+        List(IdWithSourceAndDestPaths(id, Path(s"$id/missing").toNioPath.some, "destinationPath")),
+        List(IdWithSourceAndDestPaths(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath"))
+      ),
+      drosToLookup = List(
+        List(
+          s"$parentRef/Preservation_1/$id/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+          s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
+        )
+      ),
+      snsMessagesToSend = List(
+        SendSnsMessage(ContentObject, id, Bitstream, Created, tableItemIdentifier),
+        SendSnsMessage(ContentObject, id, Metadata, Created, tableItemIdentifier)
+      )
+    )
+  }
+
+  "process" should "not source the file locally and download it instead, if it's found in the DB but its checksum doesn't match Preservica's" in {
     val utils = new ProcessorTestUtils(ContentObject, cacheDir = true)
     val id = utils.coId
     val parentRef = utils.ioId
@@ -126,6 +163,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
       idsOfEntityToGetMetadataFrom = List(id),
       entityTypesToGetMetadataFrom = List(ContentObject),
       xmlRequestsToValidate = List(utils.coXmlToValidate),
+      numOfStreamBitstreamContentCalls = bitstreamCalls,
       createdIdSourceAndDestinationPathAndId = List(
         List(IdWithSourceAndDestPaths(id, Path(s"$id/missing").toNioPath.some, "destinationPath")),
         List(IdWithSourceAndDestPaths(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath"))
