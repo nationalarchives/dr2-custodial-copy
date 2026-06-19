@@ -34,7 +34,6 @@ import java.util.UUID
 import scala.annotation.tailrec
 import scala.xml.{Elem, Node}
 import scala.concurrent.duration.*
-import scala.util.chaining.scalaUtilChainingOps
 
 class Processor(
     config: Config,
@@ -257,9 +256,12 @@ class Processor(
           for
             logger <- Slf4jLogger.create[IO]
             potentialFilePath <-
-              potentialIcDatabase
-                .flatTraverse(_.getPathFromDri(fo.tableItemIdentifier))
-                .tap(_ => logger.info(s"Found path for bitstream name ${fo.tableItemIdentifier} in local cache"))
+              potentialIcDatabase.flatTraverse { db =>
+                for
+                  path <- db.getPathFromDri(fo.tableItemIdentifier)
+                  _ <- logger.info(s"Found path for bitstream name ${fo.tableItemIdentifier} in local cache")
+                yield path
+              }
             writePath <- fo.sourceFilePath(config.downloadDir)
             potentialWritePath <-
               for
