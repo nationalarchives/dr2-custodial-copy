@@ -265,7 +265,7 @@ class Processor(
             writePath <- fo.sourceFilePath(config.downloadDir)
             potentialWritePath <-
               for
-                localChecksumsMatchPreservica <-
+                localChecksumsMatchPs <-
                   potentialFilePath
                     .map { filePath =>
                       val path = Path(config.filesCacheDir).resolve(Path(filePath.stripPrefix("/")))
@@ -278,11 +278,11 @@ class Processor(
                         .compile
                         .toList
                         .map(localFileChecksums => fo.checksums.forall(checksum => localFileChecksums.contains(checksum.fingerprint)))
-                        .flatTap { localChecksumsMatchPreservica =>
-                          if !localChecksumsMatchPreservica then
+                        .flatTap { localChecksumsMatchPs =>
+                          if !localChecksumsMatchPs then
                             logger.info(
                               s"File with bitstream name ${fo.tableItemIdentifier} was found in the local cache but its checksum(s)" +
-                                s" didn't match the one(s) on Preservica...downloading the file from Preservica instead."
+                                s" didn't match the one(s) from the Preservation System...downloading the file from the Preservation System instead."
                             )
                           else IO.unit
                         }
@@ -290,7 +290,7 @@ class Processor(
                     .getOrElse(IO.pure(false))
                 potentialNioWritePath <-
                   val nioWritePath = Option(writePath.toNioPath)
-                  if localChecksumsMatchPreservica then
+                  if localChecksumsMatchPs then
                     Files[IO]
                       .readAll(Path(config.filesCacheDir).resolve(Path(potentialFilePath.get)))
                       .through(Files[IO].writeAll(writePath, Flags.Write))
