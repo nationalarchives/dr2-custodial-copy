@@ -268,7 +268,7 @@ class Processor(
                 localChecksumsMatchPreservica <-
                   potentialFilePath
                     .map { filePath =>
-                      val path = Path(config.filesCacheDir).resolve(Path(filePath))
+                      val path = Path(config.filesCacheDir).resolve(Path(filePath.stripPrefix("/")))
                       val hashers = fo.checksums.map(checksum => createHasher(fs2HashNamesToAlgos(checksum.algorithm.toUpperCase)))
 
                       Files[IO]
