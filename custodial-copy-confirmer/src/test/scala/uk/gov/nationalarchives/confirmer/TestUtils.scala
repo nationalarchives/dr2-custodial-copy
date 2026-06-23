@@ -103,5 +103,5 @@ object TestUtils:
   }
 
   def ocfl(existingRefs: List[UUID], config: Config): Ocfl = new Ocfl(config) {
-    override def getFilePathsforObject(id: UUID): List[String] = if existingRefs.contains(id) then List("file1.txt", "file2.txt") else List.empty
+    override def getFilePathsforObject(id: UUID): List[String] = if existingRefs.contains(id) then List(s"/some/path/$id/file1.txt", s"/some/path/$id/file2.txt") else List.empty
   }
