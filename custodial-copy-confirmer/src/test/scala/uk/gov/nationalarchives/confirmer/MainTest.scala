@@ -28,7 +28,9 @@ class MainTest extends AnyFlatSpec {
     updateItem.primaryKeyAndItsValue("assetId").s() should equal(existingAssetId.toString)
     updateItem.primaryKeyAndItsValue("batchId").s() should equal("batchId1")
     updateItem.attributeNamesAndValuesToUpdate("attribute").s() should equal("true")
-    updateItem.attributeNamesAndValuesToUpdate("input").s() should equal(s"""{"filePaths":["/some/path/$existingRef/file1.txt","/some/path/$existingRef/file2.txt"]}""")
+    updateItem.attributeNamesAndValuesToUpdate("input").s() should equal(
+      s"""{"filePaths":["/some/path/$existingRef/file1.txt","/some/path/$existingRef/file2.txt"]}"""
+    )
     updateItem.conditionalExpression.get should equal("attribute_exists(assetId)")
   }
 
