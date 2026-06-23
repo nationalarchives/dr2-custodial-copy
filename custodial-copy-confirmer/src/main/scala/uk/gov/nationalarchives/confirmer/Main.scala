@@ -3,7 +3,7 @@ package uk.gov.nationalarchives.confirmer
 import cats.effect.{ExitCode, IO, IOApp}
 import cats.syntax.all.*
 import fs2.Stream
-import io.circe.{Decoder, DecodingFailure, HCursor}
+import io.circe.{Decoder, DecodingFailure, HCursor, Json}
 import io.circe.parser.decode
 import pureconfig.ConfigSource
 import uk.gov.nationalarchives.utils.Utils.*
@@ -76,13 +76,29 @@ object Main extends IOApp {
         _ <- IO.whenA(messages.nonEmpty)(logger.info(s"Processing message refs ${messages.map(_.message.payload.preservationSystemId).mkString(",")}"))
         _ <- messages.parTraverse { sqsMessage =>
           val message = sqsMessage.message
+          val objectExists = ocfl.getFilePathsforObject(message.payload.preservationSystemId).nonEmpty
+          val attributeUpdateMap = Map(config.dynamoAttributeName -> "true".toAttributeValue) ++
+            (if (objectExists) 
+              Map(
+                "input" -> Json 
+                  .obj(
+                    "filePaths" -> Json.fromValues(
+                        ocfl.getFilePathsforObject(message.payload.preservationSystemId)
+                          .map(Json.fromString)
+                    )  
+                  )
+                  .noSpaces
+                  .toAttributeValue
+              )
+            else 
+              Map.empty[String, AttributeValue]
+            )
           val request = DADynamoDbRequest(
             config.dynamoTableName,
             message.primaryKey,
-            Map(config.dynamoAttributeName -> "true".toAttributeValue),
+            attributeUpdateMap,
             Option("attribute_exists(assetId)")
           )
-          val objectExists = ocfl.checkObjectExists(message.payload.preservationSystemId)
           logger.info(s"Object with assetId ${message.assetId} and preservation system ref ${message.payload.preservationSystemId} ${
               if objectExists then "has been found" else "has not been found"
             }") >>
