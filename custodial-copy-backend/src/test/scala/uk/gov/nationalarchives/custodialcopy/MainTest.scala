@@ -161,7 +161,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     val bitstreamId = "90dfb573-7419-4e89-8558-6cfa29f8fb16"
     val unusedBitstreamId = UUID.randomUUID.toString
     databaseUtils.addFilesToDriFilesTable(List(DriFile(unusedBitstreamId, Files.createTempFile("dir", "file2").toString, utils.ioId.toString)))
-    databaseUtils.addFilesToDriFilesTable(List(DriFile(bitstreamId, Files.createTempFile("dir", "file").toString, utils.ioId.toString)))
+    databaseUtils.addFilesToDriFilesTable(List(DriFile(bitstreamId, utils.cachedFilePath, utils.ioId.toString)))
     runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 
     val downloadedStatus = databaseUtils.getDownloadedStatus(bitstreamId)
