@@ -78,21 +78,20 @@ object Main extends IOApp {
           val message = sqsMessage.message
           val objectExists = ocfl.getFilePathsforObject(message.payload.preservationSystemId).nonEmpty
           val attributeUpdateMap = Map(config.dynamoAttributeName -> "true".toAttributeValue) ++
-            (if (objectExists) 
-              Map(
-                "input" -> Json 
-                  .obj(
-                    "filePaths" -> Json.fromValues(
-                        ocfl.getFilePathsforObject(message.payload.preservationSystemId)
-                          .map(Json.fromString)
-                    )  
-                  )
-                  .noSpaces
-                  .toAttributeValue
-              )
-            else 
-              Map.empty[String, AttributeValue]
-            )
+            (if objectExists then
+               Map(
+                 "input" -> Json
+                   .obj(
+                     "filePaths" -> Json.fromValues(
+                       ocfl
+                         .getFilePathsforObject(message.payload.preservationSystemId)
+                         .map(Json.fromString)
+                     )
+                   )
+                   .noSpaces
+                   .toAttributeValue
+               )
+             else Map.empty[String, AttributeValue])
           val request = DADynamoDbRequest(
             config.dynamoTableName,
             message.primaryKey,
