@@ -280,7 +280,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
           "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           1,
           "https://example.com",
-          List(Fixity("SHA256", "")),
+          List(Fixity("SHA256", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")),
           1,
           Original,
           None,
@@ -295,7 +295,15 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val workDir: String = Files.createTempDirectory("work").toString
     val repoDir: Path = Files.createTempDirectory("repo")
     val potentialDbName: Option[String] = if useCacheDir then Some(databaseName) else None
-    val config: Config = Config("", "", repoDir.toString, workDir, downloadDir, None, "", "", Duration("1s"), potentialDbName, "")
+    val cacheDir: Path = if useCacheDir then Files.createTempDirectory("test_files_cache") else Path.of("")
+
+    val cachedFilePath: String =
+      if useCacheDir then
+        // a leading "/" causes issues when path resolving if not removed, so this is a good test
+        s"/${Files.createFile(cacheDir.resolve("file")).toString}"
+      else ""
+
+    val config: Config = Config("", "", repoDir.toString, workDir, downloadDir, None, "", "", Duration("1s"), potentialDbName, cacheDir.toString)
 
     val bitstreamInfoResponsesWithSameName: Seq[BitStreamInfo] = bitstreamInfo1Responses.flatMap { bitstreamInfo1Response =>
       bitstreamInfo2Responses.filter { bitstreamInfo2Response =>
@@ -440,14 +448,19 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       pathsOfObjectsUnderIo: List[String] = Nil,
       throwErrorInMissingAndChangedObjects: Boolean = false,
       bitstreamUrl: String = "url",
-      cacheDir: Boolean = false
+      cacheDir: Boolean = false,
+      fileChecksum: String = "fileChecksum"
   ) {
     val downloadDir: String = Files.createTempDirectory("downloads").toString
     val workDir: String = Files.createTempDirectory("work").toString
     val repoDir: String = Files.createTempDirectory("repo").toString
 
     val filesCacheDir: Path = if cacheDir then Files.createTempDirectory("test_files_cache") else Path.of("")
-    val cachedFilePath: String = if cacheDir then Files.createFile(filesCacheDir.resolve("testFile.txt")).toString else ""
+    val cachedFilePath: String =
+      if cacheDir then
+        // a leading "/" causes issues when path resolving if not removed, so this is a good test
+        s"/${Files.createFile(filesCacheDir.resolve("testFile.txt")).toString}"
+      else ""
 
     val config: Config =
       Config(
@@ -491,7 +504,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
       1,
       bitstreamUrl,
-      List(Fixity("sha256", "checksum")),
+      List(Fixity("sha256", fileChecksum)),
       genVersion,
       genType,
       Some("CoTitle"),
@@ -583,7 +596,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
                 FileObject(
                   coId,
                   missingOrChanged,
-                  List(Checksum("sha256", "checksum")),
+                  List(Checksum("sha256", fileChecksum)),
                   bitstreamUrl,
                   "destinationPath",
                   identifier

@@ -136,8 +136,17 @@ Once a message has been processed, the fiber is cancelled.
     * If a path to the Intelligent Caching (IC) database was passed in as an environment variable
       * Use the id to query the IC files table to determine if a local version of the file exists and return the local file path
       * If a file path is found:
-        * Stream the file from that path to a tmp directory
-    * If a file path is **not** found or a path to the Intelligent Caching database was not passed in as an environment variable
+        * Use the checksum(s) of the file that was/were generated in Preservica and for each algorithm type,
+          generate a checksum on the file and compare them
+        * If the checksum(s) generated match the checksum(s) that were generated on the file in Preservica
+          * Return a `true` value
+        * If the checksums(s) generated do not match, then the file must be downloaded from Preservica
+          * Log the fact that this happened
+          * Return a `false` value
+    * If the checksum match result was `true`
+      * Stream the file from that path to a tmp directory
+    * If a path to the Intelligent Caching database was not passed in as an environment variable,
+        a file path is **not** found or the checksum match result was `false`
       * Use the FileObject's bitstream URL to stream it from Preservica to a tmp directory
   * For each MetadataObject update, convert the XML to a String and save it to the tmp directory
 * For "missing" objects:
