@@ -76,22 +76,16 @@ object Main extends IOApp {
         _ <- IO.whenA(messages.nonEmpty)(logger.info(s"Processing message refs ${messages.map(_.message.payload.preservationSystemId).mkString(",")}"))
         _ <- messages.parTraverse { sqsMessage =>
           val message = sqsMessage.message
-          val objectExists = ocfl.getFilePathsforObject(message.payload.preservationSystemId).nonEmpty
+          val objectFilePaths = ocfl.getFilePathsforObject(message.payload.preservationSystemId)
           val attributeUpdateMap = Map(config.dynamoAttributeName -> "true".toAttributeValue) ++
-            (if objectExists then
+            (if objectFilePaths.nonEmpty then
                Map(
                  "input" -> Json
-                   .obj(
-                     "filePaths" -> Json.fromValues(
-                       ocfl
-                         .getFilePathsforObject(message.payload.preservationSystemId)
-                         .map(Json.fromString)
-                     )
-                   )
+                   .obj("filePaths" -> Json.fromValues(objectFilePaths.map(Json.fromString)))
                    .noSpaces
                    .toAttributeValue
                )
-             else Map.empty[String, AttributeValue])
+             else Map())
           val request = DADynamoDbRequest(
             config.dynamoTableName,
             message.primaryKey,
@@ -99,9 +93,9 @@ object Main extends IOApp {
             Option("attribute_exists(assetId)")
           )
           logger.info(s"Object with assetId ${message.assetId} and preservation system ref ${message.payload.preservationSystemId} ${
-              if objectExists then "has been found" else "has not been found"
+              if objectFilePaths.nonEmpty then "has been found" else "has not been found"
             }") >>
-            IO.whenA(objectExists) {
+            IO.whenA(objectFilePaths.nonEmpty) {
               dynamoClient.updateAttributeValues(request).handleErrorWith {
                 case ce: ConditionalCheckFailedException => IO.unit
                 case e                                   => IO.raiseError(e)

@@ -348,8 +348,10 @@ The queue sends messages in this format:
 ```
 
 For each message, the Confirmer checks to see if this object exists in the OCFL repository. 
-
-If it does exist, it writes `true` to an attribute specified by `DYNAMO_ATTRIBUTE_NAME` in the table specified by `DYNAMO_TABLE_NAME`. 
+If it exists, the confirmer gets a list of file paths of all the files which belong to this object. It updates the table specified by `DYNAMO_TABLE_NAME`.
+As part of the update, it updates two attributes in the table 
+1. An attribute specified by `DYNAMO_ATTRIBUTE_NAME` which is set to true
+2. An attribute called `input` which is set with JSON representation of the list of file paths of all files that belong to the object. 
 It has a conditional check on `attribute_exists(assetId)` in the table. This is to prevent repeated messages adding a row back in after it has been deleted by the change handler.
 If the row has been deleted, it doesn't matter because the asset has already been marked as complete so we ignore any errors related to the conditional check.
 It then deletes the message from the queue. 
