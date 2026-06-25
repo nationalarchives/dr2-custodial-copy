@@ -12,15 +12,16 @@ import java.util.UUID
 
 class OcflTest extends AnyFlatSpec:
 
-  "checkObjectExists" should "return true if an object exists or false otherwise" in {
+  "getFilePathsforObject" should "return valid paths if an object exists or empty list otherwise" in {
     val repoDir = Files.createTempDirectory("repo").toString
     val workDir = Files.createTempDirectory("work").toString
     val repository = createOcflRepository(repoDir, workDir)
     val existingRef = UUID.randomUUID
     val nonExistingRef = UUID.randomUUID
-    repository.putObject(ObjectVersionId.head(existingRef.toString), Files.createTempFile(existingRef.toString, ""), new VersionInfo())
+    val filePath = Files.createTempFile(existingRef.toString, "")
+    repository.putObject(ObjectVersionId.head(existingRef.toString), filePath, new VersionInfo())
 
     val ocfl = Ocfl(Config("table", "attribute", "", URI.create("http://localhost"), repoDir, workDir))
-    ocfl.checkObjectExists(existingRef) should equal(true)
-    ocfl.checkObjectExists(nonExistingRef) should equal(false)
+    ocfl.getFilePathsforObject(existingRef) should be(List(filePath.getFileName.toString))
+    ocfl.getFilePathsforObject(nonExistingRef) should be(Nil)
   }
