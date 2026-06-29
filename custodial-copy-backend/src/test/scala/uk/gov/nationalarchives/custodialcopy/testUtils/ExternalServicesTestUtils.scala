@@ -27,7 +27,7 @@ import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.utils.TestUtils.*
 import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.{FileObject, MetadataObject}
 import uk.gov.nationalarchives.custodialcopy.{Checksum, CustodialCopyObject, Message, OcflService, Processor}
-import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
+import uk.gov.nationalarchives.custodialcopy.Main.{Config, FileDownloadInfo}
 import uk.gov.nationalarchives.custodialcopy.Message.{
   CoReceivedSnsMessage,
   DeletionReceivedSnsMessage,
@@ -211,7 +211,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     Files.write(fullSourceFilePath, bodyAsString.getBytes)
     val semaphore: Semaphore[IO] = Semaphore[IO](1).unsafeRunSync()
     new OcflService(repo, semaphore)
-      .createObjects(List(IdWithSourceAndDestPaths(id, Option(fullSourceFilePath), destinationPath)))
+      .createObjects(List(FileDownloadInfo(id, Option(fullSourceFilePath), destinationPath)))
       .unsafeRunSync()
   }
 
@@ -565,8 +565,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     private val repTypeCaptor: ArgumentCaptor[RepresentationType] = ArgumentCaptor.forClass(classOf[RepresentationType])
     private val repIndexCaptor: ArgumentCaptor[Int] = ArgumentCaptor.forClass(classOf[Int])
 
-    private val idWithSourceAndDestPathsCaptor: ArgumentCaptor[List[IdWithSourceAndDestPaths]] =
-      ArgumentCaptor.forClass(classOf[List[IdWithSourceAndDestPaths]])
+    private val fileDownloadInfoCaptor: ArgumentCaptor[List[FileDownloadInfo]] =
+      ArgumentCaptor.forClass(classOf[List[FileDownloadInfo]])
     private val metadataXmlStringToValidate: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
     private val droLookupCaptor: ArgumentCaptor[List[CustodialCopyObject]] =
       ArgumentCaptor.forClass(classOf[List[CustodialCopyObject]])
@@ -638,7 +638,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
               }
             )
           )
-      when(ocflService.createObjects(any[List[IdWithSourceAndDestPaths]])).thenReturn(IO.unit)
+      when(ocflService.createObjects(any[List[FileDownloadInfo]])).thenReturn(IO.unit)
       when(ocflService.getAllFilePathsOnAnObject(any[UUID])).thenReturn(IO.pure(pathsOfObjects))
       when(ocflService.deleteObjects(any[UUID], any[List[String]])).thenReturn(IO.unit)
       when(ocflService.commitStagedChanges(commitIdCaptor.capture)).thenReturn(IO.unit)
@@ -736,7 +736,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         entityTypesToGetMetadataFrom: List[EntityType] = List(InformationObject),
         xmlRequestsToValidate: List[Elem] = List(ioXmlToValidate),
         numOfStreamBitstreamContentCalls: Int = 0,
-        createdIdSourceAndDestinationPathAndId: List[List[IdWithSourceAndDestPaths]] = Nil,
+        createdFileDownloadInfo: List[List[FileDownloadInfo]] = Nil,
         drosToLookup: List[List[String]] = List(List(s"$ioId/IO_Metadata.xml")),
         destinationPathsToDelete: List[String] = Nil,
         snsMessagesToSend: List[SendSnsMessage] = Nil
@@ -757,15 +757,15 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       verify(ocflService, times(drosToLookup.length)).getMissingAndChangedObjects(
         droLookupCaptor.capture()
       )
-      verify(ocflService, times(createdIdSourceAndDestinationPathAndId.length))
-        .createObjects(idWithSourceAndDestPathsCaptor.capture())
+      verify(ocflService, times(createdFileDownloadInfo.length))
+        .createObjects(fileDownloadInfoCaptor.capture())
 
       val numOfTimesToDeleteObjects = if destinationPathsToDelete.nonEmpty then 1 else 0
       verify(ocflService, times(numOfTimesToDeleteObjects))
         .deleteObjects(ioToDeleteObjectsFromCaptor.capture(), pathsToDeleteCaptor.capture())
 
       val numOfTimesSnsMsgShouldBeSent =
-        if (snsMessagesToSend.nonEmpty || createdIdSourceAndDestinationPathAndId.flatten.nonEmpty) 1 else 0
+        if (snsMessagesToSend.nonEmpty || createdFileDownloadInfo.flatten.nonEmpty) 1 else 0
       verify(snsClient, times(numOfTimesSnsMsgShouldBeSent))
         .publish(topicArnCaptor.capture)(messagesCaptor.capture())(using any[Encoder[SendSnsMessage]])
 
@@ -789,8 +789,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
 
       fileObjectUrl.getAllValues.asScala.toList should equal(List.fill(numOfStreamBitstreamContentCalls)("url"))
 
-      val expectedIdsWithSourceAndDestPath = createdIdSourceAndDestinationPathAndId.flatten
-      idWithSourceAndDestPathsCaptor.getAllValues.asScala.toList.flatten.zipWithIndex.foreach { case (capturedIdWithSourceAndDestPath, index) =>
+      val expectedIdsWithSourceAndDestPath = createdFileDownloadInfo.flatten
+      fileDownloadInfoCaptor.getAllValues.asScala.toList.flatten.zipWithIndex.foreach { case (capturedIdWithSourceAndDestPath, index) =>
         val expectedIdWithSourceAndDestPath = expectedIdsWithSourceAndDestPath(index)
         capturedIdWithSourceAndDestPath.id should equal(expectedIdWithSourceAndDestPath.id)
 

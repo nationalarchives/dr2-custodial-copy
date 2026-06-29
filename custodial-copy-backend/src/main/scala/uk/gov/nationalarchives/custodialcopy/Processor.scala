@@ -14,7 +14,7 @@ import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.{DASNSClient, DASQSClient}
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.*
-import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
+import uk.gov.nationalarchives.custodialcopy.Main.{Config, FileDownloadInfo}
 import uk.gov.nationalarchives.custodialcopy.Message.*
 import uk.gov.nationalarchives.custodialcopy.Processor.{ObjectStatus, Result}
 import uk.gov.nationalarchives.custodialcopy.Processor.Result.*
@@ -251,7 +251,7 @@ class Processor(
   private def download(custodialCopyObject: CustodialCopyObject, ioId: UUID) = custodialCopyObject match {
     case fo: FileObject =>
       ocflService.fileInRepository(fo, ioId).flatMap { isFileInRepository =>
-        if isFileInRepository then IO.pure(IdWithSourceAndDestPaths(fo.id, None, fo.destinationFilePath))
+        if isFileInRepository then IO.pure(FileDownloadInfo(fo.id, None, fo.destinationFilePath))
         else
           for
             logger <- Slf4jLogger.create[IO]
@@ -263,7 +263,7 @@ class Processor(
                 yield path
               }
             writePath <- fo.sourceFilePath(config.downloadDir)
-            potentialWritePath <-
+            (potentialWritePath, potentialIcFileId) <-
               for
                 localChecksumsMatchPs <-
                   potentialFilePath
@@ -288,7 +288,7 @@ class Processor(
                         }
                     }
                     .getOrElse(IO.pure(false))
-                potentialNioWritePath <-
+                (potentialNioWritePath, potentialIcId) <-
                   val nioWritePath = Option(writePath.toNioPath)
                   if localChecksumsMatchPs then
                     Files[IO]
@@ -296,7 +296,7 @@ class Processor(
                       .through(Files[IO].writeAll(writePath, Flags.Write))
                       .compile
                       .drain
-                      .map(_ => nioWritePath)
+                      .map(_ => (nioWritePath, Some(fo.tableItemIdentifier)))
                   else // if checksums don't match, local filePath doesn't exist or caching database not provided
                   if fo.url.nonEmpty then
                     entityClient
@@ -304,10 +304,10 @@ class Processor(
                         fo.url,
                         s => s.through(Files[IO].writeAll(writePath, Flags.Write)).compile.drain
                       )
-                      .map(_ => nioWritePath)
-                  else IO.pure(None)
-              yield potentialNioWritePath
-          yield IdWithSourceAndDestPaths(fo.id, potentialWritePath, fo.destinationFilePath)
+                      .map(_ => (nioWritePath, None))
+                  else IO.pure((None, None))
+              yield (potentialNioWritePath, potentialIcId)
+          yield FileDownloadInfo(fo.id, potentialWritePath, fo.destinationFilePath, potentialIcFileId)
       }
 
     case mo: MetadataObject =>
@@ -319,7 +319,7 @@ class Processor(
           .through(Files[IO].writeUtf8(writePath))
           .compile
           .drain
-      } yield IdWithSourceAndDestPaths(mo.id, Option(writePath.toNioPath), mo.destinationFilePath)
+      } yield FileDownloadInfo(mo.id, Option(writePath.toNioPath), mo.destinationFilePath)
   }
 
   private def removeFileExtension(bitstreamName: String) =
@@ -331,7 +331,7 @@ class Processor(
     }
     .getOrElse("")
 
-  private def generateSnsMessage(
+  private def generateSnsMessage(filesDownloadedViaIc: List[String])(
       obj: CustodialCopyObject,
       receivedSnsMessage: ReceivedSnsMessage,
       status: ObjectStatus
@@ -347,13 +347,14 @@ class Processor(
       case _: SoReceivedSnsMessage => Option(StructuralObject)
       case _                       => None
 
-    potentialEntityType.map(entityType => SendSnsMessage(entityType, obj.id, objectType, status, obj.tableItemIdentifier))
+    val potentialIcId = filesDownloadedViaIc.find(_ == obj.tableItemIdentifier)
+    potentialEntityType.map(entityType => SendSnsMessage(entityType, obj.id, objectType, status, potentialIcId))
   }
 
   given Encoder[SendSnsMessage] = (message: SendSnsMessage) => {
     Encoder
-      .forProduct5("entityType", "ioRef", "objectType", "status", "tableItemIdentifier")(_ =>
-        (message.entityType.toString, message.ioRef.toString, message.objectType.toString, message.status.toString, message.tableItemIdentifier)
+      .forProduct5("entityType", "ioRef", "objectType", "status", "potentialIcId")(_ =>
+        (message.entityType.toString, message.ioRef.toString, message.objectType.toString, message.status.toString, message.potentialIcId)
       )
       .apply(message)
   }
@@ -397,10 +398,14 @@ class Processor(
       _ <- ocflService.createObjects(changedObjectsPaths)
       _ <- logger.info(s"${changedObjectsPaths.length} objects updated")
 
-      _ <- (missingObjectsPaths ++ changedObjectsPaths).flatMap(_.sourceNioFilePath).parTraverse(deleteObjectPath)
+      allObjectPaths = missingObjectsPaths ++ changedObjectsPaths
+      _ <- allObjectPaths.flatMap(_.sourceNioFilePath).parTraverse(deleteObjectPath)
 
-      createdObjsSnsMessages = missingAndChangedObjects.missingObjects.flatMap(generateSnsMessage(_, messageResponse.message, Created))
-      updatedObjsSnsMessages = missingAndChangedObjects.changedObjects.flatMap(generateSnsMessage(_, messageResponse.message, Updated))
+      filesDownloadedViaIc = allObjectPaths.flatMap(_.potentialIcId)
+      sqsMessage = generateSnsMessage(filesDownloadedViaIc)
+
+      createdObjsSnsMessages = missingAndChangedObjects.missingObjects.flatMap(sqsMessage(_, messageResponse.message, Created))
+      updatedObjsSnsMessages = missingAndChangedObjects.changedObjects.flatMap(sqsMessage(_, messageResponse.message, Updated))
     } yield createdObjsSnsMessages ++ updatedObjsSnsMessages
 
   @tailrec
@@ -429,7 +434,7 @@ class Processor(
         snsClient.publish[SendSnsMessage](config.topicArn)(snsMessages).void
       }
       _ <- logger.info(s"${snsMessages.length} 'created/updated objects' messages published to SNS")
-    } yield Success(messageResponse.message.ref, snsMessages.map(_.tableItemIdentifier))
+    } yield Success(messageResponse.message.ref, snsMessages.flatMap(_.potentialIcId))
   }.handleError(err => Failure(err))
 
   def commitStagedChanges(id: UUID): IO[Unit] = ocflService.commitStagedChanges(id)
@@ -458,6 +463,6 @@ object Processor {
 
     def isError: Boolean = !isSuccess
 
-    case Success(id: UUID, icIds: List[String])
+    case Success(id: UUID, filesDownloadedViaIc: List[String])
     case Failure(ex: Throwable)
 }
