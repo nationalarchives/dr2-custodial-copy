@@ -14,7 +14,7 @@ import org.h2.jdbcx.JdbcDataSource
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.FileObject
-import uk.gov.nationalarchives.custodialcopy.Main.{Config, IdWithSourceAndDestPaths}
+import uk.gov.nationalarchives.custodialcopy.Main.{Config, FileDownloadInfo}
 import uk.gov.nationalarchives.custodialcopy.OcflService.*
 import uk.gov.nationalarchives.utils.Utils.*
 
@@ -37,7 +37,7 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO
       }.onError(logErrorAndRelease)
     } >> semaphore.release
 
-  def createObjects(paths: List[IdWithSourceAndDestPaths]): IO[Unit] = paths
+  def createObjects(paths: List[FileDownloadInfo]): IO[Unit] = paths
     .traverse { path =>
       IO.whenA(path.sourceNioFilePath.isDefined) {
         semaphore.acquire >> IO.blocking {

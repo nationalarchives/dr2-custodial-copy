@@ -155,19 +155,52 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
       )
     }
 
-  "runCustodialCopy" should "set downloaded to true for the rows found in the intelligent cache database" in {
-    val utils = new MainTestUtils(List((ContentObject, false)), objectVersion = 0, true)
-    val parentRef = utils.ioId
-    val bitstreamId = "90dfb573-7419-4e89-8558-6cfa29f8fb16"
+  "runCustodialCopy" should "set downloaded to true for the rows found in the intelligent cache database and where checksums matched PS" in {
+    val bitstreamId1 = "90dfb573-7419-4e89-8558-6cfa29f8fb16"
+    val bitstreamId2 = "de35982b-4a3a-48ad-888d-fe41f3532d36"
+    val parentRef = UUID.randomUUID()
+    val utils = new MainTestUtils(
+      List((ContentObject, false), (ContentObject, false)),
+      objectVersion = 0,
+      true,
+      bitstreamInfo1Responses = Seq(
+        BitStreamInfo(
+          "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+          1,
+          "https://example.com",
+          List(Fixity("SHA256", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")),
+          1,
+          Original,
+          None,
+          Some(parentRef)
+        )
+      ),
+      bitstreamInfo2Responses = Seq(
+        BitStreamInfo(
+          f"$bitstreamId2.testExt",
+          1,
+          "https://example.com",
+          List(Fixity("SHA256", "fixityDifferentFromIC")),
+          1,
+          Original,
+          None,
+          Some(parentRef)
+        )
+      )
+    )
     val unusedBitstreamId = UUID.randomUUID.toString
     databaseUtils.addFilesToDriFilesTable(List(DriFile(unusedBitstreamId, Files.createTempFile("dir", "file2").toString, utils.ioId.toString)))
-    databaseUtils.addFilesToDriFilesTable(List(DriFile(bitstreamId, utils.cachedFilePath, utils.ioId.toString)))
+    databaseUtils.addFilesToDriFilesTable(List(DriFile(bitstreamId2, utils.cachedFilePath, utils.ioId.toString)))
+    databaseUtils.addFilesToDriFilesTable(List(DriFile(bitstreamId1, utils.cachedFilePath, utils.ioId.toString)))
     runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 
-    val downloadedStatus = databaseUtils.getDownloadedStatus(bitstreamId)
+    val bitstream1DownloadStatus = databaseUtils.getDownloadedStatus(bitstreamId1)
+    val bitstream2DownloadStatus = databaseUtils.getDownloadedStatus(bitstreamId2)
     val unchangedDownloadStatus = databaseUtils.getDownloadedStatus(unusedBitstreamId)
-    downloadedStatus.downloaded.get must equal(1)
-    LocalDateTime.parse(downloadedStatus.downloadedAt.get).toLocalDate must equal(LocalDate.now)
+    bitstream1DownloadStatus.downloaded.get must equal(1)
+    LocalDateTime.parse(bitstream1DownloadStatus.downloadedAt.get).toLocalDate must equal(LocalDate.now)
+    bitstream2DownloadStatus.downloaded must equal(None)
+    bitstream2DownloadStatus.downloadedAt must equal(None)
     unchangedDownloadStatus.downloaded must equal(None)
     unchangedDownloadStatus.downloadedAt must equal(None)
   }
@@ -219,7 +252,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     Files.write(tempFile, "test".getBytes)
     val destinationPath = s"${utils.ioId}/Preservation_1/${utils.coId1}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2"
     (for
-      _ <- utils.ocflService.createObjects(List(IdWithSourceAndDestPaths(utils.ioId, Option(tempFile), destinationPath)))
+      _ <- utils.ocflService.createObjects(List(FileDownloadInfo(utils.ioId, Option(tempFile), destinationPath)))
       _ <- utils.ocflService.commitStagedChanges(utils.ioId)
     yield ()).unsafeRunSync()
 
