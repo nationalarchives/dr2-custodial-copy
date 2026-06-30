@@ -353,8 +353,8 @@ class Processor(
 
   given Encoder[SendSnsMessage] = (message: SendSnsMessage) => {
     Encoder
-      .forProduct5("entityType", "ioRef", "objectType", "status", "potentialIcId")(_ =>
-        (message.entityType.toString, message.ioRef.toString, message.objectType.toString, message.status.toString, message.potentialIcId)
+      .forProduct4("entityType", "ioRef", "objectType", "status")(_ =>
+        (message.entityType.toString, message.ioRef.toString, message.objectType.toString, message.status.toString)
       )
       .apply(message)
   }
