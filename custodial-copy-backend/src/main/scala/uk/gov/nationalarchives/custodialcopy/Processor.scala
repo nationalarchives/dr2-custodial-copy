@@ -434,7 +434,10 @@ class Processor(
         snsClient.publish[SendSnsMessage](config.topicArn)(snsMessages).void
       }
       _ <- logger.info(s"${snsMessages.length} 'created/updated objects' messages published to SNS")
-    } yield Success(messageResponse.message.ref, snsMessages.flatMap(_.potentialIcId))
+      icIds = snsMessages.flatMap(_.potentialIcId)
+      icIdsNum = icIds.length.toString
+      _ <- logger.info(Map("icCacheHits" -> icIdsNum))(s"$icIdsNum files downloaded from IC")
+    } yield Success(messageResponse.message.ref, icIds)
   }.handleError(err => Failure(err))
 
   def commitStagedChanges(id: UUID): IO[Unit] = ocflService.commitStagedChanges(id)
