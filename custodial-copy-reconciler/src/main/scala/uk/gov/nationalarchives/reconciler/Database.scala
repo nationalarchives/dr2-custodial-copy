@@ -2,13 +2,13 @@ package uk.gov.nationalarchives.reconciler
 
 import cats.effect.Async
 import cats.implicits.*
-import org.typelevel.doobie.Update
-import org.typelevel.doobie.free.connection.ConnectionIO
-import org.typelevel.doobie.implicits.*
-import org.typelevel.doobie.util.{Get, Put, Read, Write}
-import org.typelevel.doobie.util.log.LogHandler
-import org.typelevel.doobie.util.transactor.Transactor
-import org.typelevel.doobie.util.transactor.Transactor.Aux
+import doobie.Update
+import doobie.free.connection.ConnectionIO
+import doobie.implicits.*
+import doobie.util.{Get, Put, Read, Write}
+import doobie.util.log.LogHandler
+import doobie.util.transactor.Transactor
+import doobie.util.transactor.Transactor.Aux
 import fs2.Chunk
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType

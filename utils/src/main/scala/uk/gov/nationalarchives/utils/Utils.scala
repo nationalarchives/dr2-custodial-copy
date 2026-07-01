@@ -2,7 +2,7 @@ package uk.gov.nationalarchives.utils
 
 import cats.effect.{Async, Sync}
 import cats.syntax.all.*
-import org.typelevel.doobie.util.{Get, Put}
+import doobie.util.{Get, Put}
 import io.circe.Decoder
 import io.ocfl.api.model.{DigestAlgorithm, ObjectVersionId, OcflObjectVersionFile}
 import io.ocfl.api.{OcflConfig, OcflRepository}
