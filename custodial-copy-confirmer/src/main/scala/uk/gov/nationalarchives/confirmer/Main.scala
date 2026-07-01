@@ -3,45 +3,25 @@ package uk.gov.nationalarchives.confirmer
 import cats.effect.{ExitCode, IO, IOApp}
 import cats.syntax.all.*
 import fs2.Stream
-import io.circe.{Decoder, DecodingFailure, HCursor, Json}
-import io.circe.parser.decode
+import io.circe.Json
 import pureconfig.ConfigSource
-import uk.gov.nationalarchives.utils.Utils.*
-import pureconfig.*
 import pureconfig.module.catseffect.syntax.*
-import uk.gov.nationalarchives.{DADynamoDBClient, DASQSClient}
-import io.circe.generic.auto.*
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
 import software.amazon.awssdk.http.nio.netty.{NettyNioAsyncHttpClient, ProxyConfiguration}
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
-import software.amazon.awssdk.services.dynamodb.model.{AttributeValue, ConditionalCheckFailedException}
+import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException
 import uk.gov.nationalarchives.DADynamoDBClient.DADynamoDbRequest
+import uk.gov.nationalarchives.confirmer.Config
+import uk.gov.nationalarchives.confirmer.Confirmer.*
+import uk.gov.nationalarchives.{DADynamoDBClient, DASQSClient}
+import uk.gov.nationalarchives.utils.Utils.*
 
 import java.net.URI
 import scala.concurrent.duration.*
-import java.util.UUID
 
 object Main extends IOApp {
-
-  case class Config(dynamoTableName: String, dynamoAttributeName: String, sqsUrl: String, proxyUrl: URI, ocflRepoDir: String, ocflWorkDir: String)
-      derives ConfigReader
-
-  extension (s: String) private def toAttributeValue: AttributeValue = AttributeValue.builder.s(s).build
-
-  case class Payload(preservationSystemId: UUID)
-  case class OutputQueueMessage(assetId: UUID, batchId: String, payload: Payload) {
-    def primaryKey: Map[String, AttributeValue] = Map("assetId" -> assetId.toString.toAttributeValue, "batchId" -> batchId.toAttributeValue)
-  }
-
-  given Decoder[OutputQueueMessage] = (c: HCursor) =>
-    for {
-      assetId <- c.downField("assetId").as[String]
-      batchId <- c.downField("batchId").as[String]
-      payload <- c.downField("payload").as[String]
-      decoded <- decode[Payload](payload).left.map(err => DecodingFailure.fromThrowable(err, Nil))
-    } yield OutputQueueMessage(UUID.fromString(assetId), batchId, decoded)
 
   private def dynamoClient(proxyUrl: URI): DADynamoDBClient[IO] = {
     val proxy = ProxyConfiguration
@@ -60,49 +40,68 @@ object Main extends IOApp {
     DADynamoDBClient[IO](dynamoDBClient)
   }
 
-  override def run(args: List[String]): IO[ExitCode] =
-    for {
-      config <- ConfigSource.default.loadF[IO, Config]()
-      sqs = sqsClient[IO](config.proxyUrl.some)
-      dynamo = dynamoClient(config.proxyUrl)
-      _ <- (Stream.fixedRateStartImmediately[IO](60.seconds) >> runConfirmer(config, sqs, dynamo, Ocfl(config))).compile.drain
-    } yield ExitCode.Success
-
-  def runConfirmer(config: Config, sqsClient: DASQSClient[IO], dynamoClient: DADynamoDBClient[IO], ocfl: Ocfl): Stream[IO, Unit] = Stream
-    .eval {
+  // The confirmerStream loads config once per evaluation of Stream.eval and returns the inner stream produced by the selected Confirmer.
+  private def confirmerStream: Stream[IO, Unit] =
+    Stream.eval {
       for {
-        logger <- Slf4jLogger.create[IO]
-        messages <- aggregateMessages[IO, OutputQueueMessage](sqsClient, config.sqsUrl)
-        _ <- IO.whenA(messages.nonEmpty)(logger.info(s"Processing message refs ${messages.map(_.message.payload.preservationSystemId).mkString(",")}"))
-        _ <- messages.parTraverse { sqsMessage =>
-          val message = sqsMessage.message
-          val objectFilePaths = ocfl.getFilePathsforObject(message.payload.preservationSystemId)
-          val attributeUpdateMap = Map(config.dynamoAttributeName -> "true".toAttributeValue) ++
-            (if objectFilePaths.nonEmpty then
-               Map(
-                 "input" -> Json
-                   .obj("filePaths" -> Json.fromValues(objectFilePaths.map(Json.fromString)))
-                   .noSpaces
-                   .toAttributeValue
-               )
-             else Map())
-          val request = DADynamoDbRequest(
-            config.dynamoTableName,
-            message.primaryKey,
-            attributeUpdateMap,
-            Option("attribute_exists(assetId)")
-          )
-          logger.info(s"Object with assetId ${message.assetId} and preservation system ref ${message.payload.preservationSystemId} ${
-              if objectFilePaths.nonEmpty then "has been found" else "has not been found"
-            }") >>
-            IO.whenA(objectFilePaths.nonEmpty) {
-              dynamoClient.updateAttributeValues(request).handleErrorWith {
-                case ce: ConditionalCheckFailedException => IO.unit
-                case e                                   => IO.raiseError(e)
-              } >> sqsClient.deleteMessage(config.sqsUrl, sqsMessage.receiptHandle).void
-            }
-        }
-      } yield ()
-    }
-    .handleErrorWith(err => Stream.eval(logError(err)))
+        config <- ConfigSource.default.loadF[IO, Config]()
+        sqs = sqsClient[IO](config.proxyUrl.some)
+        dynamo = dynamoClient(config.proxyUrl)
+        ocfl = Ocfl(config)
+      } yield runConfirmer(config, sqs, dynamo, ocfl)
+    }.flatten
+
+  def runConfirmer(
+                    config: Config,
+                    sqsClient: DASQSClient[IO],
+                    dynamoClient: DADynamoDBClient[IO],
+                    ocfl: Ocfl
+                  ): Stream[IO, Unit] =
+    Stream
+      .eval {
+        for {
+          logger <- Slf4jLogger.create[IO]
+          messages <- aggregateMessages[IO, OutputQueueMessage](sqsClient, config.sqsUrl)
+
+          _ <- messages.parTraverse { sqsMessage =>
+            val message = sqsMessage.message
+            val payload = message.payload
+            val operator = ConfirmationOperator.getOperator(config, ocfl, None)
+            val result: Result = Confirmer.getConfirmer(config).getResult(payload, operator)
+
+            result match
+              case Result.Success(dynamoMap) =>
+
+                val inputJson = Json.obj(dynamoMap.toSeq.map { case (k, v) => k -> Json.fromString(v)}*)
+                val attributeUpdateMap =
+                  Map(
+                    config.dynamoAttributeName -> "true".toAttributeValue,
+                    "input" -> inputJson.noSpaces.toAttributeValue
+                  )
+
+                val request = DADynamoDbRequest(
+                  config.dynamoTableName,
+                  message.primaryKey,
+                  attributeUpdateMap,
+                  Option("attribute_exists(assetId)")
+                )
+
+                dynamoClient
+                  .updateAttributeValues(request)
+                  .handleErrorWith {
+                    case _: ConditionalCheckFailedException => IO.unit
+                    case e => IO.raiseError(e)
+                  } >>
+                  sqsClient.deleteMessage(config.sqsUrl, sqsMessage.receiptHandle).void
+
+              case Result.Failure(err) => logError[IO](err)
+          }
+        } yield ()
+      }
+      .handleErrorWith(err => Stream.eval(logError(err)))
+
+
+  override def run(args: List[String]): IO[ExitCode] =
+    (Stream.fixedRateStartImmediately[IO](60.seconds) >> confirmerStream).compile.drain
+      .as(ExitCode.Success)
 }

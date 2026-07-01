@@ -3,7 +3,7 @@ package uk.gov.nationalarchives.confirmer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
-import uk.gov.nationalarchives.confirmer.Main.{OutputQueueMessage, Payload}
+import uk.gov.nationalarchives.confirmer.OutputQueueMessage
 import uk.gov.nationalarchives.confirmer.TestUtils.*
 
 import java.util.UUID
@@ -15,8 +15,8 @@ class MainTest extends AnyFlatSpec {
     val existingRef = UUID.randomUUID
     val nonExistingRef = UUID.randomUUID
     val inputMessages = List(
-      OutputQueueMessage(existingAssetId, "batchId1", Payload(existingRef)),
-      OutputQueueMessage(UUID.randomUUID, "batchId2", Payload(nonExistingRef))
+      OutputQueueMessage(existingAssetId, "batchId1", CCPayload(existingRef)),
+      OutputQueueMessage(UUID.randomUUID, "batchId2", CCPayload(nonExistingRef))
     ).map(message => MessageResponse(message.batchId, None, message))
     val (deletedMessages, dynamoUpdateItems) = runConfirmer(inputMessages, List(existingRef), Errors())
 
@@ -27,9 +27,9 @@ class MainTest extends AnyFlatSpec {
     val updateItem = dynamoUpdateItems.head
     updateItem.primaryKeyAndItsValue("assetId").s() should equal(existingAssetId.toString)
     updateItem.primaryKeyAndItsValue("batchId").s() should equal("batchId1")
-    updateItem.attributeNamesAndValuesToUpdate("attribute").s() should equal("true")
+    updateItem.attributeNamesAndValuesToUpdate("CC_result").s() should equal("true")
     updateItem.attributeNamesAndValuesToUpdate("input").s() should equal(
-      s"""{"filePaths":["/some/path/$existingRef/file1.txt","/some/path/$existingRef/file2.txt"]}"""
+      s"""{"filePaths":"/some/path/$existingRef/file1.txt,/some/path/$existingRef/file2.txt"}"""
     )
     updateItem.conditionalExpression.get should equal("attribute_exists(assetId)")
   }
@@ -39,7 +39,7 @@ class MainTest extends AnyFlatSpec {
     val existingRef = UUID.randomUUID
     val nonExistingRef = UUID.randomUUID
     val inputMessages = List {
-      val message = OutputQueueMessage(existingAssetId, "batchId1", Payload(existingRef))
+      val message = OutputQueueMessage(existingAssetId, "batchId1", CCPayload(existingRef))
       MessageResponse(message.batchId, None, message)
     }
     val (deletedMessages, dynamoUpdateItems) = runConfirmer(inputMessages, List(existingRef), Errors(conditionalCheckError = true))
@@ -51,7 +51,7 @@ class MainTest extends AnyFlatSpec {
 
   "runConfirmer" should "not delete the messages from the queue if there is an error" in {
     val existingRef = UUID.randomUUID()
-    val inputMessages = List(MessageResponse("batchId", None, OutputQueueMessage(UUID.randomUUID, "batchId1", Payload(existingRef))))
+    val inputMessages = List(MessageResponse("batchId", None, OutputQueueMessage(UUID.randomUUID, "batchId1", CCPayload(existingRef))))
     val (messagesInQueueOne, _) = runConfirmer(inputMessages, List(existingRef), Errors(dynamoUpdateError = true))
     val (messagesInQueueTwo, _) = runConfirmer(inputMessages, List(existingRef), Errors(sqsReceiveError = true))
     val (messagesInQueueThree, _) = runConfirmer(inputMessages, List(existingRef), Errors(sqsDeleteError = true))
@@ -63,7 +63,7 @@ class MainTest extends AnyFlatSpec {
 
   "runConfirmer" should "process up to 50 messages if more are available" in {
     val existingRef = UUID.randomUUID()
-    val inputMessages = List(MessageResponse("batchId", None, OutputQueueMessage(UUID.randomUUID, "batchId1", Payload(existingRef))))
+    val inputMessages = List(MessageResponse("batchId", None, OutputQueueMessage(UUID.randomUUID, "batchId1", CCPayload(existingRef))))
     val (_, dynamoUpdates) = runConfirmer(inputMessages, List(existingRef), Errors(), true)
 
     dynamoUpdates.size should equal(50)

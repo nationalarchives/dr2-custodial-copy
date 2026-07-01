@@ -9,7 +9,7 @@ import software.amazon.awssdk.services.dynamodb.model.{BatchWriteItemResponse, C
 import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
 import uk.gov.nationalarchives.DADynamoDBClient.DADynamoDbRequest
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
-import uk.gov.nationalarchives.confirmer.Main.{Config, OutputQueueMessage}
+import uk.gov.nationalarchives.confirmer.{Config, OutputQueueMessage}
 import uk.gov.nationalarchives.utils.TestUtils.TestSqsClient
 import uk.gov.nationalarchives.{DADynamoDBClient, DASQSClient}
 
@@ -48,9 +48,8 @@ object TestUtils:
     deletedMessagesRef <- Ref.of[IO, List[String]](Nil)
     workDir = Files.createTempDirectory("work")
     repoDir = Files.createTempDirectory("repo")
-    config = Config("table", "attribute", "", URI.create("https://example.com"), repoDir.toString, workDir.toString)
-    _ <- Main
-      .runConfirmer(
+    config = Config("table", "CC_result", "", URI.create("https://example.com"), repoDir.toString, workDir.toString)
+    _ <- Main.runConfirmer(
         config,
         daSqsClient(messagesRef, deletedMessagesRef, errors, allowMultipleSqsCalls),
         daDynamoDbClient(dynamoRef, errors),
@@ -103,6 +102,6 @@ object TestUtils:
   }
 
   def ocfl(existingRefs: List[UUID], config: Config): Ocfl = new Ocfl(config) {
-    override def getFilePathsforObject(id: UUID): List[String] =
+    override def getFilePathsForObject(id: UUID): List[String] =
       if existingRefs.contains(id) then List(s"/some/path/$id/file1.txt", s"/some/path/$id/file2.txt") else Nil
   }

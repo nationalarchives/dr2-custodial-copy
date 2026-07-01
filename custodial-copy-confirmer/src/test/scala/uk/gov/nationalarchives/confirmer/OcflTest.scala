@@ -3,7 +3,7 @@ package uk.gov.nationalarchives.confirmer
 import io.ocfl.api.model.{ObjectVersionId, VersionInfo}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
-import uk.gov.nationalarchives.confirmer.Main.Config
+import uk.gov.nationalarchives.confirmer.Config
 import uk.gov.nationalarchives.utils.Utils.createOcflRepository
 
 import java.net.URI
@@ -22,6 +22,6 @@ class OcflTest extends AnyFlatSpec:
     repository.putObject(ObjectVersionId.head(existingRef.toString), filePath, new VersionInfo())
 
     val ocfl = Ocfl(Config("table", "attribute", "", URI.create("http://localhost"), repoDir, workDir))
-    ocfl.getFilePathsforObject(existingRef) should be(List(filePath.getFileName.toString))
-    ocfl.getFilePathsforObject(nonExistingRef) should be(Nil)
+    ocfl.getFilePathsForObject(existingRef) should be(List(filePath.getFileName.toString))
+    ocfl.getFilePathsForObject(nonExistingRef) should be(Nil)
   }
