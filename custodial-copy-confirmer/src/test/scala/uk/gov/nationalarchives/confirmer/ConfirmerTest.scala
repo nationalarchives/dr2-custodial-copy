@@ -25,7 +25,7 @@ class ConfirmerTest extends AnyFlatSpec {
     ccResult.isSuccess should be(true)
     ccResult match {
       case Confirmer.Result.Success(dynamoMap) =>
-        dynamoMap("filePaths") should equal(s"/some/path/$uuid/file1.txt,/some/path/$uuid/file2.txt")
+        dynamoMap("filePaths") should equal(List(s"/some/path/$uuid/file1.txt", s"/some/path/$uuid/file2.txt"))
       case _ => fail("Expected Success result for CC confirmer")
     }
   }

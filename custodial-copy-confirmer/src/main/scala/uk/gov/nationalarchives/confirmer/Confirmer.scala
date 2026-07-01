@@ -8,7 +8,7 @@ trait Confirmer:
 object Confirmer:
 
   enum Result:
-    case Success(dynamoMap: Map[String, String])
+    case Success(dynamoMap: Map[String, List[String]])
     case Failure(errorMessage: Throwable)
 
     def isSuccess: Boolean = this match
@@ -30,7 +30,7 @@ object Confirmer:
           confirmationOperator match {
             case oper: CCOperator =>
               val objectFilePaths = oper.ocfl.getFilePathsForObject(cc.preservationSystemId)
-              if objectFilePaths.nonEmpty then Result.Success(Map("filePaths" -> objectFilePaths.mkString(",")))
+              if objectFilePaths.nonEmpty then Result.Success(Map("filePaths" -> objectFilePaths))
               else Result.Failure(new RuntimeException(s"filePaths could not be found for ${cc.preservationSystemId.toString}"))
             case _ => Result.Failure(new RuntimeException(s"Unsupported operation in CC confirmer ${cc.preservationSystemId.toString}"))
           }
@@ -41,7 +41,7 @@ object Confirmer:
   val tcConfirmer: Confirmer =
     (payload: Payload, confirmationOperator: ConfirmationOperator) => {
       payload match {
-        case tc: TCPayload => Result.Success(Map("filePaths" -> tc.filePaths.mkString(","))) // FIXME: Implement interaction with scoutAM here
+        case tc: TCPayload => Result.Success(Map("filePaths" -> tc.filePaths)) // FIXME: Implement interaction with scoutAM here
         case _             => Result.Failure(new IllegalArgumentException("Invalid payload type for TC confirmer"))
       }
     }

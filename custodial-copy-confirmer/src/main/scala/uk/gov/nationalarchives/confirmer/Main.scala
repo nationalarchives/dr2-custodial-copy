@@ -4,6 +4,7 @@ import cats.effect.{ExitCode, IO, IOApp}
 import cats.syntax.all.*
 import fs2.Stream
 import io.circe.Json
+import io.circe.syntax.*
 import pureconfig.ConfigSource
 import pureconfig.module.catseffect.syntax.*
 import org.typelevel.log4cats.slf4j.Slf4jLogger
@@ -20,6 +21,7 @@ import uk.gov.nationalarchives.utils.Utils.*
 
 import java.net.URI
 import scala.concurrent.duration.*
+import scala.language.postfixOps
 
 object Main extends IOApp {
 
@@ -72,11 +74,12 @@ object Main extends IOApp {
             result match
               case Result.Success(dynamoMap) =>
 
-                val inputJson = Json.obj(dynamoMap.toSeq.map { case (k, v) => k -> Json.fromString(v) }*)
+                val resultJson = Json.obj(dynamoMap.map { case (k, v) =>
+                  k -> v.asJson
+                }.toSeq*)
                 val attributeUpdateMap =
                   Map(
-                    config.dynamoAttributeName -> "true".toAttributeValue,
-                    "input" -> inputJson.noSpaces.toAttributeValue
+                    config.dynamoAttributeName -> resultJson.noSpaces.toAttributeValue
                   )
 
                 val request = DADynamoDbRequest(
