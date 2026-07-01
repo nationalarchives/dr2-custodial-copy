@@ -3,10 +3,10 @@ package uk.gov.nationalarchives.utils
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
-import doobie.implicits.*
-import doobie.util.transactor.Transactor.Aux
-import doobie.util.update.Update
-import doobie.{Fragment, Transactor}
+import org.typelevel.doobie.implicits.*
+import org.typelevel.doobie.util.transactor.Transactor.Aux
+import org.typelevel.doobie.util.update.Update
+import org.typelevel.doobie.{Fragment, Transactor}
 import io.circe.{Decoder, Encoder}
 import io.ocfl.api.io.FixityCheckInputStream
 import io.ocfl.api.model.{DigestAlgorithm, ObjectVersionId, VersionInfo}
