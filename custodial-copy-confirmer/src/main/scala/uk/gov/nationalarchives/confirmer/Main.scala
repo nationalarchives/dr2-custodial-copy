@@ -52,11 +52,11 @@ object Main extends IOApp {
     }.flatten
 
   def runConfirmer(
-                    config: Config,
-                    sqsClient: DASQSClient[IO],
-                    dynamoClient: DADynamoDBClient[IO],
-                    ocfl: Ocfl
-                  ): Stream[IO, Unit] =
+      config: Config,
+      sqsClient: DASQSClient[IO],
+      dynamoClient: DADynamoDBClient[IO],
+      ocfl: Ocfl
+  ): Stream[IO, Unit] =
     Stream
       .eval {
         for {
@@ -72,7 +72,7 @@ object Main extends IOApp {
             result match
               case Result.Success(dynamoMap) =>
 
-                val inputJson = Json.obj(dynamoMap.toSeq.map { case (k, v) => k -> Json.fromString(v)}*)
+                val inputJson = Json.obj(dynamoMap.toSeq.map { case (k, v) => k -> Json.fromString(v) }*)
                 val attributeUpdateMap =
                   Map(
                     config.dynamoAttributeName -> "true".toAttributeValue,
@@ -90,7 +90,7 @@ object Main extends IOApp {
                   .updateAttributeValues(request)
                   .handleErrorWith {
                     case _: ConditionalCheckFailedException => IO.unit
-                    case e => IO.raiseError(e)
+                    case e                                  => IO.raiseError(e)
                   } >>
                   sqsClient.deleteMessage(config.sqsUrl, sqsMessage.receiptHandle).void
 
@@ -99,7 +99,6 @@ object Main extends IOApp {
         } yield ()
       }
       .handleErrorWith(err => Stream.eval(logError(err)))
-
 
   override def run(args: List[String]): IO[ExitCode] =
     (Stream.fixedRateStartImmediately[IO](60.seconds) >> confirmerStream).compile.drain

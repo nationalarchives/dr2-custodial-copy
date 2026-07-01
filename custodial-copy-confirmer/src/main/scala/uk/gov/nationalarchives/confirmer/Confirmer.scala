@@ -16,7 +16,7 @@ object Confirmer:
       case _: Failure => false
 
     def isError: Boolean = !isSuccess
-    
+
   def getConfirmer(config: Config): Confirmer =
     config.dynamoAttributeName match
       case "TC_result" => tcConfirmer
@@ -30,10 +30,8 @@ object Confirmer:
           confirmationOperator match {
             case oper: CCOperator =>
               val objectFilePaths = oper.ocfl.getFilePathsForObject(cc.preservationSystemId)
-              if objectFilePaths.nonEmpty then
-                Result.Success(Map("filePaths" -> objectFilePaths.mkString(",")))
-              else
-                Result.Failure(new RuntimeException(s"filePaths could not be found for ${cc.preservationSystemId.toString}"))
+              if objectFilePaths.nonEmpty then Result.Success(Map("filePaths" -> objectFilePaths.mkString(",")))
+              else Result.Failure(new RuntimeException(s"filePaths could not be found for ${cc.preservationSystemId.toString}"))
             case _ => Result.Failure(new RuntimeException(s"Unsupported operation in CC confirmer ${cc.preservationSystemId.toString}"))
           }
         case _ => Result.Failure(new IllegalArgumentException("Invalid payload type for CC confirmer"))
@@ -43,7 +41,7 @@ object Confirmer:
   val tcConfirmer: Confirmer =
     (payload: Payload, confirmationOperator: ConfirmationOperator) => {
       payload match {
-        case tc: TCPayload => Result.Success(Map("filePaths" -> tc.filePaths.mkString(","))) //FIXME: Implement interaction with scoutAM here
-        case _ => Result.Failure(new IllegalArgumentException("Invalid payload type for TC confirmer"))
+        case tc: TCPayload => Result.Success(Map("filePaths" -> tc.filePaths.mkString(","))) // FIXME: Implement interaction with scoutAM here
+        case _             => Result.Failure(new IllegalArgumentException("Invalid payload type for TC confirmer"))
       }
     }

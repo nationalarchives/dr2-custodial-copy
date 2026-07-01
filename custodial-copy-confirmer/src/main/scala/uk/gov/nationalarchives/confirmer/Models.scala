@@ -23,17 +23,16 @@ case class OutputQueueMessage(assetId: UUID, batchId: String, payload: Payload) 
 
 trait ConfirmationOperator
 final case class CCOperator(ocfl: Ocfl) extends ConfirmationOperator
-final case class TCOperator(sam: Any) extends ConfirmationOperator //FIXME: in case operations related to scoutAM need anything 
+final case class TCOperator(sam: Any) extends ConfirmationOperator //FIXME: in case operations related to scoutAM need anything
 
 object ConfirmationOperator {
   def getOperator(config: Config, ocfl: Ocfl, sam: Any): ConfirmationOperator =
     config.dynamoAttributeName match {
       case "CC_result" => CCOperator(ocfl)
       case "TC_result" => TCOperator(sam)
-      case _ => throw new IllegalArgumentException(s"Unable to create operator corresponding to ${config.dynamoAttributeName}")
+      case _           => throw new IllegalArgumentException(s"Unable to create operator corresponding to ${config.dynamoAttributeName}")
     }
 }
-
 
 trait Payload
 final case class CCPayload(preservationSystemId: UUID) extends Payload

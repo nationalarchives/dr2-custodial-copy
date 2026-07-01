@@ -49,7 +49,8 @@ object TestUtils:
     workDir = Files.createTempDirectory("work")
     repoDir = Files.createTempDirectory("repo")
     config = Config("table", "CC_result", "", URI.create("https://example.com"), repoDir.toString, workDir.toString)
-    _ <- Main.runConfirmer(
+    _ <- Main
+      .runConfirmer(
         config,
         daSqsClient(messagesRef, deletedMessagesRef, errors, allowMultipleSqsCalls),
         daDynamoDbClient(dynamoRef, errors),
