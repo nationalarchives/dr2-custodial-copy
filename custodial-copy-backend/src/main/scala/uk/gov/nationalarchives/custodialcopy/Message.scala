@@ -22,5 +22,5 @@ object Message {
   case class SoReceivedSnsMessage(ref: UUID) extends ReceivedSnsMessage
   case class DeletionReceivedSnsMessage(ref: UUID) extends ReceivedSnsMessage
 
-  case class SendSnsMessage(entityType: EntityType, ioRef: UUID, objectType: ObjectType, status: ObjectStatus, potentialIcId: Option[String])
+  case class SendSnsMessage(entityType: EntityType, ioRef: UUID, objectType: ObjectType, status: ObjectStatus, icIds: List[String])
 }

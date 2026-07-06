@@ -347,8 +347,7 @@ class Processor(
       case _: SoReceivedSnsMessage => Option(StructuralObject)
       case _                       => None
 
-    val potentialIcId = filesDownloadedViaIc.find(_ == obj.tableItemIdentifier)
-    potentialEntityType.map(entityType => SendSnsMessage(entityType, obj.id, objectType, status, potentialIcId))
+    potentialEntityType.map(entityType => SendSnsMessage(entityType, obj.id, objectType, status, filesDownloadedViaIc))
   }
 
   given Encoder[SendSnsMessage] = (message: SendSnsMessage) => {
@@ -434,7 +433,7 @@ class Processor(
         snsClient.publish[SendSnsMessage](config.topicArn)(snsMessages).void
       }
       _ <- logger.info(s"${snsMessages.length} 'created/updated objects' messages published to SNS")
-      icIds = snsMessages.flatMap(_.potentialIcId)
+      icIds = snsMessages.flatMap(_.icIds)
       icIdsNum = icIds.length.toString
       _ <- logger.info(Map("icCacheHits" -> icIdsNum))(s"$icIdsNum files downloaded from IC")
     } yield Success(messageResponse.message.ref, icIds)
