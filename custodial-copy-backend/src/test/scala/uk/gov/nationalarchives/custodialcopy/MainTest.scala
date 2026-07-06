@@ -160,7 +160,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     val bitstreamId2 = "de35982b-4a3a-48ad-888d-fe41f3532d36"
     val parentRef = UUID.randomUUID()
     val utils = new MainTestUtils(
-      List((ContentObject, false), (ContentObject, false)),
+      List((ContentObject, false), (InformationObject, false)),
       objectVersion = 0,
       true,
       bitstreamInfo1Responses = Seq(
