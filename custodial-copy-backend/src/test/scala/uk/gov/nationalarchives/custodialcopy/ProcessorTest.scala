@@ -67,7 +67,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
       repTypes = Nil,
       repIndexes = Nil,
       createdFileDownloadInfo = List(Nil, List(FileDownloadInfo(id, Path(s"$id/IO_Metadata_changed.xml").toNioPath.some, "destinationPath"))),
-      snsMessagesToSend = List(SendSnsMessage(InformationObject, id, Metadata, Updated, Nil))
+      snsMessagesToSend = List(SendSnsMessage(InformationObject, id, Metadata, Updated))
     )
   }
 
@@ -98,8 +98,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         )
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(ContentObject, id, Bitstream, Created, Nil),
-        SendSnsMessage(ContentObject, id, Metadata, Created, Nil)
+        SendSnsMessage(ContentObject, id, Bitstream, Created),
+        SendSnsMessage(ContentObject, id, Metadata, Created)
       )
     )
   }
@@ -135,8 +135,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         )
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(ContentObject, id, Bitstream, Created, icIds),
-        SendSnsMessage(ContentObject, id, Metadata, Created, icIds)
+        SendSnsMessage(ContentObject, id, Bitstream, Created),
+        SendSnsMessage(ContentObject, id, Metadata, Created)
       )
     )
   }
@@ -172,8 +172,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         )
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(ContentObject, id, Bitstream, Created, Nil),
-        SendSnsMessage(ContentObject, id, Metadata, Created, Nil)
+        SendSnsMessage(ContentObject, id, Bitstream, Created),
+        SendSnsMessage(ContentObject, id, Metadata, Created)
       )
     )
   }
@@ -255,7 +255,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         ),
         Nil
       ),
-      snsMessagesToSend = List(SendSnsMessage(InformationObject, parentRef, Metadata, Created, Nil))
+      snsMessagesToSend = List(SendSnsMessage(InformationObject, parentRef, Metadata, Created))
     )
   }
 
@@ -286,8 +286,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         )
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(ContentObject, id, Bitstream, Created, Nil),
-        SendSnsMessage(ContentObject, id, Metadata, Created, Nil)
+        SendSnsMessage(ContentObject, id, Bitstream, Created),
+        SendSnsMessage(ContentObject, id, Metadata, Created)
       )
     )
   }
@@ -318,7 +318,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         ) // 2nd call to 'createObjects' with changedObjectsPaths arg
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(InformationObject, id, Metadata, Updated, Nil)
+        SendSnsMessage(InformationObject, id, Metadata, Updated)
       )
     )
   }
@@ -349,7 +349,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         List()
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(InformationObject, id, Metadata, Created, Nil)
+        SendSnsMessage(InformationObject, id, Metadata, Created)
       )
     )
   }
@@ -381,7 +381,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         )
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(InformationObject, changedFileId, Metadata, Updated, Nil)
+        SendSnsMessage(InformationObject, changedFileId, Metadata, Updated)
       )
     )
   }
@@ -427,7 +427,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         )
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(InformationObject, missingFileId, Metadata, Created, Nil)
+        SendSnsMessage(InformationObject, missingFileId, Metadata, Created)
       )
     )
   }

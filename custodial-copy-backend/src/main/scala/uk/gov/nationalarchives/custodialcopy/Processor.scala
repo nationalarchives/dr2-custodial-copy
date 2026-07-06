@@ -16,7 +16,7 @@ import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.*
 import uk.gov.nationalarchives.custodialcopy.Main.{Config, FileDownloadInfo}
 import uk.gov.nationalarchives.custodialcopy.Message.*
-import uk.gov.nationalarchives.custodialcopy.Processor.{ObjectStatus, Result}
+import uk.gov.nationalarchives.custodialcopy.Processor.{ObjectStatus, ProcessorOutput, Result}
 import uk.gov.nationalarchives.custodialcopy.Processor.Result.*
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Updated}
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Bitstream, Metadata}
@@ -331,7 +331,7 @@ class Processor(
     }
     .getOrElse("")
 
-  private def generateSnsMessage(filesDownloadedViaIc: List[String])(
+  private def generateSnsMessage(
       obj: CustodialCopyObject,
       receivedSnsMessage: ReceivedSnsMessage,
       status: ObjectStatus
@@ -347,7 +347,7 @@ class Processor(
       case _: SoReceivedSnsMessage => Option(StructuralObject)
       case _                       => None
 
-    potentialEntityType.map(entityType => SendSnsMessage(entityType, obj.id, objectType, status, filesDownloadedViaIc))
+    potentialEntityType.map(entityType => SendSnsMessage(entityType, obj.id, objectType, status))
   }
 
   given Encoder[SendSnsMessage] = (message: SendSnsMessage) => {
@@ -358,7 +358,7 @@ class Processor(
       .apply(message)
   }
 
-  private def processNonDeletedMessages(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[List[SendSnsMessage]] =
+  private def processNonDeletedMessages(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[ProcessorOutput] =
     val downloadFile = download(_, UUID.fromString(messageResponse.messageGroupId.get))
     for {
       logger <- Slf4jLogger.create[IO]
@@ -401,11 +401,10 @@ class Processor(
       _ <- allObjectPaths.flatMap(_.sourceNioFilePath).parTraverse(deleteObjectPath)
 
       filesDownloadedViaIc = allObjectPaths.flatMap(_.potentialIcId)
-      sqsMessage = generateSnsMessage(filesDownloadedViaIc)
 
-      createdObjsSnsMessages = missingAndChangedObjects.missingObjects.flatMap(sqsMessage(_, messageResponse.message, Created))
-      updatedObjsSnsMessages = missingAndChangedObjects.changedObjects.flatMap(sqsMessage(_, messageResponse.message, Updated))
-    } yield createdObjsSnsMessages ++ updatedObjsSnsMessages
+      createdObjsSnsMessages = missingAndChangedObjects.missingObjects.flatMap(generateSnsMessage(_, messageResponse.message, Created))
+      updatedObjsSnsMessages = missingAndChangedObjects.changedObjects.flatMap(generateSnsMessage(_, messageResponse.message, Updated))
+    } yield ProcessorOutput(createdObjsSnsMessages ++ updatedObjsSnsMessages, allObjectPaths.flatMap(_.potentialIcId))
 
   @tailrec
   private def deleteObjectPath(path: JPath): IO[Unit] = {
@@ -415,25 +414,25 @@ class Processor(
       deleteObjectPath(path.getParent)
   }
 
-  private def processDeletedEntities(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[List[SendSnsMessage]] =
+  private def processDeletedEntities(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[ProcessorOutput] =
     val ref = messageResponse.message.ref
     for {
       filePaths <- ocflService.getAllFilePathsOnAnObject(ref)
       _ <- ocflService.deleteObjects(ref, filePaths)
-    } yield Nil
+    } yield ProcessorOutput(Nil, Nil)
 
   def process(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[Result] = {
     for {
       logger <- Slf4jLogger.create[IO]
-      snsMessages <-
+      processorOutput <-
         messageResponse.message match
           case DeletionReceivedSnsMessage(ref) => processDeletedEntities(messageResponse)
           case _                               => processNonDeletedMessages(messageResponse)
-      _ <- IO.whenA(snsMessages.nonEmpty) {
-        snsClient.publish[SendSnsMessage](config.topicArn)(snsMessages).void
+      _ <- IO.whenA(processorOutput.snsMessages.nonEmpty) {
+        snsClient.publish[SendSnsMessage](config.topicArn)(processorOutput.snsMessages).void
       }
-      _ <- logger.info(s"${snsMessages.length} 'created/updated objects' messages published to SNS")
-      icIds = snsMessages.flatMap(_.icIds)
+      _ <- logger.info(s"${processorOutput.snsMessages.length} 'created/updated objects' messages published to SNS")
+      icIds = processorOutput.icIds
       icIdsNum = icIds.length.toString
       _ <- logger.info(Map("icCacheHits" -> icIdsNum))(s"$icIdsNum files downloaded from IC")
     } yield Success(messageResponse.message.ref, icIds)
@@ -451,6 +450,8 @@ object Processor {
   ): IO[Processor] = IO(
     new Processor(config, sqsClient, ocflService, entityClient, ValidateXmlAgainstXsd[IO](XipXsdSchemaV7), snsClient)
   )
+
+  case class ProcessorOutput(snsMessages: List[SendSnsMessage], icIds: List[String])
 
   enum ObjectStatus:
     case Created, Updated
