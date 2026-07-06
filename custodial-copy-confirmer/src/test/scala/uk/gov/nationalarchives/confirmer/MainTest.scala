@@ -14,11 +14,12 @@ class MainTest extends AnyFlatSpec {
     val existingAssetId = UUID.randomUUID
     val existingRef = UUID.randomUUID
     val nonExistingRef = UUID.randomUUID
+    val existingFilePaths = List(s"/some/path/$existingRef/file1.txt", s"/some/path/$existingRef/file2.txt")
     val inputMessages = List(
       OutputQueueMessage(existingAssetId, "batchId1", CCPayload(existingRef)),
       OutputQueueMessage(UUID.randomUUID, "batchId2", CCPayload(nonExistingRef))
     ).map(message => MessageResponse(message.batchId, None, message))
-    val (deletedMessages, dynamoUpdateItems) = runConfirmer(inputMessages, List(existingRef), Errors())
+    val (deletedMessages, dynamoUpdateItems) = runConfirmer(inputMessages, List(existingRef), existingFilePaths, Errors())
 
     deletedMessages.size should equal(1)
     deletedMessages.sorted should equal(List("batchId1"))
@@ -37,11 +38,12 @@ class MainTest extends AnyFlatSpec {
     val existingAssetId = UUID.randomUUID
     val existingRef = UUID.randomUUID
     val nonExistingRef = UUID.randomUUID
+    val existingFilePaths = List(s"/some/path/$existingRef/file1.txt", s"/some/path/$existingRef/file2.txt")
     val inputMessages = List {
       val message = OutputQueueMessage(existingAssetId, "batchId1", CCPayload(existingRef))
       MessageResponse(message.batchId, None, message)
     }
-    val (deletedMessages, dynamoUpdateItems) = runConfirmer(inputMessages, List(existingRef), Errors(conditionalCheckError = true))
+    val (deletedMessages, dynamoUpdateItems) = runConfirmer(inputMessages, List(existingRef), existingFilePaths, Errors(conditionalCheckError = true))
 
     deletedMessages.size should equal(1)
     deletedMessages.sorted should equal(List("batchId1"))
@@ -50,10 +52,11 @@ class MainTest extends AnyFlatSpec {
 
   "runConfirmer" should "not delete the messages from the queue if there is an error" in {
     val existingRef = UUID.randomUUID()
+    val existingFilePaths = List(s"/some/path/$existingRef/file1.txt", s"/some/path/$existingRef/file2.txt")
     val inputMessages = List(MessageResponse("batchId", None, OutputQueueMessage(UUID.randomUUID, "batchId1", CCPayload(existingRef))))
-    val (messagesInQueueOne, _) = runConfirmer(inputMessages, List(existingRef), Errors(dynamoUpdateError = true))
-    val (messagesInQueueTwo, _) = runConfirmer(inputMessages, List(existingRef), Errors(sqsReceiveError = true))
-    val (messagesInQueueThree, _) = runConfirmer(inputMessages, List(existingRef), Errors(sqsDeleteError = true))
+    val (messagesInQueueOne, _) = runConfirmer(inputMessages, List(existingRef), existingFilePaths, Errors(dynamoUpdateError = true))
+    val (messagesInQueueTwo, _) = runConfirmer(inputMessages, List(existingRef), existingFilePaths, Errors(sqsReceiveError = true))
+    val (messagesInQueueThree, _) = runConfirmer(inputMessages, List(existingRef), existingFilePaths, Errors(sqsDeleteError = true))
 
     messagesInQueueOne.size should equal(0)
     messagesInQueueTwo.size should equal(0)
@@ -62,8 +65,9 @@ class MainTest extends AnyFlatSpec {
 
   "runConfirmer" should "process up to 50 messages if more are available" in {
     val existingRef = UUID.randomUUID()
+    val existingFilePaths = List(s"/some/path/$existingRef/file1.txt", s"/some/path/$existingRef/file2.txt")
     val inputMessages = List(MessageResponse("batchId", None, OutputQueueMessage(UUID.randomUUID, "batchId1", CCPayload(existingRef))))
-    val (_, dynamoUpdates) = runConfirmer(inputMessages, List(existingRef), Errors(), true)
+    val (_, dynamoUpdates) = runConfirmer(inputMessages, List(existingRef), existingFilePaths, Errors(), true)
 
     dynamoUpdates.size should equal(50)
   }

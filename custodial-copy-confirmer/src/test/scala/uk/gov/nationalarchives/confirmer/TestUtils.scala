@@ -40,6 +40,7 @@ object TestUtils:
   def runConfirmer(
       messages: List[MessageResponse[OutputQueueMessage]],
       existingRefs: List[UUID],
+      existingPaths: List[String],
       errors: Errors,
       allowMultipleSqsCalls: Boolean = false
   ): (List[String], List[DADynamoDbRequest]) = (for {
@@ -54,7 +55,8 @@ object TestUtils:
         config,
         daSqsClient(messagesRef, deletedMessagesRef, errors, allowMultipleSqsCalls),
         daDynamoDbClient(dynamoRef, errors),
-        ocfl(existingRefs, config)
+        ocfl(existingRefs, config),
+        scoutAM(existingPaths, config)
       )
       .compile
       .drain
@@ -105,4 +107,9 @@ object TestUtils:
   def ocfl(existingRefs: List[UUID], config: Config): Ocfl = new Ocfl(config) {
     override def getFilePathsForObject(id: UUID): List[String] =
       if existingRefs.contains(id) then List(s"/some/path/$id/file1.txt", s"/some/path/$id/file2.txt") else Nil
+  }
+
+  def scoutAM(filePaths: List[String], config: Config): ScoutAM = new ScoutAM(config) {
+    override def getFileDetails(filePaths: List[String]): Map[String, List[String]] =
+      if filePaths.nonEmpty then filePaths.map(eachPath => eachPath -> List(s"Volume1$eachPath", s"Volume2$eachPath")).toMap else Map.empty
   }

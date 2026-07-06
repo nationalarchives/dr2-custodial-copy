@@ -50,14 +50,16 @@ object Main extends IOApp {
         sqs = sqsClient[IO](config.proxyUrl.some)
         dynamo = dynamoClient(config.proxyUrl)
         ocfl = Ocfl(config)
-      } yield runConfirmer(config, sqs, dynamo, ocfl)
+        scoutAm = ScoutAM(config)
+      } yield runConfirmer(config, sqs, dynamo, ocfl, scoutAm)
     }.flatten
 
   def runConfirmer(
       config: Config,
       sqsClient: DASQSClient[IO],
       dynamoClient: DADynamoDBClient[IO],
-      ocfl: Ocfl
+      ocfl: Ocfl,
+      scoutAM: ScoutAM
   ): Stream[IO, Unit] =
     Stream
       .eval {
@@ -68,7 +70,7 @@ object Main extends IOApp {
           _ <- messages.parTraverse { sqsMessage =>
             val message = sqsMessage.message
             val payload = message.payload
-            val operator = ConfirmationOperator.getOperator(config, ocfl, None)
+            val operator = ConfirmationOperator.getOperator(config, ocfl, scoutAM)
             val result: Result = Confirmer.getConfirmer(config).getResult(payload, operator)
 
             result match

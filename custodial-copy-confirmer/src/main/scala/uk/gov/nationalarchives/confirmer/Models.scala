@@ -2,6 +2,7 @@ package uk.gov.nationalarchives.confirmer
 
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import io.circe.{Decoder, DecodingFailure, HCursor}
+import io.circe.generic.semiauto.*
 import java.net.URI
 import pureconfig.*
 import java.util.UUID
@@ -12,7 +13,10 @@ case class Config(
     sqsUrl: String,
     proxyUrl: URI,
     ocflRepoDir: String,
-    ocflWorkDir: String
+    ocflWorkDir: String,
+    scoutAmBaseUrl: Option[URI] = None,
+    scoutAmUsername: Option[String] = None,
+    scoutAmPassword: Option[String] = None
 ) derives ConfigReader
 
 extension (s: String) def toAttributeValue: AttributeValue = AttributeValue.builder.s(s).build
@@ -23,13 +27,13 @@ case class OutputQueueMessage(assetId: UUID, batchId: String, payload: Payload) 
 
 trait ConfirmationOperator
 final case class CCOperator(ocfl: Ocfl) extends ConfirmationOperator
-final case class TCOperator(sam: Any) extends ConfirmationOperator //FIXME: in case operations related to scoutAM need anything
+final case class TCOperator(scoutAM: ScoutAM) extends ConfirmationOperator
 
 object ConfirmationOperator {
-  def getOperator(config: Config, ocfl: Ocfl, sam: Any): ConfirmationOperator =
+  def getOperator(config: Config, ocfl: Ocfl, scoutAM: ScoutAM): ConfirmationOperator =
     config.dynamoAttributeName match {
       case "CC_result" => CCOperator(ocfl)
-      case "TC_result" => TCOperator(sam)
+      case "TC_result" => TCOperator(scoutAM)
       case _           => throw new IllegalArgumentException(s"Unable to create operator corresponding to ${config.dynamoAttributeName}")
     }
 }
@@ -70,3 +74,13 @@ given Decoder[OutputQueueMessage] = (c: HCursor) =>
     batchId <- c.downField("batchId").as[String]
     payload <- c.downField("payload").as[Payload]
   } yield OutputQueueMessage(UUID.fromString(assetId), batchId, payload)
+
+final case class FileResponse(archdone: Boolean, copies: List[Copy], checksum: Option[String])
+final case class Copy(copy: String, sections: Option[List[Section]])
+final case class Section(volume: String)
+
+object FileResponse {
+  given Decoder[Section] = deriveDecoder
+  given Decoder[Copy] = deriveDecoder
+  given Decoder[FileResponse] = deriveDecoder
+}

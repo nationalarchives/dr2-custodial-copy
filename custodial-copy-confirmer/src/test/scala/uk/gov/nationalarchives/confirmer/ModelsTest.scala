@@ -4,19 +4,35 @@ import org.scalatest.matchers.should.Matchers.*
 import io.circe.parser.decode
 
 class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
-  "ConfirmationOperator" should "return the correct operator type based on the config" in {
+  "ConfirmationOperator" should "return the CC operator type based on the config" in {
     val id = java.util.UUID.randomUUID()
     val operator = ConfirmationOperator.getOperator(
       Config("table", "CC_result", "", null, "", ""),
       TestUtils.ocfl(List(id), Config("table", "CC_result", "", null, "", "")),
-      None
+      null
     )
+
     operator shouldBe a[CCOperator]
     val paths: List[String] = operator match {
       case cc: CCOperator => cc.ocfl.getFilePathsForObject(id)
       case _              => fail("Unexpected operator created")
     }
     paths should contain allOf (s"/some/path/$id/file1.txt", s"/some/path/$id/file2.txt")
+  }
+
+  "ConfirmationOperator" should "return the TC operator type based on the config" in {
+    val operator = ConfirmationOperator.getOperator(
+      Config("table", "TC_result", "", null, "", ""),
+      null,
+      TestUtils.scoutAM(List("/tmp/file1", "/tmp/file2"), Config("table", "TC_result", "", null, "", ""))
+    )
+    operator shouldBe a[TCOperator]
+
+    val result = operator match {
+      case tc: TCOperator => tc.scoutAM.getFileDetails(List("/tmp/file1", "/tmp/file2"))
+      case _              => fail("Unexpected operator created")
+    }
+    result should contain allOf ("/tmp/file1" -> List("Volume1/tmp/file1", "Volume2/tmp/file1"), "/tmp/file2" -> List("Volume1/tmp/file2", "Volume2/tmp/file2"))
   }
 
   "Payload decoder" should "decode a CCPayload" in {
@@ -71,6 +87,55 @@ class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
       case Right(_)    => fail("Decoding should have failed for unknown payload type")
       case Left(error) =>
         error.getMessage should include("Could not determine payload type. Expected either 'preservationSystemId' or 'filePaths'.")
+    }
+  }
+
+  "FileResponse decoder" should "decode a FileResponse" in {
+    val json =
+      """
+        |{
+        |  "archdone": true,
+        |  "copies": [
+        |    {"copy": "1"},
+        |    {"copy": "2"},
+        |    {"copy": "3", "sections": [{"volume": "L03721"}]}
+        |  ],
+        |  "checksum": "someChecksumValue"
+        |}""".stripMargin
+
+    val decoded = decode[FileResponse](json)
+    decoded match {
+      case Right(fileResponse) =>
+        fileResponse.archdone shouldEqual true
+        fileResponse.copies should have size 3
+        fileResponse.copies.head.copy shouldEqual "1"
+        fileResponse.copies.find(_.copy == "3").flatMap(_.sections) shouldEqual Some(List(Section("L03721")))
+        fileResponse.checksum shouldEqual Some("someChecksumValue")
+      case Left(error) => fail(s"Decoding failed: $error")
+    }
+  }
+
+  "FileResponse decoder" should "decode a FileResponse without sections" in {
+    val json =
+      """
+        |{
+        |  "archdone": false,
+        |  "copies": [
+        |    {"copy": "1"},
+        |    {"copy": "2"}
+        |  ],
+        |  "checksum": null
+        |}""".stripMargin
+
+    val decoded = decode[FileResponse](json)
+    decoded match {
+      case Right(fileResponse) =>
+        fileResponse.archdone shouldEqual false
+        fileResponse.copies should have size 2
+        fileResponse.copies.head.copy shouldEqual "1"
+        fileResponse.copies.find(_.copy == "3") shouldEqual None
+        fileResponse.checksum shouldEqual None
+      case Left(error) => fail(s"Decoding failed: $error")
     }
   }
 }

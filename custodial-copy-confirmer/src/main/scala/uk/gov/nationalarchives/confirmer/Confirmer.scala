@@ -41,7 +41,14 @@ object Confirmer:
   val tcConfirmer: Confirmer =
     (payload: Payload, confirmationOperator: ConfirmationOperator) => {
       payload match {
-        case tc: TCPayload => Result.Success(Map("filePaths" -> tc.filePaths)) // FIXME: Implement interaction with scoutAM here
-        case _             => Result.Failure(new IllegalArgumentException("Invalid payload type for TC confirmer"))
+        case tc: TCPayload =>
+          confirmationOperator match {
+            case operator: TCOperator =>
+              val tapeConfirmation = operator.scoutAM.getFileDetails(tc.filePaths)
+              if tapeConfirmation.nonEmpty then Result.Success(tapeConfirmation)
+              else Result.Failure(new RuntimeException(s"Volumes could not be found for one or more files in ${tc.filePaths.mkString(", ")}"))
+            case _ => Result.Failure(new RuntimeException("Unsupported operation in TC confirmer"))
+          }
+        case _ => Result.Failure(new IllegalArgumentException("Invalid payload type for TC confirmer"))
       }
     }
