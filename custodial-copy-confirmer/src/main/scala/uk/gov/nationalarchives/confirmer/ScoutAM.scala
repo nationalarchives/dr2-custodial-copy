@@ -17,7 +17,7 @@ object ScoutAM:
       val encodedFilePath = URLEncoder.encode(filePath, StandardCharsets.UTF_8.toString)
       val request = HttpRequest
         .newBuilder()
-        .uri(URI.create(s"${scoutAmBaseUrl}/v1/file?path=$encodedFilePath"))
+        .uri(URI.create(s"$scoutAmBaseUrl/v1/file?path=$encodedFilePath"))
         .header("Authorization", s"Bearer ${authorisationResponse.token}")
         .header("Accept", "application/json")
         .GET()
@@ -54,7 +54,7 @@ object ScoutAM:
       val scoutAmBaseUrl = config.scoutAmBaseUrl.getOrElse(throw new RuntimeException("ScoutAM base URL is not configured"))
       val request = HttpRequest
         .newBuilder()
-        .uri(URI.create(s"${scoutAmBaseUrl}/v1/auth"))
+        .uri(URI.create(s"$scoutAmBaseUrl/v1/auth"))
         .header("Content-Type", "application/json")
         .POST(HttpRequest.BodyPublishers.ofString(s"""{"username":"$username","password":"$password"}"""))
         .build()
