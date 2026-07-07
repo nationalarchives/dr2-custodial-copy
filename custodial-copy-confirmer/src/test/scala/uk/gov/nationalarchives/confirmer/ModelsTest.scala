@@ -138,4 +138,20 @@ class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
       case Left(error) => fail(s"Decoding failed: $error")
     }
   }
+
+  "AuthorisationResponse decoder" should "decode an AuthorisationResponse" in {
+    val json =
+      """
+        |{
+        |  "response": "some-authorisation-token"
+        |}
+        |""".stripMargin
+
+    val decoded = decode[AuthorisationResponse](json)
+    decoded match {
+      case Right(authResponse) =>
+        authResponse.token shouldEqual "some-authorisation-token"
+      case Left(error) => fail(s"Decoding failed: $error")
+    }
+  }
 }

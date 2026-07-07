@@ -56,4 +56,47 @@ class ConfirmerTest extends AnyFlatSpec {
       case _ => fail("Expected Failure result for CC confirmer with invalid payload")
     }
   }
+
+  "TC Confirmer" should "return success when the payload and operator is valid" in {
+    val filePaths = List("file1.txt", "file2.txt")
+    val tcPayload = TCPayload(filePaths)
+    val tcOperator = TCOperator(TestUtils.scoutAM(filePaths, Config("table", "TC_result", "", null, "", "")))
+    val tcResult = Confirmer.tcConfirmer.getResult(tcPayload, tcOperator)
+
+    tcResult.isSuccess should be(true)
+    tcResult match {
+      case Confirmer.Result.Success(dynamoMap) =>
+        dynamoMap("file1.txt") should equal(List("Volume1file1.txt", "Volume2file1.txt"))
+        dynamoMap("file2.txt") should equal(List("Volume1file2.txt", "Volume2file2.txt"))
+      case _ => fail("Expected Success result for TC confirmer")
+    }
+  }
+
+  "TC Confirmer" should "return failure when the payload is valid but the operator is invalid" in {
+    val filePaths = List("file1.txt", "file2.txt")
+    val tcPayload = TCPayload(filePaths)
+    val ccOperator =
+      CCOperator(TestUtils.ocfl(List(java.util.UUID.randomUUID()), Config("table", "CC_result", "", null, "", ""))) // Invalid operator for TC confirmer
+    val tcResult = Confirmer.tcConfirmer.getResult(tcPayload, ccOperator)
+
+    tcResult.isError should be(true)
+    tcResult match {
+      case Confirmer.Result.Failure(errorMessage) =>
+        errorMessage.getMessage should equal("Unsupported operation in TC confirmer")
+      case _ => fail("Expected Failure result for TC confirmer with invalid operator")
+    }
+  }
+
+  "TC Confirmer" should "return failure when the payload is invalid" in {
+    val ccPayload = CCPayload(java.util.UUID.randomUUID()) // Invalid payload for TC confirmer
+    val tcOperator = TCOperator(TestUtils.scoutAM(List("file1.txt", "file2.txt"), Config("table", "TC_result", "", null, "", "")))
+    val tcResult = Confirmer.tcConfirmer.getResult(ccPayload, tcOperator)
+
+    tcResult.isError should be(true)
+    tcResult match {
+      case Confirmer.Result.Failure(errorMessage) =>
+        errorMessage.getMessage should equal("Invalid payload type for TC confirmer")
+      case _ => fail("Expected Failure result for TC confirmer with invalid payload")
+    }
+  }
 }

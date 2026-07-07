@@ -109,7 +109,7 @@ object TestUtils:
       if existingRefs.contains(id) then List(s"/some/path/$id/file1.txt", s"/some/path/$id/file2.txt") else Nil
   }
 
-  def scoutAM(filePaths: List[String], config: Config): ScoutAM = new ScoutAM(config) {
+  def scoutAM(filePaths: List[String], config: Config): ScoutAM = new ScoutAM(config, new TestHttpService(200, 200, """{"response":"Success"}""")) {
     override def getFileDetails(filePaths: List[String]): Map[String, List[String]] =
       if filePaths.nonEmpty then filePaths.map(eachPath => eachPath -> List(s"Volume1$eachPath", s"Volume2$eachPath")).toMap else Map.empty
   }

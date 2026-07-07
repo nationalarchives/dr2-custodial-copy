@@ -20,6 +20,7 @@ import uk.gov.nationalarchives.{DADynamoDBClient, DASQSClient}
 import uk.gov.nationalarchives.utils.Utils.*
 
 import java.net.URI
+import java.net.http.HttpClient
 import scala.concurrent.duration.*
 import scala.language.postfixOps
 
@@ -50,7 +51,7 @@ object Main extends IOApp {
         sqs = sqsClient[IO](config.proxyUrl.some)
         dynamo = dynamoClient(config.proxyUrl)
         ocfl = Ocfl(config)
-        scoutAm = ScoutAM(config)
+        scoutAm = ScoutAM(config, ScoutAmHttpService(HttpClient.newHttpClient()))
       } yield runConfirmer(config, sqs, dynamo, ocfl, scoutAm)
     }.flatten
 

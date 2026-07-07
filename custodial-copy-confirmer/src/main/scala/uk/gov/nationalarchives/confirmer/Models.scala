@@ -14,7 +14,7 @@ case class Config(
     proxyUrl: URI,
     ocflRepoDir: String,
     ocflWorkDir: String,
-    scoutAmBaseUrl: Option[URI] = None,
+    scoutAmBaseUrl: Option[String] = None,
     scoutAmUsername: Option[String] = None,
     scoutAmPassword: Option[String] = None
 ) derives ConfigReader
@@ -84,3 +84,12 @@ object FileResponse {
   given Decoder[Copy] = deriveDecoder
   given Decoder[FileResponse] = deriveDecoder
 }
+
+final case class AuthorisationResponse(token: String)
+
+object AuthorisationResponse:
+  given Decoder[AuthorisationResponse] = Decoder.instance { c =>
+    for {
+      token <- c.get[String]("response")
+    } yield AuthorisationResponse(token)
+  }
