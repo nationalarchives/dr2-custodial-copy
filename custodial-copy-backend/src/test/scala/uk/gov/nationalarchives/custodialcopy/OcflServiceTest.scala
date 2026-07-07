@@ -15,7 +15,7 @@ import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.FileObject
-import uk.gov.nationalarchives.custodialcopy.Main.IdWithSourceAndDestPaths
+import uk.gov.nationalarchives.custodialcopy.Main.FileDownloadInfo
 import uk.gov.nationalarchives.dp.client.Entities.Entity
 import uk.gov.nationalarchives.utils.testOcflFileRetriever
 
@@ -238,7 +238,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     val ocflRepository = mock[MutableOcflRepository]
     val service = new OcflService(ocflRepository, semaphore)
 
-    service.createObjects(List(IdWithSourceAndDestPaths(UUID.randomUUID, None, "destination"))).unsafeRunSync()
+    service.createObjects(List(FileDownloadInfo(UUID.randomUUID, None, "destination"))).unsafeRunSync()
 
     verifyNoInteractions(ocflRepository)
   }
@@ -263,7 +263,7 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
       }
     val service = new OcflService(ocflRepository, semaphore)
 
-    service.createObjects(List(IdWithSourceAndDestPaths(id, Option(inputPath), destinationPath))).unsafeRunSync()
+    service.createObjects(List(FileDownloadInfo(id, Option(inputPath), destinationPath))).unsafeRunSync()
 
     UUID.fromString(objectVersionCaptor.getValue.getObjectId) should equal(id)
     verify(updater, times(1)).addPath(

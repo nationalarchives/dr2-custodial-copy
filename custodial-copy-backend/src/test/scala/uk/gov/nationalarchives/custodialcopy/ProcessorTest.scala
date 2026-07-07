@@ -12,7 +12,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
-import uk.gov.nationalarchives.custodialcopy.Main.IdWithSourceAndDestPaths
+import uk.gov.nationalarchives.custodialcopy.Main.FileDownloadInfo
 import uk.gov.nationalarchives.custodialcopy.Message.{IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Updated}
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Bitstream, Metadata}
@@ -51,7 +51,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
       idsOfEntityToGetMetadataFrom = Nil,
       entityTypesToGetMetadataFrom = Nil,
       xmlRequestsToValidate = Nil,
-      createdIdSourceAndDestinationPathAndId = Nil,
+      createdFileDownloadInfo = Nil,
       drosToLookup = Nil,
       snsMessagesToSend = Nil,
       destinationPathsToDelete = paths
@@ -66,9 +66,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
     utils.verifyCallsAndArguments(
       repTypes = Nil,
       repIndexes = Nil,
-      createdIdSourceAndDestinationPathAndId =
-        List(Nil, List(IdWithSourceAndDestPaths(id, Path(s"$id/IO_Metadata_changed.xml").toNioPath.some, "destinationPath"))),
-      snsMessagesToSend = List(SendSnsMessage(InformationObject, id, Metadata, Updated, "SourceIDValue"))
+      createdFileDownloadInfo = List(Nil, List(FileDownloadInfo(id, Path(s"$id/IO_Metadata_changed.xml").toNioPath.some, "destinationPath"))),
+      snsMessagesToSend = List(SendSnsMessage(InformationObject, id, Metadata, Updated))
     )
   }
 
@@ -80,7 +79,6 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
     utils.processMessage.unsafeRunSync()
 
     val bitstreamCalls = 1
-    val tableItemIdentifier = "90dfb573-7419-4e89-8558-6cfa29f8fb16"
     utils.verifyCallsAndArguments(
       bitstreamCalls,
       1,
@@ -89,9 +87,9 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
       entityTypesToGetMetadataFrom = List(ContentObject),
       xmlRequestsToValidate = List(utils.coXmlToValidate),
       numOfStreamBitstreamContentCalls = bitstreamCalls,
-      createdIdSourceAndDestinationPathAndId = List(
-        List(IdWithSourceAndDestPaths(id, Path(s"$id/missing").toNioPath.some, "destinationPath")),
-        List(IdWithSourceAndDestPaths(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath"))
+      createdFileDownloadInfo = List(
+        List(FileDownloadInfo(id, Path(s"$id/missing").toNioPath.some, "destinationPath")),
+        List(FileDownloadInfo(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath"))
       ),
       drosToLookup = List(
         List(
@@ -100,8 +98,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         )
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(ContentObject, id, Bitstream, Created, tableItemIdentifier),
-        SendSnsMessage(ContentObject, id, Metadata, Created, tableItemIdentifier)
+        SendSnsMessage(ContentObject, id, Bitstream, Created),
+        SendSnsMessage(ContentObject, id, Metadata, Created)
       )
     )
   }
@@ -117,7 +115,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
     utils.processMessage.unsafeRunSync()
 
     val bitstreamCalls = 1
-    val tableItemIdentifier = "90dfb573-7419-4e89-8558-6cfa29f8fb16"
+    val icIds = List("90dfb573-7419-4e89-8558-6cfa29f8fb16")
 
     utils.verifyCallsAndArguments(
       bitstreamCalls,
@@ -126,9 +124,9 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
       idsOfEntityToGetMetadataFrom = List(id),
       entityTypesToGetMetadataFrom = List(ContentObject),
       xmlRequestsToValidate = List(utils.coXmlToValidate),
-      createdIdSourceAndDestinationPathAndId = List(
-        List(IdWithSourceAndDestPaths(id, Path(s"$id/missing").toNioPath.some, "destinationPath")),
-        List(IdWithSourceAndDestPaths(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath"))
+      createdFileDownloadInfo = List(
+        List(FileDownloadInfo(id, Path(s"$id/missing").toNioPath.some, "destinationPath")),
+        List(FileDownloadInfo(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath"))
       ),
       drosToLookup = List(
         List(
@@ -137,8 +135,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         )
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(ContentObject, id, Bitstream, Created, tableItemIdentifier),
-        SendSnsMessage(ContentObject, id, Metadata, Created, tableItemIdentifier)
+        SendSnsMessage(ContentObject, id, Bitstream, Created),
+        SendSnsMessage(ContentObject, id, Metadata, Created)
       )
     )
   }
@@ -154,7 +152,6 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
     utils.processMessage.unsafeRunSync()
 
     val bitstreamCalls = 1
-    val tableItemIdentifier = "90dfb573-7419-4e89-8558-6cfa29f8fb16"
 
     utils.verifyCallsAndArguments(
       bitstreamCalls,
@@ -164,9 +161,9 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
       entityTypesToGetMetadataFrom = List(ContentObject),
       xmlRequestsToValidate = List(utils.coXmlToValidate),
       numOfStreamBitstreamContentCalls = bitstreamCalls,
-      createdIdSourceAndDestinationPathAndId = List(
-        List(IdWithSourceAndDestPaths(id, Path(s"$id/missing").toNioPath.some, "destinationPath")),
-        List(IdWithSourceAndDestPaths(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath"))
+      createdFileDownloadInfo = List(
+        List(FileDownloadInfo(id, Path(s"$id/missing").toNioPath.some, "destinationPath")),
+        List(FileDownloadInfo(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath"))
       ),
       drosToLookup = List(
         List(
@@ -175,8 +172,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         )
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(ContentObject, id, Bitstream, Created, tableItemIdentifier),
-        SendSnsMessage(ContentObject, id, Metadata, Created, tableItemIdentifier)
+        SendSnsMessage(ContentObject, id, Bitstream, Created),
+        SendSnsMessage(ContentObject, id, Metadata, Created)
       )
     )
   }
@@ -196,7 +193,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
       idsOfEntityToGetMetadataFrom = Nil,
       entityTypesToGetMetadataFrom = Nil,
       xmlRequestsToValidate = Nil,
-      createdIdSourceAndDestinationPathAndId = Nil,
+      createdFileDownloadInfo = Nil,
       drosToLookup = Nil
     )
   }
@@ -246,19 +243,19 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
       entityTypesToGetMetadataFrom = List(InformationObject),
       xmlRequestsToValidate = List(utils.ioXmlToValidate, utils.coXmlToValidate),
       numOfStreamBitstreamContentCalls = 1,
-      createdIdSourceAndDestinationPathAndId = List(
+      createdFileDownloadInfo = List(
         List(
-          IdWithSourceAndDestPaths(
+          FileDownloadInfo(
             parentRef,
             Path(s"$parentRef/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt").toNioPath.some,
             s"${utils.ioId}/Preservation_1/$id/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt"
           ),
-          IdWithSourceAndDestPaths(parentRef, Path(s"$parentRef/CO_Metadata.xml").toNioPath.some, s"${utils.ioId}/Preservation_1/$id/CO_Metadata.xml"),
-          IdWithSourceAndDestPaths(parentRef, Path(s"$parentRef/IO_Metadata_missing.xml").toNioPath.some, "destinationPath")
+          FileDownloadInfo(parentRef, Path(s"$parentRef/CO_Metadata.xml").toNioPath.some, s"${utils.ioId}/Preservation_1/$id/CO_Metadata.xml"),
+          FileDownloadInfo(parentRef, Path(s"$parentRef/IO_Metadata_missing.xml").toNioPath.some, "destinationPath")
         ),
         Nil
       ),
-      snsMessagesToSend = List(SendSnsMessage(InformationObject, parentRef, Metadata, Created, "SourceIDValue"))
+      snsMessagesToSend = List(SendSnsMessage(InformationObject, parentRef, Metadata, Created))
     )
   }
 
@@ -270,7 +267,6 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
     utils.processMessage.unsafeRunSync()
 
     val bitstreamCalls = 1
-    val tableItemIdentifier = "90dfb573-7419-4e89-8558-6cfa29f8fb16"
     utils.verifyCallsAndArguments(
       bitstreamCalls,
       1,
@@ -279,9 +275,9 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
       entityTypesToGetMetadataFrom = List(ContentObject),
       xmlRequestsToValidate = List(utils.coXmlToValidate),
       numOfStreamBitstreamContentCalls = bitstreamCalls,
-      createdIdSourceAndDestinationPathAndId = List(
-        List(IdWithSourceAndDestPaths(id, Path(s"$id/missing").toNioPath.some, "destinationPath")),
-        List(IdWithSourceAndDestPaths(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath"))
+      createdFileDownloadInfo = List(
+        List(FileDownloadInfo(id, Path(s"$id/missing").toNioPath.some, "destinationPath")),
+        List(FileDownloadInfo(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath"))
       ),
       drosToLookup = List(
         List(
@@ -290,8 +286,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         )
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(ContentObject, id, Bitstream, Created, tableItemIdentifier),
-        SendSnsMessage(ContentObject, id, Metadata, Created, tableItemIdentifier)
+        SendSnsMessage(ContentObject, id, Bitstream, Created),
+        SendSnsMessage(ContentObject, id, Metadata, Created)
       )
     )
   }
@@ -303,7 +299,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
     utils.verifyCallsAndArguments(
       repTypes = Nil,
       repIndexes = Nil,
-      createdIdSourceAndDestinationPathAndId = List(Nil, Nil)
+      createdFileDownloadInfo = List(Nil, Nil)
     )
   }
 
@@ -315,14 +311,14 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
     utils.verifyCallsAndArguments(
       repTypes = Nil,
       repIndexes = Nil,
-      createdIdSourceAndDestinationPathAndId = List(
+      createdFileDownloadInfo = List(
         List(), // 1st call to 'createObjects' with missingObjectsPaths arg
         List(
-          IdWithSourceAndDestPaths(id, Path(s"$id/IO_Metadata_changed.xml").toNioPath.some, "destinationPath")
+          FileDownloadInfo(id, Path(s"$id/IO_Metadata_changed.xml").toNioPath.some, "destinationPath")
         ) // 2nd call to 'createObjects' with changedObjectsPaths arg
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(InformationObject, id, Metadata, Updated, "SourceIDValue")
+        SendSnsMessage(InformationObject, id, Metadata, Updated)
       )
     )
   }
@@ -340,20 +336,20 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
       idsOfEntityToGetMetadataFrom = List(id, utils.coId),
       xmlRequestsToValidate = List(utils.ioXmlToValidate, utils.coXmlToValidate),
       numOfStreamBitstreamContentCalls = 1,
-      createdIdSourceAndDestinationPathAndId = List(
+      createdFileDownloadInfo = List(
         List(
-          IdWithSourceAndDestPaths(
+          FileDownloadInfo(
             id,
             Path(s"$id/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt").toNioPath.some,
             s"${utils.ioId}/Preservation_1/${utils.coId}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt"
           ),
-          IdWithSourceAndDestPaths(id, Path(s"$id/CO_Metadata.xml").toNioPath.some, s"${utils.ioId}/Preservation_1/${utils.coId}/CO_Metadata.xml"),
-          IdWithSourceAndDestPaths(id, Path(s"$id/IO_Metadata_missing.xml").toNioPath.some, "destinationPath")
+          FileDownloadInfo(id, Path(s"$id/CO_Metadata.xml").toNioPath.some, s"${utils.ioId}/Preservation_1/${utils.coId}/CO_Metadata.xml"),
+          FileDownloadInfo(id, Path(s"$id/IO_Metadata_missing.xml").toNioPath.some, "destinationPath")
         ),
         List()
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(InformationObject, id, Metadata, Created, "SourceIDValue")
+        SendSnsMessage(InformationObject, id, Metadata, Created)
       )
     )
   }
@@ -375,9 +371,9 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
       repIndexes = Nil,
       idsOfEntityToGetMetadataFrom = List(changedFileId),
       xmlRequestsToValidate = List(utils.ioXmlToValidate),
-      createdIdSourceAndDestinationPathAndId = List(
+      createdFileDownloadInfo = List(
         Nil,
-        List(IdWithSourceAndDestPaths(changedFileId, Path(s"$changedFileId/IO_Metadata_changed.xml").toNioPath.some, "destinationPath"))
+        List(FileDownloadInfo(changedFileId, Path(s"$changedFileId/IO_Metadata_changed.xml").toNioPath.some, "destinationPath"))
       ),
       drosToLookup = List(
         List(
@@ -385,7 +381,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         )
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(InformationObject, changedFileId, Metadata, Updated, "SourceIDValue")
+        SendSnsMessage(InformationObject, changedFileId, Metadata, Updated)
       )
     )
   }
@@ -409,19 +405,19 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
       idsOfEntityToGetMetadataFrom = List(missingFileId, utils.coId),
       xmlRequestsToValidate = List(utils.ioXmlToValidate, utils.coXmlToValidate),
       numOfStreamBitstreamContentCalls = 1,
-      createdIdSourceAndDestinationPathAndId = List(
+      createdFileDownloadInfo = List(
         List(
-          IdWithSourceAndDestPaths(
+          FileDownloadInfo(
             missingFileId,
             Path(s"$missingFileId/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt").toNioPath.some,
             s"${utils.ioId}/Preservation_1/${utils.coId}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt"
           ),
-          IdWithSourceAndDestPaths(
+          FileDownloadInfo(
             missingFileId,
             Path(s"$missingFileId/CO_Metadata.xml").toNioPath.some,
             s"${utils.ioId}/Preservation_1/${utils.coId}/CO_Metadata.xml"
           ),
-          IdWithSourceAndDestPaths(missingFileId, Path(s"$missingFileId/IO_Metadata_missing.xml").toNioPath.some, "destinationPath")
+          FileDownloadInfo(missingFileId, Path(s"$missingFileId/IO_Metadata_missing.xml").toNioPath.some, "destinationPath")
         ),
         Nil
       ),
@@ -431,7 +427,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         )
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(InformationObject, missingFileId, Metadata, Created, "SourceIDValue")
+        SendSnsMessage(InformationObject, missingFileId, Metadata, Created)
       )
     )
   }
@@ -468,7 +464,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
     utils.verifyCallsAndArguments(
       repTypes = Nil,
       repIndexes = Nil,
-      createdIdSourceAndDestinationPathAndId = Nil,
+      createdFileDownloadInfo = Nil,
       xmlRequestsToValidate = List(
         <XIP xmlns="http://preservica.com/XIP/v7.7">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><InvalidTag/></InformationObject>

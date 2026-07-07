@@ -54,7 +54,7 @@ object Main extends IOApp {
         case Array(ref) => DeletionReceivedSnsMessage(UUID.fromString(ref))
     }
 
-  case class IdWithSourceAndDestPaths(id: UUID, sourceNioFilePath: Option[file.Path], destinationPath: String)
+  case class FileDownloadInfo(id: UUID, sourceNioFilePath: Option[file.Path], destinationPath: String, potentialIcId: Option[String] = None)
 
   private case class DedupedMessages(removedMessages: List[MessageResponse[ReceivedSnsMessage]], retainedMessages: List[MessageResponse[ReceivedSnsMessage]])
 
