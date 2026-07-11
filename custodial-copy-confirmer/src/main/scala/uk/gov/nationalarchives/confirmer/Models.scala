@@ -3,8 +3,10 @@ package uk.gov.nationalarchives.confirmer
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import io.circe.{Decoder, DecodingFailure, HCursor}
 import io.circe.generic.semiauto.*
+
 import java.net.URI
 import pureconfig.*
+
 import java.util.UUID
 
 case class Config(
@@ -21,32 +23,31 @@ case class Config(
 
 extension (s: String) def toAttributeValue: AttributeValue = AttributeValue.builder.s(s).build
 
-case class OutputQueueMessage(assetId: UUID, batchId: String, payload: Payload) {
+case class OutputQueueMessage(assetId: UUID, batchId: String, payload: Payload):
   def primaryKey: Map[String, AttributeValue] = Map("assetId" -> assetId.toString.toAttributeValue, "batchId" -> batchId.toAttributeValue)
-}
 
-trait ConfirmationOperator
-final case class CCOperator(ocfl: Ocfl) extends ConfirmationOperator
-final case class TCOperator(scoutAM: ScoutAM) extends ConfirmationOperator
+trait ConfirmationService
+final case class CCService(ocfl: Ocfl) extends ConfirmationService
+final case class TCService(scoutAM: ScoutAM) extends ConfirmationService
 
-object ConfirmationOperator {
-  def getOperator(config: Config, ocfl: Ocfl, scoutAM: ScoutAM): ConfirmationOperator =
-    config.dynamoAttributeName match {
-      case "CC_result" => CCOperator(ocfl)
-      case "TC_result" => TCOperator(scoutAM)
-      case _           => throw new IllegalArgumentException(s"Unable to create operator corresponding to ${config.dynamoAttributeName}")
-    }
-}
+object ConfirmationService:
+  def getInstance(config: Config, ocfl: Ocfl, scoutAM: ScoutAM): ConfirmationService =
+    ResultAttributeName.fromString(config.dynamoAttributeName) match
+      case ResultAttributeName.CC_RESULT => CCService(ocfl)
+      case ResultAttributeName.TC_RESULT =>
+        config.scoutAmUsername.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
+        TCService(scoutAM)
 
 trait Payload
-final case class CCPayload(preservationSystemId: UUID) extends Payload
-final case class TCPayload(filePaths: List[String]) extends Payload
+final case class CCPayload(preservationSystemId: UUID) extends Payload:
+  override def toString = s"CCPayload(preservationSystemId=$preservationSystemId)"
 
-object Payload {
+final case class TCPayload(filePaths: List[String]) extends Payload:
+  override def toString = s"TCPayload(filePaths=${filePaths.mkString("[", ", ", "]")})"
+
+object Payload:
   given Decoder[CCPayload] = Decoder.instance { c =>
-    for {
-      uuid <- c.get[UUID]("preservationSystemId")
-    } yield CCPayload(uuid)
+    c.get[UUID]("preservationSystemId").map(CCPayload(_))
   }
 
   given Decoder[TCPayload] = Decoder.instance { c =>
@@ -54,8 +55,7 @@ object Payload {
   }
 
   given Decoder[Payload] = Decoder.instance { c =>
-    if (c.downField("preservationSystemId").succeeded)
-      c.as[CCPayload]
+    if c.downField("preservationSystemId").succeeded then c.as[CCPayload]
     else if (c.downField("filePaths").succeeded)
       c.as[TCPayload]
     else
@@ -66,7 +66,6 @@ object Payload {
         )
       )
   }
-}
 
 given Decoder[OutputQueueMessage] = (c: HCursor) =>
   for {
@@ -79,17 +78,26 @@ final case class FileResponse(archdone: Boolean, copies: List[Copy], checksum: O
 final case class Copy(copy: String, sections: Option[List[Section]])
 final case class Section(volume: String)
 
-object FileResponse {
+object FileResponse:
   given Decoder[Section] = deriveDecoder
   given Decoder[Copy] = deriveDecoder
   given Decoder[FileResponse] = deriveDecoder
-}
 
 final case class AuthorisationResponse(token: String)
 
 object AuthorisationResponse:
   given Decoder[AuthorisationResponse] = Decoder.instance { c =>
-    for {
-      token <- c.get[String]("response")
-    } yield AuthorisationResponse(token)
+    c.get[String]("response").map(token => AuthorisationResponse(token))
   }
+
+enum ResultAttributeName(val value: String):
+  case TC_RESULT extends ResultAttributeName("TC_result")
+  case CC_RESULT extends ResultAttributeName("CC_result")
+
+  override def toString: String = value
+
+object ResultAttributeName:
+  def fromString(value: String): ResultAttributeName = value match
+    case "TC_result" => ResultAttributeName.TC_RESULT
+    case "CC_result" => ResultAttributeName.CC_RESULT
+    case _           => throw new IllegalArgumentException(s"Unknown ResultAttributeName: $value")

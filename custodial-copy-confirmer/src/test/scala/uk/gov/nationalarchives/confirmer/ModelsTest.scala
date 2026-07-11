@@ -1,36 +1,40 @@
 package uk.gov.nationalarchives.confirmer
 
+import uk.gov.nationalarchives.confirmer.ResultAttributeName.TC_RESULT
 import org.scalatest.matchers.should.Matchers.*
 import io.circe.parser.decode
 
 class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
-  "ConfirmationOperator" should "return the CC operator type based on the config" in {
+  "ConfirmationService" should "return the CC service type based on the config" in {
     val id = java.util.UUID.randomUUID()
-    val operator = ConfirmationOperator.getOperator(
+    val service = ConfirmationService.getInstance(
       Config("table", "CC_result", "", null, "", ""),
       TestUtils.ocfl(List(id), Config("table", "CC_result", "", null, "", "")),
       null
     )
 
-    operator shouldBe a[CCOperator]
-    val paths: List[String] = operator match {
-      case cc: CCOperator => cc.ocfl.getFilePathsForObject(id)
-      case _              => fail("Unexpected operator created")
+    service shouldBe a[CCService]
+    val paths: List[String] = service match {
+      case cc: CCService => cc.ocfl.getFilePathsForObject(id)
+      case _             => fail("Unexpected service created")
     }
     paths should contain allOf (s"/some/path/$id/file1.txt", s"/some/path/$id/file2.txt")
   }
 
-  "ConfirmationOperator" should "return the TC operator type based on the config" in {
-    val operator = ConfirmationOperator.getOperator(
-      Config("table", "TC_result", "", null, "", ""),
+  "ConfirmationService" should "return the TC service type based on the config" in {
+    val service = ConfirmationService.getInstance(
+      Config("table", TC_RESULT.toString, "", null, "", "", Some("http://scout.base.url:8080"), Some("scout.username"), Some("scout.password")),
       null,
-      TestUtils.scoutAM(List("/tmp/file1", "/tmp/file2"), Config("table", "TC_result", "", null, "", ""))
+      TestUtils.scoutAM(
+        List("/tmp/file1", "/tmp/file2"),
+        Config("table", TC_RESULT.toString, "", null, "", "", Some("http://scout.base.url:8080"), Some("scout.username"), Some("scout.password"))
+      )
     )
-    operator shouldBe a[TCOperator]
+    service shouldBe a[TCService]
 
-    val result = operator match {
-      case tc: TCOperator => tc.scoutAM.getFileDetails(List("/tmp/file1", "/tmp/file2"))
-      case _              => fail("Unexpected operator created")
+    val result = service match {
+      case tc: TCService => tc.scoutAM.getFileDetails(List("/tmp/file1", "/tmp/file2"))
+      case _             => fail("Unexpected service created")
     }
     result should contain allOf ("/tmp/file1" -> List("Volume1/tmp/file1", "Volume2/tmp/file1"), "/tmp/file2" -> List("Volume1/tmp/file2", "Volume2/tmp/file2"))
   }

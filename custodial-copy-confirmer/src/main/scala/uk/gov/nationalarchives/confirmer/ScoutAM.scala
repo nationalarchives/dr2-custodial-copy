@@ -12,8 +12,11 @@ trait ScoutAM(config: Config, httpService: ScoutAmHttpService):
 
 object ScoutAM:
   def apply(config: Config, httpService: ScoutAmHttpService): ScoutAM = new ScoutAM(config, httpService):
+    private val scoutAmBaseUrl = config.scoutAmBaseUrl.getOrElse(throw new RuntimeException("ScoutAM base URL is not configured"))
+    private val scoutAmUsername = config.scoutAmUsername.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
+    private val scoutAmPassword = config.scoutAmPassword.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
+
     def getFileDetailsForPath(filePath: String, authorisationResponse: AuthorisationResponse): Either[Throwable, FileResponse] =
-      val scoutAmBaseUrl = config.scoutAmBaseUrl.getOrElse(throw new RuntimeException("ScoutAM base URL is not configured"))
       val encodedFilePath = URLEncoder.encode(filePath, StandardCharsets.UTF_8.toString)
       val request = HttpRequest
         .newBuilder()
@@ -22,22 +25,15 @@ object ScoutAM:
         .header("Accept", "application/json")
         .GET()
         .build()
-      httpService.get(request) match {
+      httpService.get(request) match
         case response if response.statusCode() == 200 =>
           val jsonResponse = parse(response.body()).getOrElse(Json.Null)
-          jsonResponse.as[FileResponse] match {
-            case Right(fileResponse) => Right(fileResponse)
-            case Left(error)         => Left(error)
-          }
+          jsonResponse.as[FileResponse]
         case response =>
           Left(new RuntimeException(s"Failed to retrieve file details for $filePath with status code: ${response.statusCode()}"))
-      }
 
-    override def getFileDetails(filePaths: List[String]): Map[String, List[String]] = {
-      val authorisationResponse = authenticate(
-        config.scoutAmUsername.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found")),
-        config.scoutAmPassword.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
-      )
+    override def getFileDetails(filePaths: List[String]): Map[String, List[String]] =
+      val authorisationResponse = authenticate(scoutAmUsername, scoutAmPassword)
 
       val results = filePaths.map(eachFilePath => eachFilePath -> getFileDetailsForPath(eachFilePath, authorisationResponse)).toMap
       results.flatMap { case (filePath, result) =>
@@ -48,17 +44,15 @@ object ScoutAM:
           if copy3.sections.isDefined && copy3.sections.get.nonEmpty
         } yield filePath -> copy3.sections.get.map(_.volume)
       }
-    }
 
-    def authenticate(username: String, password: String): AuthorisationResponse = {
-      val scoutAmBaseUrl = config.scoutAmBaseUrl.getOrElse(throw new RuntimeException("ScoutAM base URL is not configured"))
+    def authenticate(username: String, password: String): AuthorisationResponse =
       val request = HttpRequest
         .newBuilder()
         .uri(URI.create(s"$scoutAmBaseUrl/v1/auth"))
         .header("Content-Type", "application/json")
         .POST(HttpRequest.BodyPublishers.ofString(s"""{"username":"$username","password":"$password"}"""))
         .build()
-      httpService.post(request) match {
+      httpService.post(request) match
         case response if response.statusCode() == 200 =>
           val jsonResponse = parse(response.body()).getOrElse(Json.Null)
           jsonResponse.as[AuthorisationResponse] match {
@@ -67,5 +61,3 @@ object ScoutAM:
           }
         case response =>
           throw new RuntimeException(s"Authentication failed with status code: ${response.statusCode()}")
-      }
-    }

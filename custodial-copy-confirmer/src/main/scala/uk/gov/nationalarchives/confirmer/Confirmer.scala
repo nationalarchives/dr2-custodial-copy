@@ -3,7 +3,7 @@ package uk.gov.nationalarchives.confirmer
 import uk.gov.nationalarchives.confirmer.Confirmer.Result
 
 trait Confirmer:
-  def getResult(payload: Payload, confirmationOperator: ConfirmationOperator): Result
+  def getResult(payload: Payload, confirmationService: ConfirmationService): Result
 
 object Confirmer:
 
@@ -18,37 +18,30 @@ object Confirmer:
     def isError: Boolean = !isSuccess
 
   def getConfirmer(config: Config): Confirmer =
-    config.dynamoAttributeName match
-      case "TC_result" => tcConfirmer
-      case "CC_result" => ccConfirmer
-      case _           => throw new IllegalArgumentException(s"Unable to create confirmer corresponding to ${config.dynamoAttributeName}")
+    ResultAttributeName.fromString(config.dynamoAttributeName) match
+      case ResultAttributeName.TC_RESULT => tcConfirmer
+      case ResultAttributeName.CC_RESULT => ccConfirmer
 
   val ccConfirmer: Confirmer =
-    (payload: Payload, confirmationOperator: ConfirmationOperator) => {
-      payload match {
+    (payload: Payload, confirmationService: ConfirmationService) =>
+      payload match
         case cc: CCPayload =>
-          confirmationOperator match {
-            case oper: CCOperator =>
-              val objectFilePaths = oper.ocfl.getFilePathsForObject(cc.preservationSystemId)
+          confirmationService match
+            case ccService: CCService =>
+              val objectFilePaths = ccService.ocfl.getFilePathsForObject(cc.preservationSystemId)
               if objectFilePaths.nonEmpty then Result.Success(Map("filePaths" -> objectFilePaths))
               else Result.Failure(new RuntimeException(s"filePaths could not be found for ${cc.preservationSystemId.toString}"))
-            case _ => Result.Failure(new RuntimeException(s"Unsupported operation in CC confirmer ${cc.preservationSystemId.toString}"))
-          }
+            case _ => Result.Failure(new RuntimeException(s"Unsupported service in CC confirmer ${cc.preservationSystemId.toString}"))
         case _ => Result.Failure(new IllegalArgumentException("Invalid payload type for CC confirmer"))
-      }
-    }
 
   val tcConfirmer: Confirmer =
-    (payload: Payload, confirmationOperator: ConfirmationOperator) => {
-      payload match {
+    (payload: Payload, confirmationService: ConfirmationService) =>
+      payload match
         case tc: TCPayload =>
-          confirmationOperator match {
-            case operator: TCOperator =>
-              val tapeConfirmation = operator.scoutAM.getFileDetails(tc.filePaths)
+          confirmationService match
+            case tcService: TCService =>
+              val tapeConfirmation = tcService.scoutAM.getFileDetails(tc.filePaths)
               if tapeConfirmation.nonEmpty then Result.Success(tapeConfirmation)
-              else Result.Failure(new RuntimeException(s"Volumes could not be found for one or more files in ${tc.filePaths.mkString(", ")}"))
-            case _ => Result.Failure(new RuntimeException("Unsupported operation in TC confirmer"))
-          }
+              else Result.Failure(new RuntimeException(s"Volumes could not be found for one or more files in [${tc.filePaths.mkString(", ")}]"))
+            case _ => Result.Failure(new RuntimeException("Unsupported service in TC confirmer"))
         case _ => Result.Failure(new IllegalArgumentException("Invalid payload type for TC confirmer"))
-      }
-    }

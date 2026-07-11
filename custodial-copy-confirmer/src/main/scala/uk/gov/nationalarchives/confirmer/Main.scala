@@ -67,12 +67,12 @@ object Main extends IOApp {
         for {
           logger <- Slf4jLogger.create[IO]
           messages <- aggregateMessages[IO, OutputQueueMessage](sqsClient, config.sqsUrl)
-
+          _ <- IO.whenA(messages.nonEmpty)(logger.info(s"Processing message refs ${messages.map(_.message.payload.toString).mkString(",")}"))
           _ <- messages.parTraverse { sqsMessage =>
             val message = sqsMessage.message
             val payload = message.payload
-            val operator = ConfirmationOperator.getOperator(config, ocfl, scoutAM)
-            val result: Result = Confirmer.getConfirmer(config).getResult(payload, operator)
+            val confirmationService = ConfirmationService.getInstance(config, ocfl, scoutAM)
+            val result: Result = Confirmer.getConfirmer(config).getResult(payload, confirmationService)
 
             result match
               case Result.Success(dynamoMap) =>

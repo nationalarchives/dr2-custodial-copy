@@ -104,12 +104,27 @@ object TestUtils:
         .map(_ => 1)
   }
 
-  def ocfl(existingRefs: List[UUID], config: Config): Ocfl = new Ocfl(config) {
+  def ocfl(existingRefs: List[UUID], config: Config, ocflErrors: OcflErrors = OcflErrors()): Ocfl = new Ocfl(config):
     override def getFilePathsForObject(id: UUID): List[String] =
-      if existingRefs.contains(id) then List(s"/some/path/$id/file1.txt", s"/some/path/$id/file2.txt") else Nil
-  }
+      if !ocflErrors.hasErrors then
+        if existingRefs.contains(id) then List(s"/some/path/$id/file1.txt", s"/some/path/$id/file2.txt")
+        else Nil
+      else if ocflErrors.filePathNotFound then List.empty[String]
+      else throw new RuntimeException("New error flag not included in hasError implementation in test class")
 
-  def scoutAM(filePaths: List[String], config: Config): ScoutAM = new ScoutAM(config, new TestHttpService(200, 200, """{"response":"Success"}""")) {
-    override def getFileDetails(filePaths: List[String]): Map[String, List[String]] =
-      if filePaths.nonEmpty then filePaths.map(eachPath => eachPath -> List(s"Volume1$eachPath", s"Volume2$eachPath")).toMap else Map.empty
-  }
+  case class OcflErrors(
+      filePathNotFound: Boolean = false
+  ):
+    def hasErrors: Boolean = filePathNotFound
+
+  def scoutAM(filePaths: List[String], config: Config, scoutAmErrors: ScoutAmErrors = ScoutAmErrors()): ScoutAM =
+    new ScoutAM(config, new TestHttpService("", """{"response":"Success"}""", 200, 200)):
+      override def getFileDetails(filePaths: List[String]): Map[String, List[String]] =
+        if !scoutAmErrors.hasErrors then filePaths.map(eachPath => eachPath -> List(s"Volume1$eachPath", s"Volume2$eachPath")).toMap
+        else if scoutAmErrors.volumeNotFound then Map.empty
+        else throw new RuntimeException("New error flag not included in hasError implementation in test class")
+
+  case class ScoutAmErrors(
+      volumeNotFound: Boolean = false
+  ):
+    def hasErrors: Boolean = volumeNotFound
