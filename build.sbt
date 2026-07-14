@@ -30,7 +30,7 @@ def tagScannedImage(imageName: String): Unit = {
 def setupDirectories(serviceName: String) =
   Cmd(
     "RUN",
-    s"""apk update && apk upgrade && apk update openssl && apk add openjdk21-jre && \\
+    s"""apk update && apk upgrade && apk update openssl && apk add curl openjdk21-jre && \\
                |    mkdir -p /poduser/work /poduser/repo /poduser/version /poduser/database /poduser/log-config && \\
                |    mkdir /poduser/logs && \\
                |    touch /poduser/logs/$serviceName.log && \\
@@ -153,6 +153,8 @@ lazy val reconciler = (project in file("custodial-copy-reconciler"))
 
 lazy val imageSettings = {
   Seq(
+    dockerExecCommand := List("podman"),
+    dockerBuildOptions := List("--arch", "arm64"),
     tagImage := tagDockerImage(s"${dockerRepository.value.get}/${(Docker / packageName).value}"),
     scanDockerImage := scanDockerImage(s"${dockerRepository.value.get}/${(Docker / packageName).value}"),
     tagScannedImage := tagScannedImage(s"${dockerRepository.value.get}/${(Docker / packageName).value}")
