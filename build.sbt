@@ -30,7 +30,7 @@ def tagScannedImage(imageName: String): Unit = {
 def setupDirectories(serviceName: String) =
   Cmd(
     "RUN",
-    s"""apk update && apk upgrade && apk update openssl && apk add openjdk21-jre && \\
+    s"""apk update && apk upgrade && apk update openssl && apk add curl openjdk21-jre && \\
                |    mkdir -p /poduser/work /poduser/repo /poduser/version /poduser/database /poduser/log-config && \\
                |    mkdir /poduser/logs && \\
                |    touch /poduser/logs/$serviceName.log && \\
@@ -150,6 +150,31 @@ lazy val reconciler = (project in file("custodial-copy-reconciler"))
     )
   )
   .dependsOn(utils)
+
+
+lazy val mockTapeApi = (project in file("custodial-copy-mock-tape-api"))
+  .enablePlugins(DockerPlugin)
+  .settings(imageSettings)
+  .settings(
+    name := "custodial-copy-mock-tape-api",
+    publish / skip := true,
+
+    dockerRepository := Some(s"${sys.env.getOrElse("MANAGEMENT_ACCOUNT_NUMBER", "")}.dkr.ecr.eu-west-2.amazonaws.com"),
+    dockerBuildOptions ++= Seq("--no-cache", "--pull"),
+    Docker / packageName := s"dr2-${baseDirectory.value.getName}",
+    Docker / version := sys.env.getOrElse("DOCKER_TAG", version.value),
+
+    Docker / mappings := Seq(
+      (baseDirectory.value / "mock_tape_api.py") -> "app/mock_tape_api.py"
+    ),
+
+    dockerCommands := Seq(
+      Cmd("FROM", "python:3.15-rc-alpine"),
+      Cmd("WORKDIR", "/app"),
+      Cmd("COPY", "app/mock_tape_api.py", "/app/mock_tape_api.py"),
+      ExecCmd("CMD", "python", "mock_tape_api.py")
+    )
+  )
 
 lazy val imageSettings = {
   Seq(
