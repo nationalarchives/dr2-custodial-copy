@@ -26,21 +26,32 @@ import scala.language.postfixOps
 
 object Main extends IOApp {
 
-  private def dynamoClient(proxyUrl: URI): DADynamoDBClient[IO] = {
-    val proxy = ProxyConfiguration
+  private def dynamoClient(proxyUrl: Option[URI]): DADynamoDBClient[IO] = {
+
+    val dynamoDbAsyncClientBuilder = DynamoDbAsyncClient
       .builder()
-      .scheme(proxyUrl.getScheme)
-      .host(proxyUrl.getHost)
-      .port(proxyUrl.getPort)
-      .build
-    val dynamoDBClient: DynamoDbAsyncClient = DynamoDbAsyncClient
-      .builder()
-      .httpClient(NettyNioAsyncHttpClient.builder().proxyConfiguration(proxy).build())
       .region(Region.EU_WEST_2)
       .credentialsProvider(DefaultCredentialsProvider.builder.build)
-      .build()
 
-    DADynamoDBClient[IO](dynamoDBClient)
+    proxyUrl
+      .map { uri =>
+        dynamoDbAsyncClientBuilder.httpClient(
+          NettyNioAsyncHttpClient
+            .builder()
+            .proxyConfiguration(
+              ProxyConfiguration
+                .builder()
+                .scheme(uri.getScheme)
+                .host(uri.getHost)
+                .port(uri.getPort)
+                .build()
+            )
+            .build()
+        )
+      }
+      .getOrElse(dynamoDbAsyncClientBuilder)
+
+    DADynamoDBClient[IO](dynamoDbAsyncClientBuilder.build())
   }
 
   // The confirmerStream loads config once per evaluation of Stream.eval and returns the inner stream produced by the selected Confirmer.
@@ -48,7 +59,7 @@ object Main extends IOApp {
     Stream.eval {
       for {
         config <- ConfigSource.default.loadF[IO, Config]()
-        sqs = sqsClient[IO](config.proxyUrl.some)
+        sqs = sqsClient[IO](config.proxyUrl)
         dynamo = dynamoClient(config.proxyUrl)
         ocfl = Ocfl(config)
         scoutAm = ScoutAM(config, ScoutAmHttpService(HttpClient.newHttpClient()))

@@ -21,7 +21,7 @@ class OcflTest extends AnyFlatSpec:
     val filePath = Files.createTempFile(existingRef.toString, "")
     repository.putObject(ObjectVersionId.head(existingRef.toString), filePath, new VersionInfo())
 
-    val ocfl = Ocfl(Config("table", "attribute", "", URI.create("http://localhost"), repoDir, workDir))
+    val ocfl = Ocfl(Config("table", "attribute", "", Some(URI.create("http://localhost")), repoDir, workDir))
     ocfl.getFilePathsForObject(existingRef) should be(List(filePath.getFileName.toString))
     ocfl.getFilePathsForObject(nonExistingRef) should be(Nil)
   }

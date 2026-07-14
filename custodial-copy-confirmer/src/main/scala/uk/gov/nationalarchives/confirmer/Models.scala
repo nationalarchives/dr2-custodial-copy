@@ -13,7 +13,7 @@ case class Config(
     dynamoTableName: String,
     dynamoAttributeName: String,
     sqsUrl: String,
-    proxyUrl: URI,
+    proxyUrl: Option[URI],
     ocflRepoDir: String,
     ocflWorkDir: String,
     scoutAmBaseUrl: Option[String] = None,

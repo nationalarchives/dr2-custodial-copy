@@ -163,7 +163,16 @@ class TestHttpService(authResponse: String = "", fileResponse: String = "", auth
           else
             new TestHttpResponse(
               200,
-              s"""{"archdone":true, "copies":[{"copy": "1"},{"copy": "2"},{"copy": "3", "sections": [{"volume": "Volume1-$filename"}, {"volume": "Volume2-$filename"}]}],"checksum": "someChecksumValue"}"""
+              s"""
+                 |{
+                 |  "archdone":true, 
+                 |  "copies":[
+                 |    {"copy": "1"},
+                 |    {"copy": "2"},
+                 |    {"copy": "3", "sections": [{"volume": "Volume1-$filename"}, {"volume": "Volume2-$filename"}]}
+                 |  ],
+                 |  "checksum": "someChecksumValue"
+                 |}""".stripMargin
             )
         else new TestHttpResponse(fileStatus, """{"error":"Unauthorized"}""")
       case _ => throw new NotImplementedError("Only /v1/file endpoint is implemented in TestHttpService")
