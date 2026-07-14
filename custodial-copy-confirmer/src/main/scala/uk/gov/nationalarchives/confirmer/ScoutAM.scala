@@ -12,9 +12,9 @@ trait ScoutAM(config: Config, httpService: ScoutAmHttpService):
 
 object ScoutAM:
   def apply(config: Config, httpService: ScoutAmHttpService): ScoutAM = new ScoutAM(config, httpService):
-    private val scoutAmBaseUrl = config.scoutAmBaseUrl.getOrElse(throw new RuntimeException("ScoutAM base URL is not configured"))
-    private val scoutAmUsername = config.scoutAmUsername.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
-    private val scoutAmPassword = config.scoutAmPassword.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
+    private val scoutAmBaseUrl = config.scoutamBaseUrl.getOrElse(throw new RuntimeException("ScoutAM base URL is not configured"))
+    private val scoutAmUsername = config.scoutamUsername.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
+    private val scoutAmPassword = config.scoutamPassword.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
 
     def getFileDetailsForPath(filePath: String, authorisationResponse: AuthorisationResponse): Either[Throwable, FileResponse] =
       val encodedFilePath = URLEncoder.encode(filePath, StandardCharsets.UTF_8.toString)
@@ -48,9 +48,9 @@ object ScoutAM:
     def authenticate(username: String, password: String): AuthorisationResponse =
       val request = HttpRequest
         .newBuilder()
-        .uri(URI.create(s"$scoutAmBaseUrl/v1/auth"))
+        .uri(URI.create(s"$scoutAmBaseUrl/v1/security/login"))
         .header("Content-Type", "application/json")
-        .POST(HttpRequest.BodyPublishers.ofString(s"""{"username":"$username","password":"$password"}"""))
+        .POST(HttpRequest.BodyPublishers.ofString(s"""{"acct":"$username","pass":"$password"}"""))
         .build()
       httpService.post(request) match
         case response if response.statusCode() == 200 =>

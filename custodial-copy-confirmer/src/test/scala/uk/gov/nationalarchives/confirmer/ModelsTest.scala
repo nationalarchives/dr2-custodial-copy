@@ -1,15 +1,17 @@
 package uk.gov.nationalarchives.confirmer
 
-import uk.gov.nationalarchives.confirmer.ResultAttributeName.TC_RESULT
+import uk.gov.nationalarchives.confirmer.ResultAttributeName.RESULT_TC
 import org.scalatest.matchers.should.Matchers.*
 import io.circe.parser.decode
+
+import scala.language.postfixOps
 
 class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
   "ConfirmationService" should "return the CC service type based on the config" in {
     val id = java.util.UUID.randomUUID()
     val service = ConfirmationService.getInstance(
-      Config("table", "CC_result", "", null, "", ""),
-      TestUtils.ocfl(List(id), Config("table", "CC_result", "", null, "", "")),
+      Config("table", "result_CC", "", null, "", ""),
+      TestUtils.ocfl(List(id), Config("table", "result_CC", "", null, "", "")),
       null
     )
 
@@ -23,11 +25,11 @@ class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
 
   "ConfirmationService" should "return the TC service type based on the config" in {
     val service = ConfirmationService.getInstance(
-      Config("table", TC_RESULT.toString, "", null, "", "", Some("http://scout.base.url:8080"), Some("scout.username"), Some("scout.password")),
+      Config("table", RESULT_TC.toString, "", null, "", "", Some("http://scout.base.url:8080"), Some("scout.username"), Some("scout.password")),
       null,
       TestUtils.scoutAM(
         List("/tmp/file1", "/tmp/file2"),
-        Config("table", TC_RESULT.toString, "", null, "", "", Some("http://scout.base.url:8080"), Some("scout.username"), Some("scout.password"))
+        Config("table", RESULT_TC.toString, "", null, "", "", Some("http://scout.base.url:8080"), Some("scout.username"), Some("scout.password"))
       )
     )
     service shouldBe a[TCService]
@@ -156,6 +158,47 @@ class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
       case Right(authResponse) =>
         authResponse.token shouldEqual "some-authorisation-token"
       case Left(error) => fail(s"Decoding failed: $error")
+    }
+  }
+
+  "Message decoder" should "decode the CC message" in {
+    val json =
+      """
+        |{
+        |   "assetId": "141bac2e-bab3-4cec-88fd-2649bda971ea",
+        |   "batchId": "some-batch",
+        |   "payload": "{\"preservationSystemId\": \"d48de631-6fb2-480b-989b-c3b8f48659ec\"}"
+        |}
+        |""".stripMargin
+
+    val decoded = decode[OutputQueueMessage](json)
+    decoded match {
+      case Right(message) =>
+        message.payload match {
+          case p: CCPayload => p.preservationSystemId.toString shouldEqual "d48de631-6fb2-480b-989b-c3b8f48659ec"
+          case other        => fail(s"Expected CCPayload, got ${other.getClass.getSimpleName}")
+        }
+      case Left(err) => fail(s"Decoding failed: $err")
+    }
+  }
+
+  "Message decoder" should "decode the TC message" in {
+    val json =
+      """
+        |{
+        |   "assetId": "141bac2e-bab3-4cec-88fd-2649bda971ea",
+        |   "batchId": "some-batch",
+        |   "payload": "{\"filePaths\": [\"/tmp1/file1\", \"/tmp1/file2\"]}"
+        |}
+        |""".stripMargin
+    val decoded = decode[OutputQueueMessage](json)
+    decoded match {
+      case Right(message) =>
+        message.payload match {
+          case p: TCPayload => p.filePaths should contain allOf ("/tmp1/file1", "/tmp1/file2")
+          case other        => fail(s"Expected TCPayload, got ${other.getClass.getSimpleName}")
+        }
+      case Left(err) => fail(s"Decoding failed: $err")
     }
   }
 }

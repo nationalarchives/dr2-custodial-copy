@@ -19,8 +19,8 @@ object Confirmer:
 
   def getConfirmer(config: Config): Confirmer =
     ResultAttributeName.fromString(config.dynamoAttributeName) match
-      case ResultAttributeName.TC_RESULT => tcConfirmer
-      case ResultAttributeName.CC_RESULT => ccConfirmer
+      case ResultAttributeName.RESULT_TC => tcConfirmer
+      case ResultAttributeName.RESULT_CC => ccConfirmer
 
   val ccConfirmer: Confirmer =
     (payload: Payload, confirmationService: ConfirmationService) =>

@@ -49,7 +49,7 @@ object TestUtils:
     deletedMessagesRef <- Ref.of[IO, List[String]](Nil)
     workDir = Files.createTempDirectory("work")
     repoDir = Files.createTempDirectory("repo")
-    config = Config("table", "CC_result", "", Some(URI.create("https://example.com")), repoDir.toString, workDir.toString)
+    config = Config("table", "result_CC", "", Some(URI.create("https://example.com")), repoDir.toString, workDir.toString)
     _ <- Main
       .runConfirmer(
         config,

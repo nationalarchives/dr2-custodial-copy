@@ -125,9 +125,12 @@ lazy val tapeConfirmer = (project in file("custodial-copy-confirmer"))
   .settings(commonSettings)
   .settings(imageSettings)
   .settings(
+    target := baseDirectory.value / "target" / "custodial-copy-tape-confirmer",
     name := "custodial-copy-tape-confirmer",
+    packageName := "custodial-copy-tape-confirmer",
     scalacOptions += "-Wunused:imports",
     assembly / assemblyJarName := "custodial-copy-confirmer.jar",
+    assembly / assemblyOutputPath := file(s"target/outputs/${packageName.value}"),
     libraryDependencies ++= Seq(
       fs2Core,
       dynamoClient

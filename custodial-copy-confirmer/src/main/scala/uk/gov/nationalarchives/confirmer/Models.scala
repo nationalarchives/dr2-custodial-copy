@@ -3,6 +3,7 @@ package uk.gov.nationalarchives.confirmer
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import io.circe.{Decoder, DecodingFailure, HCursor}
 import io.circe.generic.semiauto.*
+import io.circe.parser.parse
 
 import java.net.URI
 import pureconfig.*
@@ -16,9 +17,9 @@ case class Config(
     proxyUrl: Option[URI],
     ocflRepoDir: String,
     ocflWorkDir: String,
-    scoutAmBaseUrl: Option[String] = None,
-    scoutAmUsername: Option[String] = None,
-    scoutAmPassword: Option[String] = None
+    scoutamBaseUrl: Option[String] = None,
+    scoutamUsername: Option[String] = None,
+    scoutamPassword: Option[String] = None
 ) derives ConfigReader
 
 extension (s: String) def toAttributeValue: AttributeValue = AttributeValue.builder.s(s).build
@@ -33,9 +34,9 @@ final case class TCService(scoutAM: ScoutAM) extends ConfirmationService
 object ConfirmationService:
   def getInstance(config: Config, ocfl: Ocfl, scoutAM: ScoutAM): ConfirmationService =
     ResultAttributeName.fromString(config.dynamoAttributeName) match
-      case ResultAttributeName.CC_RESULT => CCService(ocfl)
-      case ResultAttributeName.TC_RESULT =>
-        config.scoutAmUsername.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
+      case ResultAttributeName.RESULT_CC => CCService(ocfl)
+      case ResultAttributeName.RESULT_TC =>
+        config.scoutamUsername.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
         TCService(scoutAM)
 
 trait Payload
@@ -71,7 +72,10 @@ given Decoder[OutputQueueMessage] = (c: HCursor) =>
   for {
     assetId <- c.downField("assetId").as[String]
     batchId <- c.downField("batchId").as[String]
-    payload <- c.downField("payload").as[Payload]
+    payloadString <- c.downField("payload").as[String]
+    payload <- parse(payloadString).left
+      .map(err => io.circe.DecodingFailure(err.message, c.history))
+      .flatMap(_.as[Payload])
   } yield OutputQueueMessage(UUID.fromString(assetId), batchId, payload)
 
 final case class FileResponse(archdone: Boolean, copies: List[Copy], checksum: Option[String])
@@ -91,13 +95,13 @@ object AuthorisationResponse:
   }
 
 enum ResultAttributeName(val value: String):
-  case TC_RESULT extends ResultAttributeName("TC_result")
-  case CC_RESULT extends ResultAttributeName("CC_result")
+  case RESULT_TC extends ResultAttributeName("result_TC")
+  case RESULT_CC extends ResultAttributeName("result_CC")
 
   override def toString: String = value
 
 object ResultAttributeName:
   def fromString(value: String): ResultAttributeName = value match
-    case "TC_result" => ResultAttributeName.TC_RESULT
-    case "CC_result" => ResultAttributeName.CC_RESULT
+    case "result_TC" => ResultAttributeName.RESULT_TC
+    case "result_CC" => ResultAttributeName.RESULT_CC
     case _           => throw new IllegalArgumentException(s"Unknown ResultAttributeName: $value")

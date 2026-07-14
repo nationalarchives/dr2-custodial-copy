@@ -337,10 +337,12 @@ there are 50 messages.
 
 There is a queue for each Confirmer, The queues send messages with payload that can be utilised by the respective Confirmer.
 
-In case of the CCConfirmer, the payload contains Preservation System ID as shown below: 
+In case of the CCConfirmer, the payload contains Preservation System ID, so the full message appears as shown below: 
 ```json
 {
-  "preservationSystemId": "2d33b709-0c36-4a81-91a9-8c5c4cea26a9"
+   "assetId": "141bac2e-bab3-4cec-88fd-2649bda971ea",
+   "batchId": "some-batch",
+   "payload": "{\"preservationSystemId\": \"d48de631-6fb2-480b-989b-c3b8f48659ec\"}"
 }
 ```
 Based on this ID, the CCConfirmer looks into the OCFL
@@ -349,10 +351,13 @@ the POSTINGEST_STATE_TABLE and saves this list of File Paths into an attribute i
 of CCConfirmer, this attribute is called `CC_result`. Once this is done, the job of CCConfirmer for this particular Preservation 
 System ID is over.
 
-In case of the TCConfirmer, the payload contains the list of File Paths (as updated by the CCConfirmer above) as shown below: 
+In case of the TCConfirmer, the payload contains the list of File Paths (as updated by the CCConfirmer above), so the full 
+message appears as shown below: 
 ```json
 {
-  "filePaths": ["/tmp/file1", "/tmp/file2"]
+   "assetId": "141bac2e-bab3-4cec-88fd-2649bda971ea",
+   "batchId": "some-batch",
+   "payload": "{\"filePaths\": [\"/tmp1/file1\", \"/tmp1/file2\"]}"
 }
 ```
 Based on these File Paths, the TCConfirmer connects to the ScoutAM server and finds out details for each File Path. The ScoutAM server response 
