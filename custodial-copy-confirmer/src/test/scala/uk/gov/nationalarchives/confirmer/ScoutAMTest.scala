@@ -19,7 +19,7 @@ class ScoutAMTest extends org.scalatest.flatspec.AnyFlatSpec {
       ScoutAM(
         Config("table", RESULT_TC.toString, "", null, "", "", None, Some("scout.username"), Some("scout.password")),
         new TestHttpService()
-      )
+      ).getFileDetails(List("/tmp/file1", "/tmp/file2"))
     }
     ex.getMessage should equal("ScoutAM base URL is not configured")
   }
@@ -29,7 +29,7 @@ class ScoutAMTest extends org.scalatest.flatspec.AnyFlatSpec {
       ScoutAM(
         Config("table", RESULT_TC.toString, "", null, "", "", Some("http://scout.base.url:8080"), None, Some("scout.password")),
         new TestHttpService()
-      )
+      ).getFileDetails(List("/tmp/file1", "/tmp/file2"))
     }
     ex1.getMessage should equal("Unable to authenticate, ScoutAM credentials not found")
 
@@ -37,7 +37,7 @@ class ScoutAMTest extends org.scalatest.flatspec.AnyFlatSpec {
       ScoutAM(
         Config("table", RESULT_TC.toString, "", null, "", "", Some("http://scout.base.url:8080"), Some("scout.username"), None),
         new TestHttpService()
-      )
+      ).getFileDetails(List("/tmp/file1", "/tmp/file2"))
     }
     ex2.getMessage should equal("Unable to authenticate, ScoutAM credentials not found")
   }

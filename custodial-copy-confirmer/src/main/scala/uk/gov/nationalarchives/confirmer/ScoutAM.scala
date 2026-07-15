@@ -13,8 +13,7 @@ trait ScoutAM(config: Config, httpService: ScoutAmHttpService):
 object ScoutAM:
   def apply(config: Config, httpService: ScoutAmHttpService): ScoutAM = new ScoutAM(config, httpService):
 
-    def getFileDetailsForPath(filePath: String, authorisationResponse: AuthorisationResponse): Either[Throwable, FileResponse] =
-      val scoutAmBaseUrl = config.scoutamBaseUrl.getOrElse(throw new RuntimeException("ScoutAM base URL is not configured"))
+    private def getFileDetailsForPath(scoutAmBaseUrl: String, filePath: String, authorisationResponse: AuthorisationResponse): Either[Throwable, FileResponse] =
       val encodedFilePath = URLEncoder.encode(filePath, StandardCharsets.UTF_8.toString)
       val request = HttpRequest
         .newBuilder()
@@ -31,11 +30,12 @@ object ScoutAM:
           Left(new RuntimeException(s"Failed to retrieve file details for $filePath with status code: ${response.statusCode()}"))
 
     override def getFileDetails(filePaths: List[String]): Map[String, List[String]] =
-      val scoutAmUsername = config.scoutamUsername.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
-      val scoutAmPassword = config.scoutamPassword.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
-      val authorisationResponse = authenticate(scoutAmUsername, scoutAmPassword)
+      val baseUrl = config.scoutamBaseUrl.getOrElse(throw new RuntimeException("ScoutAM base URL is not configured"))
+      val username = config.scoutamUsername.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
+      val password = config.scoutamPassword.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
+      val authorisationResponse = authenticate(baseUrl, username, password)
 
-      val results = filePaths.map(eachFilePath => eachFilePath -> getFileDetailsForPath(eachFilePath, authorisationResponse)).toMap
+      val results = filePaths.map(eachFilePath => eachFilePath -> getFileDetailsForPath(baseUrl, eachFilePath, authorisationResponse)).toMap
       results.flatMap { case (filePath, result) =>
         for {
           fileResponse <- result.toOption
@@ -45,10 +45,11 @@ object ScoutAM:
         } yield filePath -> copy3.sections.get.map(_.volume)
       }
 
-    def authenticate(username: String, password: String): AuthorisationResponse =
+    private def authenticate(baseUrl: String, username: String, password: String): AuthorisationResponse =
+      
       val request = HttpRequest
         .newBuilder()
-        .uri(URI.create(s"${config.scoutamBaseUrl.get}/v1/security/login"))
+        .uri(URI.create(s"$baseUrl/v1/security/login"))
         .header("Content-Type", "application/json")
         .POST(HttpRequest.BodyPublishers.ofString(s"""{"acct":"$username","pass":"$password"}"""))
         .build()
