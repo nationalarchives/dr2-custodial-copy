@@ -129,8 +129,7 @@ lazy val tapeConfirmer = (project in file("custodial-copy-confirmer"))
     name := "custodial-copy-tape-confirmer",
     packageName := "custodial-copy-tape-confirmer",
     scalacOptions += "-Wunused:imports",
-    assembly / assemblyJarName := "custodial-copy-confirmer.jar",
-    assembly / assemblyOutputPath := file(s"target/outputs/${packageName.value}"),
+    assembly / assemblyJarName := "custodial-copy-tape-confirmer.jar",
     libraryDependencies ++= Seq(
       fs2Core,
       dynamoClient
