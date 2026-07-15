@@ -19,7 +19,9 @@ class Handler(BaseHTTPRequestHandler):
         body = {
             "archdone": True,
             "copies": [
-                {"copy": "1"}
+                {"copy": "1"},
+                {"copy": "2"},
+                {"copy": "3", "sections": [{"volume": "L03721"}]}
             ]
         }
         self.send_json(body)
