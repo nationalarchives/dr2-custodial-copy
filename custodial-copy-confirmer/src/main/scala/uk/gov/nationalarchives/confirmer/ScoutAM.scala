@@ -46,7 +46,7 @@ object ScoutAM:
       }
 
     private def authenticate(baseUrl: String, username: String, password: String): AuthorisationResponse =
-      
+
       val request = HttpRequest
         .newBuilder()
         .uri(URI.create(s"$baseUrl/v1/security/login"))
