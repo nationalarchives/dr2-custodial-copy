@@ -35,9 +35,7 @@ object ConfirmationService:
   def getInstance(config: Config, ocfl: Ocfl, scoutAM: ScoutAM): ConfirmationService =
     ResultAttributeName.fromString(config.dynamoAttributeName) match
       case ResultAttributeName.RESULT_CC => CCService(ocfl)
-      case ResultAttributeName.RESULT_TC =>
-        config.scoutamUsername.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
-        TCService(scoutAM)
+      case ResultAttributeName.RESULT_TC => TCService(scoutAM)
 
 trait Payload
 final case class CCPayload(preservationSystemId: UUID) extends Payload:

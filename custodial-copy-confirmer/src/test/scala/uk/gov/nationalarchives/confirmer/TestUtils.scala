@@ -42,14 +42,19 @@ object TestUtils:
       existingRefs: List[UUID],
       existingPaths: List[String],
       errors: Errors,
-      allowMultipleSqsCalls: Boolean = false
+      allowMultipleSqsCalls: Boolean = false,
+      config: Config = Config(
+        "table",
+        "result_CC",
+        "",
+        Some(URI.create("https://example.com")),
+        Files.createTempDirectory("repo").toString,
+        Files.createTempDirectory("work").toString
+      )
   ): (List[String], List[DADynamoDbRequest]) = (for {
     messagesRef <- Ref.of[IO, List[MessageResponse[OutputQueueMessage]]](messages)
     dynamoRef <- Ref.of[IO, List[DADynamoDbRequest]](Nil)
     deletedMessagesRef <- Ref.of[IO, List[String]](Nil)
-    workDir = Files.createTempDirectory("work")
-    repoDir = Files.createTempDirectory("repo")
-    config = Config("table", "result_CC", "", Some(URI.create("https://example.com")), repoDir.toString, workDir.toString)
     _ <- Main
       .runConfirmer(
         config,

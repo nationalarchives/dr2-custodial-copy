@@ -6,6 +6,8 @@ import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.confirmer.OutputQueueMessage
 import uk.gov.nationalarchives.confirmer.TestUtils.*
 
+import java.net.URI
+import java.nio.file.Files
 import java.util.UUID
 
 class MainTest extends AnyFlatSpec {
@@ -30,6 +32,43 @@ class MainTest extends AnyFlatSpec {
     updateItem.primaryKeyAndItsValue("batchId").s() should equal("batchId1")
     updateItem.attributeNamesAndValuesToUpdate("result_CC").s() should equal(
       s"""{"filePaths":["/some/path/$existingRef/file1.txt","/some/path/$existingRef/file2.txt"]}"""
+    )
+    updateItem.conditionalExpression.get should equal("attribute_exists(assetId)")
+  }
+
+  "runConfirmer" should "write result from tape confirmer to dynamo and delete the message from the tape confirmer queue" in {
+    val existingAssetId = UUID.randomUUID
+    val existingRef = UUID.randomUUID
+    val nonExistingRef = UUID.randomUUID
+    val existingFilePaths = List(s"/some/path/$existingRef/file1.txt", s"/some/path/$existingRef/file2.txt")
+    val inputMessages = List(
+      OutputQueueMessage(existingAssetId, "batchId1", TCPayload(existingFilePaths))
+    ).map(message => MessageResponse(message.batchId, None, message))
+    val (deletedMessages, dynamoUpdateItems) = runConfirmer(
+      inputMessages,
+      List(existingRef),
+      existingFilePaths,
+      Errors(),
+      false,
+      Config(
+        "table",
+        "result_TC",
+        "",
+        Some(URI.create("https://example.com")),
+        Files.createTempDirectory("repo").toString,
+        Files.createTempDirectory("work").toString
+      )
+    )
+
+    deletedMessages.size should equal(1)
+    deletedMessages.sorted should equal(List("batchId1"))
+    dynamoUpdateItems.size should equal(1)
+
+    val updateItem = dynamoUpdateItems.head
+    updateItem.primaryKeyAndItsValue("assetId").s() should equal(existingAssetId.toString)
+    updateItem.primaryKeyAndItsValue("batchId").s() should equal("batchId1")
+    updateItem.attributeNamesAndValuesToUpdate("result_TC").s() should equal(
+      s"""{"/some/path/$existingRef/file1.txt":["Volume1/some/path/$existingRef/file1.txt","Volume2/some/path/$existingRef/file1.txt"],"/some/path/$existingRef/file2.txt":["Volume1/some/path/$existingRef/file2.txt","Volume2/some/path/$existingRef/file2.txt"]}"""
     )
     updateItem.conditionalExpression.get should equal("attribute_exists(assetId)")
   }
