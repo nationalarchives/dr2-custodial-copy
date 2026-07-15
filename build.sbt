@@ -125,7 +125,7 @@ lazy val tapeConfirmer = (project in file("custodial-copy-confirmer"))
   .settings(commonSettings)
   .settings(imageSettings)
   .settings(
-    target := baseDirectory.value / "target" / "custodial-copy-tape-confirmer",
+    target := (confirmer / baseDirectory).value / "target" / "custodial-copy-tape-confirmer",
     name := "custodial-copy-tape-confirmer",
     packageName := "custodial-copy-tape-confirmer",
     scalacOptions += "-Wunused:imports",
