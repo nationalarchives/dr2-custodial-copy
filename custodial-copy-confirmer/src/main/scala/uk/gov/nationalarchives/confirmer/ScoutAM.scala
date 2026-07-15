@@ -12,11 +12,9 @@ trait ScoutAM(config: Config, httpService: ScoutAmHttpService):
 
 object ScoutAM:
   def apply(config: Config, httpService: ScoutAmHttpService): ScoutAM = new ScoutAM(config, httpService):
-    private val scoutAmBaseUrl = config.scoutamBaseUrl.getOrElse(throw new RuntimeException("ScoutAM base URL is not configured"))
-    private val scoutAmUsername = config.scoutamUsername.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
-    private val scoutAmPassword = config.scoutamPassword.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
 
     def getFileDetailsForPath(filePath: String, authorisationResponse: AuthorisationResponse): Either[Throwable, FileResponse] =
+      val scoutAmBaseUrl = config.scoutamBaseUrl.getOrElse(throw new RuntimeException("ScoutAM base URL is not configured"))
       val encodedFilePath = URLEncoder.encode(filePath, StandardCharsets.UTF_8.toString)
       val request = HttpRequest
         .newBuilder()
@@ -33,6 +31,8 @@ object ScoutAM:
           Left(new RuntimeException(s"Failed to retrieve file details for $filePath with status code: ${response.statusCode()}"))
 
     override def getFileDetails(filePaths: List[String]): Map[String, List[String]] =
+      val scoutAmUsername = config.scoutamUsername.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
+      val scoutAmPassword = config.scoutamPassword.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
       val authorisationResponse = authenticate(scoutAmUsername, scoutAmPassword)
 
       val results = filePaths.map(eachFilePath => eachFilePath -> getFileDetailsForPath(eachFilePath, authorisationResponse)).toMap
@@ -48,7 +48,7 @@ object ScoutAM:
     def authenticate(username: String, password: String): AuthorisationResponse =
       val request = HttpRequest
         .newBuilder()
-        .uri(URI.create(s"$scoutAmBaseUrl/v1/security/login"))
+        .uri(URI.create(s"${config.scoutamBaseUrl.get}/v1/security/login"))
         .header("Content-Type", "application/json")
         .POST(HttpRequest.BodyPublishers.ofString(s"""{"acct":"$username","pass":"$password"}"""))
         .build()
