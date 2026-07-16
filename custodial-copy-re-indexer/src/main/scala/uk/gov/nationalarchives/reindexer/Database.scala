@@ -2,12 +2,12 @@ package uk.gov.nationalarchives.reindexer
 
 import cats.effect.Async
 import cats.implicits.*
-import doobie.Update
-import doobie.implicits.*
-import doobie.util.log.LogHandler
-import doobie.util.transactor.Transactor
-import doobie.util.transactor.Transactor.Aux
-import doobie.util.{Put, Write}
+import org.typelevel.doobie.Update
+import org.typelevel.doobie.implicits.*
+import org.typelevel.doobie.util.log.LogHandler
+import org.typelevel.doobie.util.transactor.Transactor
+import org.typelevel.doobie.util.transactor.Transactor.Aux
+import org.typelevel.doobie.util.{Put, Write}
 import fs2.Chunk
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import uk.gov.nationalarchives.utils.Utils.{OcflFile, given}
