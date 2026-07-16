@@ -1,45 +1,11 @@
 package uk.gov.nationalarchives.confirmer
 
-import uk.gov.nationalarchives.confirmer.ResultAttributeName.RESULT_TC
 import org.scalatest.matchers.should.Matchers.*
 import io.circe.parser.decode
 
 import scala.language.postfixOps
 
 class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
-  "ConfirmationService" should "return the CC service type based on the config" in {
-    val id = java.util.UUID.randomUUID()
-    val service = ConfirmationService.getInstance(
-      Config("table", "result_CC", "", null, "", ""),
-      TestUtils.ocfl(List(id), Config("table", "result_CC", "", null, "", "")),
-      null
-    )
-
-    service shouldBe a[CCService]
-    val paths: List[String] = service match {
-      case cc: CCService => cc.ocfl.getFilePathsForObject(id)
-      case _             => fail("Unexpected service created")
-    }
-    paths should contain allOf (s"/some/path/$id/file1.txt", s"/some/path/$id/file2.txt")
-  }
-
-  "ConfirmationService" should "return the TC service type based on the config" in {
-    val service = ConfirmationService.getInstance(
-      Config("table", RESULT_TC.toString, "", null, "", "", Some("http://scout.base.url:8080"), Some("scout.username"), Some("scout.password")),
-      null,
-      TestUtils.scoutAM(
-        List("/tmp/file1", "/tmp/file2"),
-        Config("table", RESULT_TC.toString, "", null, "", "", Some("http://scout.base.url:8080"), Some("scout.username"), Some("scout.password"))
-      )
-    )
-    service shouldBe a[TCService]
-
-    val result = service match {
-      case tc: TCService => tc.scoutAM.getFileDetails(List("/tmp/file1", "/tmp/file2"))
-      case _             => fail("Unexpected service created")
-    }
-    result should contain allOf ("/tmp/file1" -> List("Volume1/tmp/file1", "Volume2/tmp/file1"), "/tmp/file2" -> List("Volume1/tmp/file2", "Volume2/tmp/file2"))
-  }
 
   "Payload decoder" should "decode a CCPayload" in {
     val id = java.util.UUID.randomUUID()

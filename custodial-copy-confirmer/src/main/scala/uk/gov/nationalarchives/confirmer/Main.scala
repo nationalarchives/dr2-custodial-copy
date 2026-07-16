@@ -15,12 +15,12 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException
 import uk.gov.nationalarchives.DADynamoDBClient.DADynamoDbRequest
 import uk.gov.nationalarchives.confirmer.Config
+import uk.gov.nationalarchives.confirmer.given 
 import uk.gov.nationalarchives.confirmer.Confirmer.*
 import uk.gov.nationalarchives.{DADynamoDBClient, DASQSClient}
 import uk.gov.nationalarchives.utils.Utils.*
 
 import java.net.URI
-import java.net.http.HttpClient
 import scala.concurrent.duration.*
 import scala.language.postfixOps
 
@@ -61,17 +61,15 @@ object Main extends IOApp {
         config <- ConfigSource.default.loadF[IO, Config]()
         sqs = sqsClient[IO](config.proxyUrl)
         dynamo = dynamoClient(config.proxyUrl)
-        ocfl = Ocfl(config)
-        scoutAm = ScoutAM(config, ScoutAmHttpService(HttpClient.newHttpClient()))
-      } yield runConfirmer(config, sqs, dynamo, ocfl, scoutAm)
+        confirmer = Confirmer.getConfirmer(config)
+      } yield runConfirmer(config, sqs, dynamo, confirmer)
     }.flatten
 
   def runConfirmer(
       config: Config,
       sqsClient: DASQSClient[IO],
       dynamoClient: DADynamoDBClient[IO],
-      ocfl: Ocfl,
-      scoutAM: ScoutAM
+      confirmer: Confirmer
   ): Stream[IO, Unit] =
     Stream
       .eval {
@@ -82,8 +80,7 @@ object Main extends IOApp {
           _ <- messages.parTraverse { sqsMessage =>
             val message = sqsMessage.message
             val payload = message.payload
-            val confirmationService = ConfirmationService.getInstance(config, ocfl, scoutAM)
-            val result: Result = Confirmer.getConfirmer(config).getResult(payload, confirmationService)
+            val result: Result = confirmer.getResult(payload)
 
             result match
               case Result.Success(dynamoMap) =>

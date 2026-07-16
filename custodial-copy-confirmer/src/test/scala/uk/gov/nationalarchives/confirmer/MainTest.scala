@@ -6,8 +6,6 @@ import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.confirmer.OutputQueueMessage
 import uk.gov.nationalarchives.confirmer.TestUtils.*
 
-import java.net.URI
-import java.nio.file.Files
 import java.util.UUID
 
 class MainTest extends AnyFlatSpec {
@@ -49,15 +47,7 @@ class MainTest extends AnyFlatSpec {
       List(existingRef),
       existingFilePaths,
       Errors(),
-      false,
-      Config(
-        "table",
-        "result_TC",
-        "",
-        Some(URI.create("https://example.com")),
-        Files.createTempDirectory("repo").toString,
-        Files.createTempDirectory("work").toString
-      )
+      "result_TC"
     )
 
     deletedMessages.size should equal(1)
@@ -106,7 +96,7 @@ class MainTest extends AnyFlatSpec {
     val existingRef = UUID.randomUUID()
     val existingFilePaths = List(s"/some/path/$existingRef/file1.txt", s"/some/path/$existingRef/file2.txt")
     val inputMessages = List(MessageResponse("batchId", None, OutputQueueMessage(UUID.randomUUID, "batchId1", CCPayload(existingRef))))
-    val (_, dynamoUpdates) = runConfirmer(inputMessages, List(existingRef), existingFilePaths, Errors(), true)
+    val (_, dynamoUpdates) = runConfirmer(inputMessages, List(existingRef), existingFilePaths, Errors(), allowMultipleSqsCalls = true)
 
     dynamoUpdates.size should equal(50)
   }

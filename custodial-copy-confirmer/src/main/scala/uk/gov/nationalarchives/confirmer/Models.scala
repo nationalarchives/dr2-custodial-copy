@@ -1,41 +1,57 @@
 package uk.gov.nationalarchives.confirmer
 
-import software.amazon.awssdk.services.dynamodb.model.AttributeValue
-import io.circe.{Decoder, DecodingFailure, HCursor}
 import io.circe.generic.semiauto.*
 import io.circe.parser.parse
+import io.circe.{Decoder, DecodingFailure, HCursor}
+import pureconfig.*
+import pureconfig.ConfigReader.Result
+import pureconfig.error.ConfigReaderFailures
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 
 import java.net.URI
-import pureconfig.*
-
 import java.util.UUID
 
-case class Config(
+given ConfigReader[Config] with
+  override def from(cur: ConfigCursor): ConfigReader.Result[Config] =
+    for
+      obj <- cur.asObjectCursor
+      attrCur <- obj.atKey("dynamo-attribute-name")
+      attributeName <- attrCur.asString
+      decoded <- ResultAttributeName.valueOf(attributeName) match {
+        case ResultAttributeName.result_TC => summon[ConfigReader[TCConfig]].from(cur)
+        case ResultAttributeName.result_CC => summon[ConfigReader[CCConfig]].from(cur)
+      }        
+    yield decoded
+
+sealed trait Config:
+  def dynamoTableName: String
+  def dynamoAttributeName: String
+  def sqsUrl: String
+  def proxyUrl: Option[URI]
+
+case class CCConfig(
     dynamoTableName: String,
     dynamoAttributeName: String,
     sqsUrl: String,
     proxyUrl: Option[URI],
     ocflRepoDir: String,
-    ocflWorkDir: String,
-    scoutamBaseUrl: Option[String] = None,
-    scoutamUsername: Option[String] = None,
-    scoutamPassword: Option[String] = None
-) derives ConfigReader
+    ocflWorkDir: String
+) extends Config derives ConfigReader
+
+case class TCConfig(
+    dynamoTableName: String,
+    dynamoAttributeName: String,
+    sqsUrl: String,
+    proxyUrl: Option[URI],
+    scoutamBaseUrl: String,
+    scoutamUsername: String,
+    scoutamPassword: String
+) extends Config derives ConfigReader
 
 extension (s: String) def toAttributeValue: AttributeValue = AttributeValue.builder.s(s).build
 
 case class OutputQueueMessage(assetId: UUID, batchId: String, payload: Payload):
   def primaryKey: Map[String, AttributeValue] = Map("assetId" -> assetId.toString.toAttributeValue, "batchId" -> batchId.toAttributeValue)
-
-trait ConfirmationService
-final case class CCService(ocfl: Ocfl) extends ConfirmationService
-final case class TCService(scoutAM: ScoutAM) extends ConfirmationService
-
-object ConfirmationService:
-  def getInstance(config: Config, ocfl: Ocfl, scoutAM: ScoutAM): ConfirmationService =
-    ResultAttributeName.fromString(config.dynamoAttributeName) match
-      case ResultAttributeName.RESULT_CC => CCService(ocfl)
-      case ResultAttributeName.RESULT_TC => TCService(scoutAM)
 
 trait Payload
 final case class CCPayload(preservationSystemId: UUID) extends Payload:
@@ -92,14 +108,5 @@ object AuthorisationResponse:
     c.get[String]("response").map(token => AuthorisationResponse(token))
   }
 
-enum ResultAttributeName(val value: String):
-  case RESULT_TC extends ResultAttributeName("result_TC")
-  case RESULT_CC extends ResultAttributeName("result_CC")
-
-  override def toString: String = value
-
-object ResultAttributeName:
-  def fromString(value: String): ResultAttributeName = value match
-    case "result_TC" => ResultAttributeName.RESULT_TC
-    case "result_CC" => ResultAttributeName.RESULT_CC
-    case _           => throw new IllegalArgumentException(s"Unknown ResultAttributeName: $value")
+enum ResultAttributeName:
+  case result_TC, result_CC

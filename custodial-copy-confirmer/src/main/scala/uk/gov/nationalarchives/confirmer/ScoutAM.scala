@@ -7,11 +7,11 @@ import java.nio.charset.StandardCharsets
 import io.circe.parser.parse
 import io.circe.Json
 
-trait ScoutAM(config: Config, httpService: ScoutAmHttpService):
+trait ScoutAM(config: TCConfig, httpService: ScoutAmHttpService):
   def getFileDetails(filePaths: List[String]): Map[String, List[String]]
 
 object ScoutAM:
-  def apply(config: Config, httpService: ScoutAmHttpService): ScoutAM = new ScoutAM(config, httpService):
+  def apply(config: TCConfig, httpService: ScoutAmHttpService): ScoutAM = new ScoutAM(config, httpService):
 
     private def getFileDetailsForPath(scoutAmBaseUrl: String, filePath: String, authorisationResponse: AuthorisationResponse): Either[Throwable, FileResponse] =
       val encodedFilePath = URLEncoder.encode(filePath, StandardCharsets.UTF_8.toString)
@@ -30,9 +30,9 @@ object ScoutAM:
           Left(new RuntimeException(s"Failed to retrieve file details for $filePath with status code: ${response.statusCode()}"))
 
     override def getFileDetails(filePaths: List[String]): Map[String, List[String]] =
-      val baseUrl = config.scoutamBaseUrl.getOrElse(throw new RuntimeException("ScoutAM base URL is not configured"))
-      val username = config.scoutamUsername.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
-      val password = config.scoutamPassword.getOrElse(throw new RuntimeException("Unable to authenticate, ScoutAM credentials not found"))
+      val baseUrl = config.scoutamBaseUrl
+      val username = config.scoutamUsername
+      val password = config.scoutamPassword
       val authorisationResponse = authenticate(baseUrl, username, password)
 
       val results = filePaths.map(eachFilePath => eachFilePath -> getFileDetailsForPath(baseUrl, eachFilePath, authorisationResponse)).toMap

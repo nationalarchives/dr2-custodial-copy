@@ -9,7 +9,7 @@ import software.amazon.awssdk.services.dynamodb.model.{BatchWriteItemResponse, C
 import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse
 import uk.gov.nationalarchives.DADynamoDBClient.DADynamoDbRequest
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
-import uk.gov.nationalarchives.confirmer.{Config, OutputQueueMessage}
+import uk.gov.nationalarchives.confirmer.OutputQueueMessage
 import uk.gov.nationalarchives.utils.TestUtils.TestSqsClient
 import uk.gov.nationalarchives.{DADynamoDBClient, DASQSClient}
 
@@ -42,26 +42,27 @@ object TestUtils:
       existingRefs: List[UUID],
       existingPaths: List[String],
       errors: Errors,
-      allowMultipleSqsCalls: Boolean = false,
-      config: Config = Config(
-        "table",
-        "result_CC",
-        "",
-        Some(URI.create("https://example.com")),
-        Files.createTempDirectory("repo").toString,
-        Files.createTempDirectory("work").toString
-      )
+      dynamoAttributeName: String = "result_CC",
+      allowMultipleSqsCalls: Boolean = false
   ): (List[String], List[DADynamoDbRequest]) = (for {
     messagesRef <- Ref.of[IO, List[MessageResponse[OutputQueueMessage]]](messages)
     dynamoRef <- Ref.of[IO, List[DADynamoDbRequest]](Nil)
     deletedMessagesRef <- Ref.of[IO, List[String]](Nil)
+    workDir = Files.createTempDirectory("work")
+    repoDir = Files.createTempDirectory("repo")
+    (config, confirmer) =
+      if dynamoAttributeName == "result_CC" then
+        val ccConfig = CCConfig("table", dynamoAttributeName, "", Some(URI.create("https://example.com")), repoDir.toString, workDir.toString)
+        ccConfig -> Confirmer.ccConfirmer(ocfl(existingRefs, ccConfig))
+      else
+        val tcConfig = TCConfig("table", dynamoAttributeName, "", Some(URI.create("https://example.com")), "https://example.com", "user", "password")
+        tcConfig -> Confirmer.tcConfirmer(scoutAM(existingPaths, tcConfig))
     _ <- Main
       .runConfirmer(
         config,
         daSqsClient(messagesRef, deletedMessagesRef, errors, allowMultipleSqsCalls),
         daDynamoDbClient(dynamoRef, errors),
-        ocfl(existingRefs, config),
-        scoutAM(existingPaths, config)
+        confirmer
       )
       .compile
       .drain
@@ -109,7 +110,7 @@ object TestUtils:
         .map(_ => 1)
   }
 
-  def ocfl(existingRefs: List[UUID], config: Config, ocflErrors: OcflErrors = OcflErrors()): Ocfl = new Ocfl(config):
+  def ocfl(existingRefs: List[UUID], config: CCConfig, ocflErrors: OcflErrors = OcflErrors()): Ocfl = new Ocfl(config):
     override def getFilePathsForObject(id: UUID): List[String] =
       if !ocflErrors.hasErrors then
         if existingRefs.contains(id) then List(s"/some/path/$id/file1.txt", s"/some/path/$id/file2.txt")
@@ -122,7 +123,7 @@ object TestUtils:
   ):
     def hasErrors: Boolean = filePathNotFound
 
-  def scoutAM(filePaths: List[String], config: Config, scoutAmErrors: ScoutAmErrors = ScoutAmErrors()): ScoutAM =
+  def scoutAM(filePaths: List[String], config: TCConfig, scoutAmErrors: ScoutAmErrors = ScoutAmErrors()): ScoutAM =
     new ScoutAM(config, new TestHttpService("", """{"response":"Success"}""", 200, 200)):
       override def getFileDetails(filePaths: List[String]): Map[String, List[String]] =
         if !scoutAmErrors.hasErrors then filePaths.map(eachPath => eachPath -> List(s"Volume1$eachPath", s"Volume2$eachPath")).toMap
