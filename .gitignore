@@ -33,3 +33,5 @@ metals.sbt
 
 test-database
 test-ic-database.db
+
+__pycache__
