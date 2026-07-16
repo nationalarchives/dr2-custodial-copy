@@ -20,7 +20,7 @@ given ConfigReader[Config] with
       decoded <- ResultAttributeName.valueOf(attributeName) match {
         case ResultAttributeName.result_TC => summon[ConfigReader[TCConfig]].from(cur)
         case ResultAttributeName.result_CC => summon[ConfigReader[CCConfig]].from(cur)
-      }        
+      }
     yield decoded
 
 sealed trait Config:

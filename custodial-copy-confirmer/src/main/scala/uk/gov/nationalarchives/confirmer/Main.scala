@@ -15,7 +15,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException
 import uk.gov.nationalarchives.DADynamoDBClient.DADynamoDbRequest
 import uk.gov.nationalarchives.confirmer.Config
-import uk.gov.nationalarchives.confirmer.given 
+import uk.gov.nationalarchives.confirmer.given
 import uk.gov.nationalarchives.confirmer.Confirmer.*
 import uk.gov.nationalarchives.{DADynamoDBClient, DASQSClient}
 import uk.gov.nationalarchives.utils.Utils.*

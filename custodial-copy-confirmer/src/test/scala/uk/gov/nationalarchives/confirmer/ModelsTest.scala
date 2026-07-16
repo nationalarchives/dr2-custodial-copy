@@ -2,6 +2,7 @@ package uk.gov.nationalarchives.confirmer
 
 import org.scalatest.matchers.should.Matchers.*
 import io.circe.parser.decode
+import pureconfig.ConfigSource
 
 import scala.language.postfixOps
 
@@ -167,4 +168,95 @@ class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
       case Left(err) => fail(s"Decoding failed: $err")
     }
   }
+  
+  "Config decoder" should "decode the config as CCConfig when the dynamo attribute corresponds to CC" in {
+    val json =
+      """
+        |{
+        |   "ocfl-repo-dir": "some_repo",
+        |   "ocfl-work-dir": "some_work",
+        |   "proxy-url": "http://localhost:1234",
+        |   "sqs-url": "some_sqs_queue_url",
+        |   "dynamo-table-name": "DYNAMO_TABLE",
+        |   "dynamo-attribute-name": "result_CC"
+        |}
+        |""".stripMargin
+        
+    val actualConfig = ConfigSource.string(json).load[Config]
+    actualConfig match {
+      case Right(cc:CCConfig) => 
+        cc.ocflRepoDir shouldEqual "some_repo"
+        cc.ocflWorkDir shouldEqual "some_work"
+      case Right(other) => fail("Expected CCConfig, got something else")
+      case Left(err) => fail(s"Failed to decode config: $err")
+    }
+  }
+  
+  "Config decoder" should "decode the config as TCConfig when the dynamo attribute corresponds to TC" in {
+    val json =
+      """
+        |{
+        |   "proxy-url": "http://localhost:1234",
+        |   "sqs-url": "some_sqs_queue_url",
+        |   "dynamo-table-name": "DYNAMO_TABLE",
+        |   "dynamo-attribute-name": "result_TC",
+        |   "scoutam-base-url":"http://scoutam-base:8080",
+        |   "scoutam-username": "Scotty",
+        |   "scoutam-password": "Beam Me"
+        |}
+        |""".stripMargin
+
+    val actualConfig = ConfigSource.string(json).load[Config]
+    actualConfig match {
+      case Right(tc:TCConfig) =>
+        tc.scoutamUsername shouldEqual "Scotty"
+        tc.scoutamPassword shouldEqual "Beam Me"
+        tc.scoutamBaseUrl shouldEqual "http://scoutam-base:8080"
+      case Right(other) => fail("Expected TCConfig, got something else")
+      case Left(err) => fail(s"Failed to decode config: $err")
+    }
+  }
+  
+  "Config decoder" should "error when the config does not have dynamo-attribute-name" in {
+    val json =
+      """
+        |{
+        |   "ocfl-repo-dir": "some_repo",
+        |   "ocfl-work-dir": "some_work",
+        |   "proxy-url": "http://localhost:1234",
+        |   "sqs-url": "some_sqs_queue_url",
+        |   "dynamo-table-name": "DYNAMO_TABLE",
+        |   "dynamo-attribute-no-name": "result_CC"
+        |}
+        |""".stripMargin
+
+    val actualConfig = ConfigSource.string(json).load[Config]
+    actualConfig match {
+      case Left(err) => err.head.toString should include("KeyNotFound(dynamo-attribute-name")
+      case Right(_) => fail("Expected config reading error, no error thrown") 
+    }
+  }
+
+  "Config decoder" should "error when the config fails to parse" in {
+    val json =
+      """
+        |{
+        |   "ocfl-repo-no-dir": "some_repo",
+        |   "ocfl-work-dir": "some_work",
+        |   "proxy-url": "http://localhost:1234",
+        |   "sqs-url": "some_sqs_queue_url",
+        |   "dynamo-table-name": "DYNAMO_TABLE",
+        |   "dynamo-attribute-name": "result_CC"
+        |}
+        |""".stripMargin
+
+    val actualConfig = ConfigSource.string(json).load[Config]
+    actualConfig match {
+      case Left(err) =>
+        println(" ******* => " + err)
+        err.head.toString should include("KeyNotFound(ocfl-repo-dir")
+      case Right(_) => fail("Expected config reading error, no error thrown")
+    }
+  }
+
 }
