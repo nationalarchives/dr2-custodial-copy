@@ -1,6 +1,6 @@
 # DR2 Custodial Copy
 
-This repository contains six components which together make up the custodial copy service.
+This repository contains seven components which together make up the custodial copy service.
 
 The principle of the Custodial Copy approach is described [here](https://zenodo.org/records/13647420)
 
@@ -418,3 +418,13 @@ two storage mediums to become out of sync.
 | OCFL_WORK_DIR          | The directory for the OCFL work directory                                                      |
 | DAYS_TO_IGNORE         | The number of days before the current date to ignore entities from Preservica and OCFL objects |
 | HTTPS_PROXY            | An optional proxy. This is needed running in TNA's network but not locally.                    |
+
+## 7. Custodial Copy Mock Tape API
+
+This Python service mocks the API provided by ScoutAM to determine whether files on disk have been written to tape.
+That API does not exist in our integration and staging environments, so this service allows us to keep the same behaviour in the calling service without environment-specific changes.
+
+It exposes two endpoints:
+
+1. `POST /v1/security/login` which returns a mock token payload.
+2. `GET /v1/file` which requires an `Authorization` header and returns a fixed mock tape-status payload.
