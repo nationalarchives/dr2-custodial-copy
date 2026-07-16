@@ -2,12 +2,12 @@ package uk.gov.nationalarchives.webapp
 
 import cats.effect.Async
 import cats.implicits.*
-import doobie.Transactor
-import doobie.implicits.*
-import doobie.util.fragments.whereAndOpt
-import doobie.util.log.LogHandler
-import doobie.util.transactor.Transactor.Aux
-import doobie.util.{Get, Put}
+import org.typelevel.doobie.Transactor
+import org.typelevel.doobie.implicits.*
+import org.typelevel.doobie.util.fragments.whereAndOpt
+import org.typelevel.doobie.util.log.LogHandler
+import org.typelevel.doobie.util.transactor.Transactor.Aux
+import org.typelevel.doobie.util.{Get, Put}
 import pureconfig.module.catseffect.syntax.*
 import pureconfig.{ConfigReader, ConfigSource}
 import uk.gov.nationalarchives.utils.Utils.{OcflFile, given}
