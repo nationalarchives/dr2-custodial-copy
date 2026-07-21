@@ -798,6 +798,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         sourcePathString.endsWith(expectedIdWithSourceAndDestPath.sourceNioFilePath.get.toString) should equal(true)
         capturedIdWithSourceAndDestPath.destinationPath should equal(expectedIdWithSourceAndDestPath.destinationPath)
 
+        capturedIdWithSourceAndDestPath.potentialIcInfo should equal(expectedIdWithSourceAndDestPath.potentialIcInfo)
+
         File(sourcePathString).exists() should equal(false)
       }
       val capturedLookupDestinationPaths = droLookupCaptor.getAllValues.asScala.toList.map(_.map(_.destinationFilePath))

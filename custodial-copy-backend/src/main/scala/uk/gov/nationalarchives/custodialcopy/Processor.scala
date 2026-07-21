@@ -14,7 +14,7 @@ import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.{DASNSClient, DASQSClient}
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.*
-import uk.gov.nationalarchives.custodialcopy.Main.{Config, FileDownloadInfo}
+import uk.gov.nationalarchives.custodialcopy.Main.{Config, FileDownloadInfo, IntelligentCachingInfo, IntelligentCachingDownloads}
 import uk.gov.nationalarchives.custodialcopy.Message.*
 import uk.gov.nationalarchives.custodialcopy.Processor.{ObjectStatus, ProcessorOutput, Result}
 import uk.gov.nationalarchives.custodialcopy.Processor.Result.*
@@ -263,7 +263,7 @@ class Processor(
                 yield path
               }
             writePath <- fo.sourceFilePath(config.downloadDir)
-            (potentialWritePath, potentialIcFileId) <-
+            (potentialWritePath, downloadedLocally) <-
               for
                 localChecksumsMatchPs <-
                   potentialFilePath
@@ -288,7 +288,7 @@ class Processor(
                         }
                     }
                     .getOrElse(IO.pure(false))
-                (potentialNioWritePath, potentialIcId) <-
+                potentialNioWritePath <-
                   val nioWritePath = Option(writePath.toNioPath)
                   if localChecksumsMatchPs then
                     Files[IO]
@@ -296,7 +296,7 @@ class Processor(
                       .through(Files[IO].writeAll(writePath, Flags.Write))
                       .compile
                       .drain
-                      .map(_ => (nioWritePath, Some(fo.tableItemIdentifier)))
+                      .map(_ => nioWritePath)
                   else // if checksums don't match, local filePath doesn't exist or caching database not provided
                   if fo.url.nonEmpty then
                     entityClient
@@ -304,10 +304,10 @@ class Processor(
                         fo.url,
                         s => s.through(Files[IO].writeAll(writePath, Flags.Write)).compile.drain
                       )
-                      .map(_ => (nioWritePath, None))
-                  else IO.pure((None, None))
-              yield (potentialNioWritePath, potentialIcId)
-          yield FileDownloadInfo(fo.id, potentialWritePath, fo.destinationFilePath, potentialIcFileId)
+                      .map(_ => nioWritePath)
+                  else IO.pure(None)
+              yield (potentialNioWritePath, localChecksumsMatchPs)
+          yield FileDownloadInfo(fo.id, potentialWritePath, fo.destinationFilePath, Some(IntelligentCachingInfo(fo.tableItemIdentifier, downloadedLocally)))
       }
 
     case mo: MetadataObject =>
@@ -400,11 +400,14 @@ class Processor(
       allObjectPaths = missingObjectsPaths ++ changedObjectsPaths
       _ <- allObjectPaths.flatMap(_.sourceNioFilePath).parTraverse(deleteObjectPath)
 
-      filesDownloadedViaIc = allObjectPaths.flatMap(_.potentialIcId)
-
+      allFileObjectPaths = allObjectPaths.filter(_.potentialIcInfo.isDefined)
+      potentialIcDownloadInfo = potentialIcDatabase.map { _ =>
+        val (filesDownloadedViaIc, filesNotDownloadedViaIc) = allFileObjectPaths.partition(_.potentialIcInfo.get.downloadedLocally)
+        IntelligentCachingDownloads(filesDownloadedViaIc.map(_.potentialIcInfo.get.id), filesNotDownloadedViaIc.map(_.potentialIcInfo.get.id))
+      }
       createdObjsSnsMessages = missingAndChangedObjects.missingObjects.flatMap(generateSnsMessage(_, messageResponse.message, Created))
       updatedObjsSnsMessages = missingAndChangedObjects.changedObjects.flatMap(generateSnsMessage(_, messageResponse.message, Updated))
-    } yield ProcessorOutput(createdObjsSnsMessages ++ updatedObjsSnsMessages, allObjectPaths.flatMap(_.potentialIcId))
+    } yield ProcessorOutput(createdObjsSnsMessages ++ updatedObjsSnsMessages, potentialIcDownloadInfo)
 
   @tailrec
   private def deleteObjectPath(path: JPath): IO[Unit] = {
@@ -419,7 +422,7 @@ class Processor(
     for {
       filePaths <- ocflService.getAllFilePathsOnAnObject(ref)
       _ <- ocflService.deleteObjects(ref, filePaths)
-    } yield ProcessorOutput(Nil, Nil)
+    } yield ProcessorOutput(Nil, None)
 
   def process(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[Result] = {
     for {
@@ -432,10 +435,17 @@ class Processor(
         snsClient.publish[SendSnsMessage](config.topicArn)(processorOutput.snsMessages).void
       }
       _ <- logger.info(s"${processorOutput.snsMessages.length} 'created/updated objects' messages published to SNS")
-      icIds = processorOutput.icIds
-      icIdsNum = icIds.length.toString
-      _ <- logger.info(Map("icCacheHits" -> icIdsNum))(s"$icIdsNum files downloaded from IC")
-    } yield Success(messageResponse.message.ref, icIds)
+      (icIds, psIds) = processorOutput.potentialIcDownloadInfo match {
+        case Some(icDownloadInfo) => (icDownloadInfo.localIds, icDownloadInfo.psIds)
+        case None                 => (Nil, Nil)
+      }
+      _ <- IO.whenA(processorOutput.potentialIcDownloadInfo.isDefined) {
+        val icIdsNum = icIds.length.toString
+        val psIdsNum = psIds.length.toString
+        logger.info(Map("icCacheHits" -> icIdsNum))(s"$icIdsNum files downloaded from IC instead of PS") >>
+          logger.info(Map("icCacheNonHits" -> psIdsNum))(s"$psIdsNum files downloaded from PS instead of IC")
+      }
+    } yield Success(messageResponse.message.ref, icIds, psIds)
   }.handleError(err => Failure(err))
 
   def commitStagedChanges(id: UUID): IO[Unit] = ocflService.commitStagedChanges(id)
@@ -451,7 +461,7 @@ object Processor {
     new Processor(config, sqsClient, ocflService, entityClient, ValidateXmlAgainstXsd[IO](XipXsdSchemaV7), snsClient)
   )
 
-  case class ProcessorOutput(snsMessages: List[SendSnsMessage], icIds: List[String])
+  case class ProcessorOutput(snsMessages: List[SendSnsMessage], potentialIcDownloadInfo: Option[IntelligentCachingDownloads] = None)
 
   enum ObjectStatus:
     case Created, Updated
@@ -466,6 +476,6 @@ object Processor {
 
     def isError: Boolean = !isSuccess
 
-    case Success(id: UUID, filesDownloadedViaIc: List[String])
+    case Success(id: UUID, filesDownloadedViaIc: List[String], filesNotFoundViaIc: List[String])
     case Failure(ex: Throwable)
 }

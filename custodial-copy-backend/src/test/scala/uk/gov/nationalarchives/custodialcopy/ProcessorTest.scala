@@ -12,7 +12,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
-import uk.gov.nationalarchives.custodialcopy.Main.FileDownloadInfo
+import uk.gov.nationalarchives.custodialcopy.Main.{FileDownloadInfo, IntelligentCachingInfo}
 import uk.gov.nationalarchives.custodialcopy.Message.{IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Updated}
 import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Bitstream, Metadata}
@@ -88,7 +88,14 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
       xmlRequestsToValidate = List(utils.coXmlToValidate),
       numOfStreamBitstreamContentCalls = bitstreamCalls,
       createdFileDownloadInfo = List(
-        List(FileDownloadInfo(id, Path(s"$id/missing").toNioPath.some, "destinationPath")),
+        List(
+          FileDownloadInfo(
+            id,
+            Path(s"$id/missing").toNioPath.some,
+            "destinationPath",
+            Some(IntelligentCachingInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16", false))
+          )
+        ),
         List(FileDownloadInfo(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath"))
       ),
       drosToLookup = List(
@@ -112,7 +119,13 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
 
     databaseUtils.addFilesToDriFilesTable(List(DriFile(bitstreamId, utils.cachedFilePath, parentRef.toString)))
 
-    utils.processMessage.unsafeRunSync()
+    val res = utils.processMessage.unsafeRunSync()
+
+    res match
+      case Success(ref, icIds, psIds) =>
+        icIds should equal(List("90dfb573-7419-4e89-8558-6cfa29f8fb16"))
+        psIds should equal(Nil)
+      case Failure(e) => throw Exception(s"Test should've returned a 'Success' but returned a failure of $e")
 
     val bitstreamCalls = 1
     val icIds = List("90dfb573-7419-4e89-8558-6cfa29f8fb16")
@@ -125,7 +138,14 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
       entityTypesToGetMetadataFrom = List(ContentObject),
       xmlRequestsToValidate = List(utils.coXmlToValidate),
       createdFileDownloadInfo = List(
-        List(FileDownloadInfo(id, Path(s"$id/missing").toNioPath.some, "destinationPath")),
+        List(
+          FileDownloadInfo(
+            id,
+            Path(s"$id/missing").toNioPath.some,
+            "destinationPath",
+            Some(IntelligentCachingInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16", true))
+          )
+        ),
         List(FileDownloadInfo(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath"))
       ),
       drosToLookup = List(
@@ -149,7 +169,13 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
 
     databaseUtils.addFilesToDriFilesTable(List(DriFile(bitstreamId, utils.cachedFilePath, parentRef.toString)))
 
-    utils.processMessage.unsafeRunSync()
+    val res = utils.processMessage.unsafeRunSync()
+
+    res match
+      case Success(ref, icIds, psIds) =>
+        icIds should equal(Nil)
+        psIds should equal(List("90dfb573-7419-4e89-8558-6cfa29f8fb16"))
+      case Failure(e) => throw Exception(s"Test should've returned a 'Success' but returned a failure of $e")
 
     val bitstreamCalls = 1
 
@@ -162,7 +188,14 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
       xmlRequestsToValidate = List(utils.coXmlToValidate),
       numOfStreamBitstreamContentCalls = bitstreamCalls,
       createdFileDownloadInfo = List(
-        List(FileDownloadInfo(id, Path(s"$id/missing").toNioPath.some, "destinationPath")),
+        List(
+          FileDownloadInfo(
+            id,
+            Path(s"$id/missing").toNioPath.some,
+            "destinationPath",
+            Some(IntelligentCachingInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16", false))
+          )
+        ),
         List(FileDownloadInfo(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath"))
       ),
       drosToLookup = List(
@@ -248,7 +281,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
           FileDownloadInfo(
             parentRef,
             Path(s"$parentRef/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt").toNioPath.some,
-            s"${utils.ioId}/Preservation_1/$id/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt"
+            s"${utils.ioId}/Preservation_1/$id/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+            Some(IntelligentCachingInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16", false))
           ),
           FileDownloadInfo(parentRef, Path(s"$parentRef/CO_Metadata.xml").toNioPath.some, s"${utils.ioId}/Preservation_1/$id/CO_Metadata.xml"),
           FileDownloadInfo(parentRef, Path(s"$parentRef/IO_Metadata_missing.xml").toNioPath.some, "destinationPath")
@@ -276,7 +310,14 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
       xmlRequestsToValidate = List(utils.coXmlToValidate),
       numOfStreamBitstreamContentCalls = bitstreamCalls,
       createdFileDownloadInfo = List(
-        List(FileDownloadInfo(id, Path(s"$id/missing").toNioPath.some, "destinationPath")),
+        List(
+          FileDownloadInfo(
+            id,
+            Path(s"$id/missing").toNioPath.some,
+            "destinationPath",
+            Some(IntelligentCachingInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16", false))
+          )
+        ),
         List(FileDownloadInfo(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath"))
       ),
       drosToLookup = List(
@@ -341,7 +382,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
           FileDownloadInfo(
             id,
             Path(s"$id/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt").toNioPath.some,
-            s"${utils.ioId}/Preservation_1/${utils.coId}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt"
+            s"${utils.ioId}/Preservation_1/${utils.coId}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+            Some(IntelligentCachingInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16", false))
           ),
           FileDownloadInfo(id, Path(s"$id/CO_Metadata.xml").toNioPath.some, s"${utils.ioId}/Preservation_1/${utils.coId}/CO_Metadata.xml"),
           FileDownloadInfo(id, Path(s"$id/IO_Metadata_missing.xml").toNioPath.some, "destinationPath")
@@ -410,7 +452,8 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
           FileDownloadInfo(
             missingFileId,
             Path(s"$missingFileId/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt").toNioPath.some,
-            s"${utils.ioId}/Preservation_1/${utils.coId}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt"
+            s"${utils.ioId}/Preservation_1/${utils.coId}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+            Some(IntelligentCachingInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16", false))
           ),
           FileDownloadInfo(
             missingFileId,

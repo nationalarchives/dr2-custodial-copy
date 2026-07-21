@@ -923,8 +923,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
       config,
       sqsClient,
       { messageResponse =>
-        if messageResponse.receiptHandle == "receiptHandleDelayed" then IO.sleep(4.seconds) >> IO.pure(Result.Success(delayedId, Nil))
-        else IO.pure(Result.Success(id, Nil))
+        if messageResponse.receiptHandle == "receiptHandleDelayed" then IO.sleep(4.seconds) >> IO.pure(Result.Success(delayedId, Nil, Nil))
+        else IO.pure(Result.Success(id, Nil, Nil))
       }
     )
 
@@ -972,8 +972,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
       config,
       sqsClient,
       { messageResponse =>
-        if messageResponse.receiptHandle == "receiptHandleDelayed" then IO.sleep(4.seconds) >> IO.pure(Result.Success(delayedId, Nil))
-        else IO.pure(Result.Success(id, Nil))
+        if messageResponse.receiptHandle == "receiptHandleDelayed" then IO.sleep(4.seconds) >> IO.pure(Result.Success(delayedId, Nil, Nil))
+        else IO.pure(Result.Success(id, Nil, Nil))
       }
     )
 
