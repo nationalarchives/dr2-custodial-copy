@@ -15,6 +15,7 @@ jobs:
           java-version: "21"
       - uses: nationalarchives/ds-docker-actions/.github/actions/wiz-install-cli@a37bebac8d11fa61ca7a539863fe45cfa00cdfc6
       - run: |
+          python3 -m unittest discover -s custodial-copy-mock-tape-api -p "test_*.py"
           sbt scalafmtCheckAll test Docker/publishLocal scanDockerImage
         env:
           MANAGEMENT_ACCOUNT_NUMBER: 1
