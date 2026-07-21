@@ -168,7 +168,7 @@ class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
       case Left(err) => fail(s"Decoding failed: $err")
     }
   }
-  
+
   "Config decoder" should "decode the config as CCConfig when the dynamo attribute corresponds to CC" in {
     val json =
       """
@@ -181,17 +181,17 @@ class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
         |   "dynamo-attribute-name": "result_CC"
         |}
         |""".stripMargin
-        
+
     val actualConfig = ConfigSource.string(json).load[Config]
     actualConfig match {
-      case Right(cc:CCConfig) => 
+      case Right(cc: CCConfig) =>
         cc.ocflRepoDir shouldEqual "some_repo"
         cc.ocflWorkDir shouldEqual "some_work"
       case Right(other) => fail("Expected CCConfig, got something else")
-      case Left(err) => fail(s"Failed to decode config: $err")
+      case Left(err)    => fail(s"Failed to decode config: $err")
     }
   }
-  
+
   "Config decoder" should "decode the config as TCConfig when the dynamo attribute corresponds to TC" in {
     val json =
       """
@@ -208,15 +208,15 @@ class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
 
     val actualConfig = ConfigSource.string(json).load[Config]
     actualConfig match {
-      case Right(tc:TCConfig) =>
+      case Right(tc: TCConfig) =>
         tc.scoutamUsername shouldEqual "Scotty"
         tc.scoutamPassword shouldEqual "Beam Me"
         tc.scoutamBaseUrl shouldEqual "http://scoutam-base:8080"
       case Right(other) => fail("Expected TCConfig, got something else")
-      case Left(err) => fail(s"Failed to decode config: $err")
+      case Left(err)    => fail(s"Failed to decode config: $err")
     }
   }
-  
+
   "Config decoder" should "error when the config does not have dynamo-attribute-name" in {
     val json =
       """
@@ -233,7 +233,7 @@ class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
     val actualConfig = ConfigSource.string(json).load[Config]
     actualConfig match {
       case Left(err) => err.head.toString should include("KeyNotFound(dynamo-attribute-name")
-      case Right(_) => fail("Expected config reading error, no error thrown") 
+      case Right(_)  => fail("Expected config reading error, no error thrown")
     }
   }
 
