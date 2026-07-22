@@ -127,7 +127,7 @@ lazy val tapeConfirmer = (project in file("custodial-copy-confirmer"))
   .settings(
     target := (confirmer / baseDirectory).value / "target" / "custodial-copy-tape-confirmer",
     name := "custodial-copy-tape-confirmer",
-    packageName := "custodial-copy-tape-confirmer",
+    Docker / packageName := "dr2-custodial-copy-tape-confirmer",
     scalacOptions += "-Wunused:imports",
     assembly / assemblyJarName := "custodial-copy-tape-confirmer.jar",
     libraryDependencies ++= Seq(
