@@ -120,6 +120,23 @@ lazy val confirmer = (project in file("custodial-copy-confirmer"))
   )
   .dependsOn(utils)
 
+lazy val tapeConfirmer = (project in file("custodial-copy-confirmer"))
+  .enablePlugins(DockerPlugin)
+  .settings(commonSettings)
+  .settings(imageSettings)
+  .settings(
+    target := (confirmer / baseDirectory).value / "target" / "custodial-copy-tape-confirmer",
+    name := "custodial-copy-tape-confirmer",
+    packageName := "custodial-copy-tape-confirmer",
+    scalacOptions += "-Wunused:imports",
+    assembly / assemblyJarName := "custodial-copy-tape-confirmer.jar",
+    libraryDependencies ++= Seq(
+      fs2Core,
+      dynamoClient
+    )
+  )
+  .dependsOn(utils)
+
 lazy val webapp = (project in file("custodial-copy-webapp"))
   .enablePlugins(SbtTwirl, DockerPlugin)
   .settings(commonSettings)

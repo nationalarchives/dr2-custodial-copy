@@ -328,46 +328,66 @@ the environment variables. You will need to provide the arguments listed above a
 
 It can also be run using `sbt run`
 
-## 5. OCFL Confirmer
+## 5. Custodial Copy Confirmer and Tape Copy Confirmer
 
-This is a service which is intended to run in a long-running Docker container.
+There are two services, first is `CCConfirmer`, which confirms whether the assets have been saved to the custodial copy and 
+`TCConfirmer`, which confirms that the asset has been written to the tape. These two services are intended to run in a 
+long-running Docker container. Every 10 seconds, they poll the queue specified in the `SQS_QUEUE_URL` environment variable.
+For each invocation, the Confirmer will try to fetch messages from the queue until there are either no more messages, or 
+there are 50 messages.
 
-Every 10 seconds, it polls the queue specified in the `SQS_QUEUE_URL` environment variable.
-For each invocation, it will try to fetch messages from the queue until there are either no more messages, or there are
-50 messages.
+There is a queue for each Confirmer, The queues send messages with payload that can be utilised by the respective Confirmer.
 
-### Messages
-
-The queue sends messages in this format:
-
+In case of the CCConfirmer, the payload contains Preservation System ID, so the full message appears as shown below: 
 ```json
 {
-  "ioRef": "1b9555dd-43b7-4681-9b0d-85ebe951ca02",
-  "batchId": "TDR-ABC-123_0"
+   "assetId": "141bac2e-bab3-4cec-88fd-2649bda971ea",
+   "batchId": "some-batch",
+   "payload": "{\"preservationSystemId\": \"d48de631-6fb2-480b-989b-c3b8f48659ec\"}"
 }
 ```
+Based on this ID, the CCConfirmer looks into the OCFL
+repository, if the files are found in the OCFL repository, CCConfirmer, gets the File Paths for all the files. It then updates
+the POSTINGEST_STATE_TABLE and saves this list of File Paths into an attribute identified by the `DYNAMO_ATTRIBUTE_NAME`, in case
+of CCConfirmer, this attribute is called `result_CC`. Once this is done, the job of CCConfirmer for this particular Preservation 
+System ID is over.
 
-For each message, the Confirmer checks to see if this object exists in the OCFL repository. 
-If it exists, the confirmer gets a list of file paths of all the files which belong to this object. It updates the table specified by `DYNAMO_TABLE_NAME`.
-As part of the update, it updates two attributes in the table 
-1. An attribute specified by `DYNAMO_ATTRIBUTE_NAME` which is set to true
-2. An attribute called `input` which is set with JSON representation of the list of file paths of all files that belong to the object. 
-It has a conditional check on `attribute_exists(assetId)` in the table. This is to prevent repeated messages adding a row back in after it has been deleted by the change handler.
-If the row has been deleted, it doesn't matter because the asset has already been marked as complete so we ignore any errors related to the conditional check.
-It then deletes the message from the queue. 
+In case of the TCConfirmer, the payload contains the list of File Paths in the OCFL repository, so the full message appears 
+as shown below: 
+```json
+{
+   "assetId": "141bac2e-bab3-4cec-88fd-2649bda971ea",
+   "batchId": "some-batch",
+   "payload": "{\"filePaths\": [\"/tmp1/file1\", \"/tmp1/file2\"]}"
+}
+```
+Based on these File Paths, the TCConfirmer connects to the ScoutAM server and finds out details for each File Path. The ScoutAM server response 
+contains whether archiving is done, if it is done, the response has details of 3 copies, the 3rd copy has volume information about
+the file. If TCConfirmer finds volume information for all files in the payload, it updates the attribute identified by the
+`DYNAMO_ATTRIBUTE_NAME`, in case of TCConfirmer, this attribute is called `result_TC`. Once this is done, the job of TCConfirmer 
+is over. 
+
+The update requests, for both Confirmers, have a conditional check on `attribute_exists(assetId)` in the table. This is to 
+prevent repeated messages adding a row back in after it has been deleted by the change handler. If the row has been deleted, 
+it doesn't matter because the asset has already been marked as complete so we ignore any errors related to the conditional 
+check. It then deletes the message from the queue. 
 
 If the object is not in the queue, nothing happens. The message will eventually be resent after the visibility timeout has expired.
 
 ### Environment Variables
 
-| Name                  | Description                                                                |
-|-----------------------|----------------------------------------------------------------------------|
-| DYNAMO_TABLE_NAME     | The DynamoDB table to update                                               |
-| DYNAMO_ATTRIBUTE_NAME | The attribute to update in the DynamoDB table                              |
-| SQS_QUEUE_URL         | The queue the service will poll                                            |
-| OCFL_REPO_DIR         | The directory for the OCFL repository                                      |
-| OCFL_WORK_DIR         | The directory for the OCFL work directory                                  |
-| HTTPS_PROXY           | An optional proxy. This is needed running in TNA's network but not locally |
+| Name                  | Description                                                                     |
+|-----------------------|---------------------------------------------------------------------------------|
+| DYNAMO_TABLE_NAME     | The DynamoDB table to update                                                    |
+| DYNAMO_ATTRIBUTE_NAME | The attribute to update in the DynamoDB table                                   |
+| SQS_QUEUE_URL         | The queue the service will poll                                                 |
+| OCFL_REPO_DIR         | The directory for the OCFL repository                                           |
+| OCFL_WORK_DIR         | The directory for the OCFL work directory                                       |
+| HTTPS_PROXY           | An optional proxy. This is needed running in TNA's network but not locally      |
+| SCOUTAM_URL           | Base URL for the SCOUTAM service                                                |
+| SCOUTAM_USERNAME      | Username for authenticating with the SCOUTAM service                            |
+| SCOUTAM_PASSWORD      | Password for authenticating with the SCOUTAM service                            |
+
 
 ## 6. Custodial Copy Reconciler
 
