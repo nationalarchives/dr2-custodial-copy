@@ -253,7 +253,6 @@ class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
     val actualConfig = ConfigSource.string(json).load[Config]
     actualConfig match {
       case Left(err) =>
-        println(" ******* => " + err)
         err.head.toString should include("KeyNotFound(ocfl-repo-dir")
       case Right(_) => fail("Expected config reading error, no error thrown")
     }

@@ -330,7 +330,8 @@ It can also be run using `sbt run`
 
 ## 5. Custodial Copy Confirmer and Tape Copy Confirmer
 
-There are two services, `CCConfirmer` for Custodial Copy and `TCConfirmer` for Tape Copy. These are intended to run in a 
+There are two services, first is `CCConfirmer`, which confirms whether the assets have been saved to the custodial copy and 
+`TCConfirmer`, which confirms that the asset has been written to the tape. These two services are intended to run in a 
 long-running Docker container. Every 10 seconds, they poll the queue specified in the `SQS_QUEUE_URL` environment variable.
 For each invocation, the Confirmer will try to fetch messages from the queue until there are either no more messages, or 
 there are 50 messages.
@@ -348,11 +349,11 @@ In case of the CCConfirmer, the payload contains Preservation System ID, so the 
 Based on this ID, the CCConfirmer looks into the OCFL
 repository, if the files are found in the OCFL repository, CCConfirmer, gets the File Paths for all the files. It then updates
 the POSTINGEST_STATE_TABLE and saves this list of File Paths into an attribute identified by the `DYNAMO_ATTRIBUTE_NAME`, in case
-of CCConfirmer, this attribute is called `CC_result`. Once this is done, the job of CCConfirmer for this particular Preservation 
+of CCConfirmer, this attribute is called `result_CC`. Once this is done, the job of CCConfirmer for this particular Preservation 
 System ID is over.
 
-In case of the TCConfirmer, the payload contains the list of File Paths (as updated by the CCConfirmer above), so the full 
-message appears as shown below: 
+In case of the TCConfirmer, the payload contains the list of File Paths in the OCFL repository, so the full message appears 
+as shown below: 
 ```json
 {
    "assetId": "141bac2e-bab3-4cec-88fd-2649bda971ea",
@@ -363,7 +364,7 @@ message appears as shown below:
 Based on these File Paths, the TCConfirmer connects to the ScoutAM server and finds out details for each File Path. The ScoutAM server response 
 contains whether archiving is done, if it is done, the response has details of 3 copies, the 3rd copy has volume information about
 the file. If TCConfirmer finds volume information for all files in the payload, it updates the attribute identified by the
-`DYNAMO_ATTRIBUTE_NAME`, in case of TCConfirmer, this attribute is called `TC_result`. Once this is done, the job of TCConfirmer 
+`DYNAMO_ATTRIBUTE_NAME`, in case of TCConfirmer, this attribute is called `result_TC`. Once this is done, the job of TCConfirmer 
 is over. 
 
 The update requests, for both Confirmers, have a conditional check on `attribute_exists(assetId)` in the table. This is to 
