@@ -300,7 +300,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val cachedFilePath: String =
       if useCacheDir then
         // a leading "/" causes issues when path resolving if not removed, so this is a good test
-        s"/${Files.createFile(cacheDir.resolve("file")).toString}"
+        s"/${Files.writeString(Files.createTempFile(cacheDir, "file", ""), "file content").toString}"
       else ""
 
     val config: Config = Config("", "", repoDir.toString, workDir, downloadDir, None, "", "", Duration("1s"), potentialDbName, cacheDir.toString)
@@ -459,7 +459,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val cachedFilePath: String =
       if cacheDir then
         // a leading "/" causes issues when path resolving if not removed, so this is a good test
-        s"/${Files.createFile(filesCacheDir.resolve("testFile.txt")).toString}"
+        s"/${Files.writeString(Files.createTempFile(filesCacheDir, "testFile", ".txt"), "file content").toString}"
       else ""
 
     val config: Config =
@@ -741,7 +741,6 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         destinationPathsToDelete: List[String] = Nil,
         snsMessagesToSend: List[SendSnsMessage] = Nil
     ): Assertion = {
-
       files.size should equal(0)
       verify(entityClient, times(numOfGetBitstreamInfoCalls)).getBitstreamInfo(getBitstreamsCoIdCaptor.capture)
       verify(entityClient, times(numOfGetUrlsToIoRepresentationsCalls))
@@ -797,6 +796,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         val sourcePathString = capturedIdWithSourceAndDestPath.sourceNioFilePath.get.toString
         sourcePathString.endsWith(expectedIdWithSourceAndDestPath.sourceNioFilePath.get.toString) should equal(true)
         capturedIdWithSourceAndDestPath.destinationPath should equal(expectedIdWithSourceAndDestPath.destinationPath)
+
+        capturedIdWithSourceAndDestPath.potentialIcInfo should equal(expectedIdWithSourceAndDestPath.potentialIcInfo)
 
         File(sourcePathString).exists() should equal(false)
       }
