@@ -168,7 +168,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
           "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           1,
           "https://example.com",
-          List(Fixity("SHA256", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")),
+          List(Fixity("SHA256", "e0ac3601005dfa1864f5392aabaf7d898b1b5bab854f1acb4491bcd806b76b0c")),
           1,
           Original,
           None,
@@ -923,8 +923,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
       config,
       sqsClient,
       { messageResponse =>
-        if messageResponse.receiptHandle == "receiptHandleDelayed" then IO.sleep(4.seconds) >> IO.pure(Result.Success(delayedId, Nil, Nil))
-        else IO.pure(Result.Success(id, Nil, Nil))
+        if messageResponse.receiptHandle == "receiptHandleDelayed" then IO.sleep(4.seconds) >> IO.pure(Result.Success(delayedId, Nil, 0L, Nil, 0L))
+        else IO.pure(Result.Success(id, Nil, 0L, Nil, 0L))
       }
     )
 
@@ -972,8 +972,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
       config,
       sqsClient,
       { messageResponse =>
-        if messageResponse.receiptHandle == "receiptHandleDelayed" then IO.sleep(4.seconds) >> IO.pure(Result.Success(delayedId, Nil, Nil))
-        else IO.pure(Result.Success(id, Nil, Nil))
+        if messageResponse.receiptHandle == "receiptHandleDelayed" then IO.sleep(4.seconds) >> IO.pure(Result.Success(delayedId, Nil, 0L, Nil, 0L))
+        else IO.pure(Result.Success(id, Nil, 0L, Nil, 0L))
       }
     )
 

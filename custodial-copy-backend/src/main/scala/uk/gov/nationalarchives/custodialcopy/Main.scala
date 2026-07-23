@@ -55,7 +55,7 @@ object Main extends IOApp {
     }
   case class IntelligentCachingInfo(id: String, downloadedLocally: Boolean)
   case class FileDownloadInfo(id: UUID, sourceNioFilePath: Option[file.Path], destinationPath: String, potentialIcInfo: Option[IntelligentCachingInfo] = None)
-  case class IntelligentCachingDownloads(localIds: List[String], psIds: List[String])
+  case class IntelligentCachingDownloads(localIds: List[String], bytesDownloadedFromCache: Long, psIds: List[String], bytesDownloadedFromPs: Long)
 
   private case class DedupedMessages(removedMessages: List[MessageResponse[ReceivedSnsMessage]], retainedMessages: List[MessageResponse[ReceivedSnsMessage]])
 
@@ -109,15 +109,15 @@ object Main extends IOApp {
         .map(_.toMap)
 
       results <- dedupedMessages.retainedMessages.traverse(processor.process)
-      removedResults = dedupedMessages.removedMessages.map(r => Success(r.message.ref, Nil, Nil))
+      removedResults = dedupedMessages.removedMessages.map(r => Success(r.message.ref, Nil, 0L, Nil, 0L))
 
       _ <- processor.commitStagedChanges(UUID.fromString(groupId))
       _ <- logger.info(s"${results.count(_.isSuccess)} out of ${results.length} unique messages processed successfully")
       _ <- logger.info(s"${results.count(_.isError)} out of ${results.length} unique messages failed")
 
       _ <- (results ++ removedResults).parTraverse {
-        case Failure(e)             => logError[IO](e)
-        case Success(ref, icIds, _) =>
+        case Failure(e)                   => logError[IO](e)
+        case Success(ref, icIds, _, _, _) =>
           processor.potentialIcDatabase.traverse(_.setAsDownloaded(icIds)) >>
             responses
               .filter(_.message.ref == ref)

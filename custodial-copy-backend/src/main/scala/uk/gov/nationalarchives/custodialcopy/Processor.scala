@@ -263,16 +263,16 @@ class Processor(
                 yield path
               }
             writePath <- fo.sourceFilePath(config.downloadDir)
+            potentialReadFilePath = potentialFilePath.map(filePath => Path(config.filesCacheDir).resolve(Path(filePath.stripPrefix("/"))))
             (potentialWritePath, downloadedLocally) <-
               for
                 localChecksumsMatchPs <-
-                  potentialFilePath
-                    .map { filePath =>
-                      val path = Path(config.filesCacheDir).resolve(Path(filePath.stripPrefix("/")))
+                  potentialReadFilePath
+                    .map { readFilePath =>
                       val hashers = fo.checksums.map(checksum => createHasher(fs2HashNamesToAlgos(checksum.algorithm.toUpperCase)))
 
                       Files[IO]
-                        .readAll(path)
+                        .readAll(readFilePath)
                         .broadcastThrough(hashers*)
                         .flatMap(hash => text.hex.encode(Stream.emits(hash.bytes.toList)))
                         .compile
@@ -292,7 +292,7 @@ class Processor(
                   val nioWritePath = Option(writePath.toNioPath)
                   if localChecksumsMatchPs then
                     Files[IO]
-                      .readAll(Path(config.filesCacheDir).resolve(Path(potentialFilePath.get)))
+                      .readAll(potentialReadFilePath.get)
                       .through(Files[IO].writeAll(writePath, Flags.Write))
                       .compile
                       .drain
@@ -391,20 +391,27 @@ class Processor(
       allMissingObjects: List[CustodialCopyObject] = missingIosAndCos ++ missingCoObjects
       missingObjectsPaths <- allMissingObjects.traverse(downloadFile)
       changedObjectsPaths <- missingAndChangedObjects.changedObjects.traverse(downloadFile)
+      allObjectPaths = missingObjectsPaths ++ changedObjectsPaths
+
+      potentialIcDownloadInfo = potentialIcDatabase.map { _ =>
+        val allFileObjectPaths = allObjectPaths.filter(_.potentialIcInfo.isDefined)
+        val (filesDownloadedViaIc, filesNotDownloadedViaIc) = allFileObjectPaths.partition(_.potentialIcInfo.get.downloadedLocally)
+
+        val filesIdsDownloadedViaIc = filesDownloadedViaIc.map(_.potentialIcInfo.get.id)
+        val filesDownloadedViaIcSize = filesDownloadedViaIc.flatMap(_.sourceNioFilePath.map(JFiles.size)).sum
+
+        val filesIdsNotDownloadedViaIc = filesNotDownloadedViaIc.map(_.potentialIcInfo.get.id)
+        val filesNotDownloadedViaIcSize = filesNotDownloadedViaIc.flatMap(_.sourceNioFilePath.map(JFiles.size)).sum
+        IntelligentCachingDownloads(filesIdsDownloadedViaIc, filesDownloadedViaIcSize, filesIdsNotDownloadedViaIc, filesNotDownloadedViaIcSize)
+      }
 
       _ <- ocflService.createObjects(missingObjectsPaths)
       _ <- logger.info(s"${missingObjectsPaths.length} objects created")
       _ <- ocflService.createObjects(changedObjectsPaths)
       _ <- logger.info(s"${changedObjectsPaths.length} objects updated")
 
-      allObjectPaths = missingObjectsPaths ++ changedObjectsPaths
       _ <- allObjectPaths.flatMap(_.sourceNioFilePath).parTraverse(deleteObjectPath)
 
-      allFileObjectPaths = allObjectPaths.filter(_.potentialIcInfo.isDefined)
-      potentialIcDownloadInfo = potentialIcDatabase.map { _ =>
-        val (filesDownloadedViaIc, filesNotDownloadedViaIc) = allFileObjectPaths.partition(_.potentialIcInfo.get.downloadedLocally)
-        IntelligentCachingDownloads(filesDownloadedViaIc.map(_.potentialIcInfo.get.id), filesNotDownloadedViaIc.map(_.potentialIcInfo.get.id))
-      }
       createdObjsSnsMessages = missingAndChangedObjects.missingObjects.flatMap(generateSnsMessage(_, messageResponse.message, Created))
       updatedObjsSnsMessages = missingAndChangedObjects.changedObjects.flatMap(generateSnsMessage(_, messageResponse.message, Updated))
     } yield ProcessorOutput(createdObjsSnsMessages ++ updatedObjsSnsMessages, potentialIcDownloadInfo)
@@ -435,17 +442,18 @@ class Processor(
         snsClient.publish[SendSnsMessage](config.topicArn)(processorOutput.snsMessages).void
       }
       _ <- logger.info(s"${processorOutput.snsMessages.length} 'created/updated objects' messages published to SNS")
-      (icIds, psIds) = processorOutput.potentialIcDownloadInfo match {
-        case Some(icDownloadInfo) => (icDownloadInfo.localIds, icDownloadInfo.psIds)
-        case None                 => (Nil, Nil)
+      (icIds, icDownloadsBytesSize, psIds, psDownloadsInBytesSize) = processorOutput.potentialIcDownloadInfo match {
+        case Some(icDownloadInfo) =>
+          (icDownloadInfo.localIds, icDownloadInfo.bytesDownloadedFromCache, icDownloadInfo.psIds, icDownloadInfo.bytesDownloadedFromPs)
+        case None => (Nil, 0L, Nil, 0L)
       }
       _ <- IO.whenA(processorOutput.potentialIcDownloadInfo.isDefined) {
         val icIdsNum = icIds.length.toString
         val psIdsNum = psIds.length.toString
-        logger.info(Map("icCacheHits" -> icIdsNum))(s"$icIdsNum files downloaded from IC instead of PS") >>
-          logger.info(Map("icCacheNonHits" -> psIdsNum))(s"$psIdsNum files downloaded from PS instead of IC")
+        logger.info(Map("icCacheHits" -> icIdsNum))(s"$icIdsNum files downloaded from IC instead of PS; a total of $icDownloadsBytesSize bytes") >>
+          logger.info(Map("icCacheNonHits" -> psIdsNum))(s"$psIdsNum files downloaded from PS instead of IC; a total of $psDownloadsInBytesSize bytes")
       }
-    } yield Success(messageResponse.message.ref, icIds, psIds)
+    } yield Success(messageResponse.message.ref, icIds, icDownloadsBytesSize, psIds, psDownloadsInBytesSize)
   }.handleError(err => Failure(err))
 
   def commitStagedChanges(id: UUID): IO[Unit] = ocflService.commitStagedChanges(id)
@@ -476,6 +484,6 @@ object Processor {
 
     def isError: Boolean = !isSuccess
 
-    case Success(id: UUID, filesDownloadedViaIc: List[String], filesNotFoundViaIc: List[String])
+    case Success(id: UUID, filesDownloadedViaIc: List[String], filesDownloadedSize: Long, filesNotFoundViaIc: List[String], filesNotFoundViaIcSize: Long)
     case Failure(ex: Throwable)
 }

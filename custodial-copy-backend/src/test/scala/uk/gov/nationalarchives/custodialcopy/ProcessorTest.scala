@@ -112,7 +112,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
   }
 
   "process" should "source the file locally instead of downloading it, if it's found in the DB and its checksum matches Preservica's" in {
-    val utils = new ProcessorTestUtils(ContentObject, cacheDir = true, fileChecksum = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+    val utils = new ProcessorTestUtils(ContentObject, cacheDir = true, fileChecksum = "e0ac3601005dfa1864f5392aabaf7d898b1b5bab854f1acb4491bcd806b76b0c")
     val id = utils.coId
     val parentRef = utils.ioId
     val bitstreamId = utils.bitstreamFromApi.name.split("\\.").head
@@ -120,11 +120,12 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
     databaseUtils.addFilesToDriFilesTable(List(DriFile(bitstreamId, utils.cachedFilePath, parentRef.toString)))
 
     val res = utils.processMessage.unsafeRunSync()
-
     res match
-      case Success(ref, icIds, psIds) =>
+      case Success(ref, icIds, filesDownloadedSize, psIds, filesNotFoundViaIcSize) =>
         icIds should equal(List("90dfb573-7419-4e89-8558-6cfa29f8fb16"))
+        filesDownloadedSize should equal(12)
         psIds should equal(Nil)
+        filesNotFoundViaIcSize should equal(0)
       case Failure(e) => throw Exception(s"Test should've returned a 'Success' but returned a failure of $e")
 
     val bitstreamCalls = 1
@@ -172,9 +173,11 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
     val res = utils.processMessage.unsafeRunSync()
 
     res match
-      case Success(ref, icIds, psIds) =>
+      case Success(ref, icIds, filesDownloadedSize, psIds, filesNotFoundViaIcSize) =>
         icIds should equal(Nil)
+        filesDownloadedSize should equal(0)
         psIds should equal(List("90dfb573-7419-4e89-8558-6cfa29f8fb16"))
+        filesNotFoundViaIcSize should equal(61)
       case Failure(e) => throw Exception(s"Test should've returned a 'Success' but returned a failure of $e")
 
     val bitstreamCalls = 1
