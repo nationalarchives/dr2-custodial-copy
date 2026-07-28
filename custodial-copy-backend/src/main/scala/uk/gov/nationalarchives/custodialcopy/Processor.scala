@@ -451,8 +451,12 @@ class Processor(
       _ <- IO.whenA(processorOutput.potentialIcDownloadInfo.isDefined) {
         val icIdsNum = icIds.length.toString
         val psIdsNum = psIds.length.toString
-        logger.info(Map("icCacheHits" -> icIdsNum))(s"$icIdsNum files downloaded from IC instead of PS; a total of $icDownloadsBytesSize bytes") >>
-          logger.info(Map("icCacheNonHits" -> psIdsNum))(s"$psIdsNum files downloaded from PS instead of IC; a total of $psDownloadsInBytesSize bytes")
+        logger.info(Map("icCacheHits" -> icIdsNum, "icDownloadsInBytes" -> icDownloadsBytesSize.toString))(
+          s"$icIdsNum files downloaded from IC instead of PS; a total of $icDownloadsBytesSize bytes"
+        ) >>
+          logger.info(Map("icCacheNonHits" -> psIdsNum, "psDownloadsInBytes" -> psDownloadsInBytesSize.toString))(
+            s"$psIdsNum files downloaded from PS instead of IC; a total of $psDownloadsInBytesSize bytes"
+          )
       }
     } yield Success(messageResponse.message.ref, icIds, icDownloadsBytesSize, psIds, psDownloadsInBytesSize)
   }.handleError(err => Failure(err))
