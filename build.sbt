@@ -40,7 +40,7 @@ def setupDirectories(serviceName: String) =
   )
 
 lazy val root = (project in file("."))
-  .aggregate(custodialCopyBackend, webapp, builder, confirmer, reconciler, reIndexer, utils)
+  .aggregate(custodialCopyBackend, webapp, builder, confirmer, mockTapeApi, reconciler, reIndexer, tapeConfirmer, utils)
   .settings(
     publish / skip := true
   )
@@ -113,6 +113,23 @@ lazy val confirmer = (project in file("custodial-copy-confirmer"))
     name := "custodial-copy-confirmer",
     scalacOptions += "-Wunused:imports",
     assembly / assemblyJarName := "custodial-copy-confirmer.jar",
+    libraryDependencies ++= Seq(
+      fs2Core,
+      dynamoClient
+    )
+  )
+  .dependsOn(utils)
+
+lazy val tapeConfirmer = (project in file("custodial-copy-confirmer"))
+  .enablePlugins(DockerPlugin)
+  .settings(commonSettings)
+  .settings(imageSettings)
+  .settings(
+    target := (confirmer / baseDirectory).value / "target" / "custodial-copy-tape-confirmer",
+    name := "custodial-copy-tape-confirmer",
+    Docker / packageName := "dr2-custodial-copy-tape-confirmer",
+    scalacOptions += "-Wunused:imports",
+    assembly / assemblyJarName := "custodial-copy-tape-confirmer.jar",
     libraryDependencies ++= Seq(
       fs2Core,
       dynamoClient
