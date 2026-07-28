@@ -394,15 +394,16 @@ class Processor(
       allObjectPaths = missingObjectsPaths ++ changedObjectsPaths
 
       potentialIcDownloadInfo = potentialIcDatabase.map { _ =>
-        val allFileObjectPaths = allObjectPaths.filter(_.potentialIcInfo.isDefined)
-        val (filesDownloadedViaIc, filesNotDownloadedViaIc) = allFileObjectPaths.partition(_.potentialIcInfo.get.downloadedLocally)
-
-        val filesIdsDownloadedViaIc = filesDownloadedViaIc.map(_.potentialIcInfo.get.id)
-        val filesDownloadedViaIcSize = filesDownloadedViaIc.flatMap(_.sourceNioFilePath.map(JFiles.size)).sum
-
-        val filesIdsNotDownloadedViaIc = filesNotDownloadedViaIc.map(_.potentialIcInfo.get.id)
-        val filesNotDownloadedViaIcSize = filesNotDownloadedViaIc.flatMap(_.sourceNioFilePath.map(JFiles.size)).sum
-        IntelligentCachingDownloads(filesIdsDownloadedViaIc, filesDownloadedViaIcSize, filesIdsNotDownloadedViaIc, filesNotDownloadedViaIcSize)
+        def getIds(info: List[FileDownloadInfo]) = info.flatMap(_.potentialIcInfo.map(_.id))
+        def getSize(info: List[FileDownloadInfo]) = info.flatMap(_.sourceNioFilePath.map(JFiles.size)).sum
+        val allObjectFilePaths = allObjectPaths.filter(_.potentialIcInfo.isDefined)
+        val (filesDownloadedViaIc, filesNotDownloadedViaIc) = allObjectFilePaths.partition(_.potentialIcInfo.get.downloadedLocally)
+        IntelligentCachingDownloads(
+          getIds(filesDownloadedViaIc),
+          getSize(filesDownloadedViaIc),
+          getIds(filesNotDownloadedViaIc),
+          getSize(filesNotDownloadedViaIc)
+        )
       }
 
       _ <- ocflService.createObjects(missingObjectsPaths)
