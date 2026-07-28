@@ -134,7 +134,7 @@ class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
       "assetId" -> Json.fromString("141bac2e-bab3-4cec-88fd-2649bda971ea"),
       "batchId" -> Json.fromString("some-batch"),
       "payload" -> Json.obj(
-          "preservationSystemId" ->  Json.fromString("d48de631-6fb2-480b-989b-c3b8f48659ec")
+        "preservationSystemId" -> Json.fromString("d48de631-6fb2-480b-989b-c3b8f48659ec")
       )
     )
 
@@ -160,7 +160,7 @@ class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
         )
       )
     )
-    
+
     val decoded = json.as[OutputQueueMessage]
     decoded match {
       case Right(message) =>
