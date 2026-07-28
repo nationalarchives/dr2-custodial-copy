@@ -7,6 +7,8 @@ import java.nio.charset.StandardCharsets
 import io.circe.parser.parse
 import io.circe.Json
 
+import java.nio.file.Path
+
 trait ScoutAM(config: TCConfig, httpService: ScoutAmHttpService):
   def getFileDetails(filePaths: List[String]): Map[String, List[String]]
 
@@ -14,7 +16,8 @@ object ScoutAM:
   def apply(config: TCConfig, httpService: ScoutAmHttpService): ScoutAM = new ScoutAM(config, httpService):
 
     private def getFileDetailsForPath(scoutAmBaseUrl: String, filePath: String, authorisationResponse: AuthorisationResponse): Either[Throwable, FileResponse] =
-      val encodedFilePath = URLEncoder.encode(filePath, StandardCharsets.UTF_8.toString)
+      val fullFilePath = Path.of(config.mountRoot, filePath).toString
+      val encodedFilePath = URLEncoder.encode(fullFilePath, StandardCharsets.UTF_8)
       val request = HttpRequest
         .newBuilder()
         .uri(URI.create(s"$scoutAmBaseUrl/v1/file?path=$encodedFilePath"))

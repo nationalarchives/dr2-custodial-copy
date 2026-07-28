@@ -205,7 +205,8 @@ class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
         |   "dynamo-attribute-name": "result_TC",
         |   "scoutam-base-url":"http://scoutam-base:8080",
         |   "scoutam-username": "Scotty",
-        |   "scoutam-password": "Beam Me"
+        |   "scoutam-password": "Beam Me",
+        |   "mount-root": "/mnt"
         |}
         |""".stripMargin
 

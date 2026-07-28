@@ -44,7 +44,8 @@ case class TCConfig(
     proxyUrl: Option[URI],
     scoutamBaseUrl: String,
     scoutamUsername: String,
-    scoutamPassword: String
+    scoutamPassword: String,
+    mountRoot: String
 ) extends Config derives ConfigReader
 
 extension (s: String) def toAttributeValue: AttributeValue = AttributeValue.builder.s(s).build
