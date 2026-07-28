@@ -120,13 +120,15 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
     databaseUtils.addFilesToDriFilesTable(List(DriFile(bitstreamId, utils.cachedFilePath, parentRef.toString)))
 
     val res = utils.processMessage.unsafeRunSync()
+
+    res.isSuccess should equal(true)
     res match
       case Success(ref, icIds, filesDownloadedSize, psIds, filesNotFoundViaIcSize) =>
         icIds should equal(List("90dfb573-7419-4e89-8558-6cfa29f8fb16"))
         filesDownloadedSize should equal(12)
         psIds should equal(Nil)
         filesNotFoundViaIcSize should equal(0)
-      case Failure(e) => throw Exception(s"Test should've returned a 'Success' but returned a failure of $e")
+      case Failure(_) => ()
 
     val bitstreamCalls = 1
     val icIds = List("90dfb573-7419-4e89-8558-6cfa29f8fb16")
@@ -172,13 +174,14 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
 
     val res = utils.processMessage.unsafeRunSync()
 
+    res.isSuccess should equal(true)
     res match
       case Success(ref, icIds, filesDownloadedSize, psIds, filesNotFoundViaIcSize) =>
         icIds should equal(Nil)
         filesDownloadedSize should equal(0)
         psIds should equal(List("90dfb573-7419-4e89-8558-6cfa29f8fb16"))
         filesNotFoundViaIcSize should equal(61)
-      case Failure(e) => throw Exception(s"Test should've returned a 'Success' but returned a failure of $e")
+      case Failure(_) => ()
 
     val bitstreamCalls = 1
 
