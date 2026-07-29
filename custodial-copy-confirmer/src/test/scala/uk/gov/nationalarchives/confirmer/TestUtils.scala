@@ -55,7 +55,8 @@ object TestUtils:
         val ccConfig = CCConfig("table", dynamoAttributeName, "", Some(URI.create("https://example.com")), repoDir.toString, workDir.toString)
         ccConfig -> Confirmer.ccConfirmer(ocfl(existingRefs, ccConfig))
       else
-        val tcConfig = TCConfig("table", dynamoAttributeName, "", Some(URI.create("https://example.com")), "https://example.com", "user", "password")
+        val tcConfig =
+          TCConfig("table", dynamoAttributeName, "", Some(URI.create("https://example.com")), "https://example.com", "user", "password", "mountRoot")
         tcConfig -> Confirmer.tcConfirmer(scoutAM(existingPaths, tcConfig))
     _ <- Main
       .runConfirmer(
