@@ -15,5 +15,5 @@ object Ocfl:
 
   def apply(config: CCConfig): Ocfl = new Ocfl(config):
     override def getFilePathsForObject(id: UUID): List[String] =
-      if repo.containsObject(id.toString) then repo.describeObject(id.toString).getHeadVersion.getFiles.asScala.map(_.getPath).toList
+      if repo.containsObject(id.toString) then repo.describeObject(id.toString).getHeadVersion.getFiles.asScala.map(_.getStorageRelativePath).toList
       else List.empty

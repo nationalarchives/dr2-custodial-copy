@@ -2,6 +2,7 @@ package uk.gov.nationalarchives.confirmer
 
 import org.scalatest.matchers.should.Matchers.*
 import io.circe.parser.decode
+import io.circe.Json
 import pureconfig.ConfigSource
 
 import scala.language.postfixOps
@@ -129,16 +130,15 @@ class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
   }
 
   "Message decoder" should "decode the CC message" in {
-    val json =
-      """
-        |{
-        |   "assetId": "141bac2e-bab3-4cec-88fd-2649bda971ea",
-        |   "batchId": "some-batch",
-        |   "payload": "{\"preservationSystemId\": \"d48de631-6fb2-480b-989b-c3b8f48659ec\"}"
-        |}
-        |""".stripMargin
+    val json = Json.obj(
+      "assetId" -> Json.fromString("141bac2e-bab3-4cec-88fd-2649bda971ea"),
+      "batchId" -> Json.fromString("some-batch"),
+      "payload" -> Json.obj(
+        "preservationSystemId" -> Json.fromString("d48de631-6fb2-480b-989b-c3b8f48659ec")
+      )
+    )
 
-    val decoded = decode[OutputQueueMessage](json)
+    val decoded = json.as[OutputQueueMessage]
     decoded match {
       case Right(message) =>
         message.payload match {
@@ -150,15 +150,18 @@ class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
   }
 
   "Message decoder" should "decode the TC message" in {
-    val json =
-      """
-        |{
-        |   "assetId": "141bac2e-bab3-4cec-88fd-2649bda971ea",
-        |   "batchId": "some-batch",
-        |   "payload": "{\"filePaths\": [\"/tmp1/file1\", \"/tmp1/file2\"]}"
-        |}
-        |""".stripMargin
-    val decoded = decode[OutputQueueMessage](json)
+    val json = Json.obj(
+      "assetId" -> Json.fromString("141bac2e-bab3-4cec-88fd-2649bda971ea"),
+      "batchId" -> Json.fromString("some-batch"),
+      "payload" -> Json.obj(
+        "filePaths" -> Json.arr(
+          Json.fromString("/tmp1/file1"),
+          Json.fromString("/tmp1/file2")
+        )
+      )
+    )
+
+    val decoded = json.as[OutputQueueMessage]
     decoded match {
       case Right(message) =>
         message.payload match {
@@ -202,7 +205,8 @@ class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
         |   "dynamo-attribute-name": "result_TC",
         |   "scoutam-base-url":"http://scoutam-base:8080",
         |   "scoutam-username": "Scotty",
-        |   "scoutam-password": "Beam Me"
+        |   "scoutam-password": "Beam Me",
+        |   "mount-root": "/mnt"
         |}
         |""".stripMargin
 

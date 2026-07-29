@@ -1,7 +1,6 @@
 package uk.gov.nationalarchives.confirmer
 
 import io.circe.generic.semiauto.*
-import io.circe.parser.parse
 import io.circe.{Decoder, DecodingFailure, HCursor}
 import pureconfig.*
 import pureconfig.ConfigReader.Result
@@ -45,7 +44,8 @@ case class TCConfig(
     proxyUrl: Option[URI],
     scoutamBaseUrl: String,
     scoutamUsername: String,
-    scoutamPassword: String
+    scoutamPassword: String,
+    mountRoot: String
 ) extends Config derives ConfigReader
 
 extension (s: String) def toAttributeValue: AttributeValue = AttributeValue.builder.s(s).build
@@ -86,10 +86,7 @@ given Decoder[OutputQueueMessage] = (c: HCursor) =>
   for {
     assetId <- c.downField("assetId").as[String]
     batchId <- c.downField("batchId").as[String]
-    payloadString <- c.downField("payload").as[String]
-    payload <- parse(payloadString).left
-      .map(err => io.circe.DecodingFailure(err.message, c.history))
-      .flatMap(_.as[Payload])
+    payload <- c.downField("payload").as[Payload]
   } yield OutputQueueMessage(UUID.fromString(assetId), batchId, payload)
 
 final case class FileResponse(archdone: Boolean, copies: List[Copy], checksum: Option[String])
