@@ -76,7 +76,7 @@ object Main extends IOApp {
         for {
           logger <- Slf4jLogger.create[IO]
           messages <- aggregateMessages[IO, OutputQueueMessage](sqsClient, config.sqsUrl)
-          _ <- IO.whenA(messages.nonEmpty)(logger.info(s"Processing message refs ${messages.map(_.message.payload.toString).mkString(",")}"))
+          _ <- IO.whenA(messages.nonEmpty)(logger.info(s"Processing ${messages.length} messages"))
           _ <- messages.parTraverse { sqsMessage =>
             val message = sqsMessage.message
             val payload = message.payload
@@ -107,8 +107,8 @@ object Main extends IOApp {
                     case e                                  => IO.raiseError(e)
                   } >>
                   sqsClient.deleteMessage(config.sqsUrl, sqsMessage.receiptHandle).void
-
-              case Result.Failure(err) => logError[IO](err)
+              case Result.Failure(err) if err.getMessage.contains("Invalid payload") => logger.error(err.getMessage)
+              case Result.Failure(err)                                               => logger.info(err.getMessage)
           }
         } yield ()
       }
