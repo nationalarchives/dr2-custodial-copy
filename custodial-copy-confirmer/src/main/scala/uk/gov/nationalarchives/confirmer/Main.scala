@@ -108,7 +108,7 @@ object Main extends IOApp {
                   } >>
                   sqsClient.deleteMessage(config.sqsUrl, sqsMessage.receiptHandle).void
               case Result.Failure(err) if err.getMessage.contains("Invalid payload") => logger.error(err.getMessage)
-              case Result.Failure(err) => logger.info(err.getMessage)
+              case Result.Failure(err)                                               => logger.info(err.getMessage)
           }
         } yield ()
       }
