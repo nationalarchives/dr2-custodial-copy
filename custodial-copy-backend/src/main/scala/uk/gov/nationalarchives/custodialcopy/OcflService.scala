@@ -1,7 +1,7 @@
 package uk.gov.nationalarchives.custodialcopy
 
 import cats.effect.IO
-import cats.effect.std.Semaphore
+import cats.effect.std.{MapRef, Semaphore}
 import cats.syntax.all.*
 import io.ocfl.api.exception.{CorruptObjectException, NotFoundException}
 import io.ocfl.api.model.DigestAlgorithm
@@ -23,24 +23,28 @@ import java.util.UUID
 import scala.jdk.CollectionConverters.*
 import scala.jdk.FunctionConverters.*
 
-class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO]) {
+class OcflService(ocflRepository: MutableOcflRepository, semaphoreMap: MapRef[IO, UUID, Option[Semaphore[IO]]]) {
 
   given Logger[IO] = Slf4jLogger.getLogger[IO]
 
-  private def logErrorAndRelease: PartialFunction[Throwable, IO[Unit]] =
-    case err => Logger[IO].error(err)(err.getMessage) >> semaphore.release
+  private def logErrorAndRelease(id: UUID): PartialFunction[Throwable, IO[Unit]] =
+    case err => Logger[IO].error(err)(err.getMessage) >> semaphoreRelease(id)
+
+  private def semaphoreAcquire(id: UUID): IO[Unit] = semaphoreMap(id).get.flatMap(_.map(_.acquire).getOrElse(IO.unit))
+
+  private def semaphoreRelease(id: UUID): IO[Unit] = semaphoreMap(id).get.flatMap(_.map(_.release).getOrElse(IO.unit))
 
   def commitStagedChanges(id: UUID): IO[Unit] =
-    semaphore.acquire >> IO.whenA(ocflRepository.hasStagedChanges(id.toString)) {
+    semaphoreAcquire(id) >> IO.whenA(ocflRepository.hasStagedChanges(id.toString)) {
       IO.blocking[Unit] {
         ocflRepository.commitStagedChanges(id.toString, null)
-      }.onError(logErrorAndRelease)
-    } >> semaphore.release
+      }.onError(logErrorAndRelease(id))
+    } >> semaphoreRelease(id)
 
-  def createObjects(paths: List[FileDownloadInfo]): IO[Unit] = paths
+  def createObjects(id: UUID, paths: List[FileDownloadInfo]): IO[Unit] = paths
     .traverse { path =>
       IO.whenA(path.sourceNioFilePath.isDefined) {
-        semaphore.acquire >> IO.blocking {
+        semaphoreAcquire(id) >> IO.blocking {
           ocflRepository.stageChanges(
             path.id.toHeadVersion,
             null,
@@ -54,13 +58,13 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO
               ()
             }.asJava
           )
-        } >> semaphore.release
+        } >> semaphoreRelease(id)
       }
     }
-    .onError(logErrorAndRelease)
+    .onError(logErrorAndRelease(id))
     .void
 
-  def deleteObjects(ioId: UUID, destinationFilePaths: List[String]): IO[Unit] = semaphore.acquire >> IO
+  def deleteObjects(ioId: UUID, destinationFilePaths: List[String]): IO[Unit] = semaphoreAcquire(ioId) >> IO
     .blocking {
       ocflRepository.stageChanges(
         ioId.toHeadVersion,
@@ -68,7 +72,7 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO
         { (updater: OcflObjectUpdater) => destinationFilePaths.foreach { path => updater.removeFile(path) } }.asJava
       )
     }
-    .onError(logErrorAndRelease) >> semaphore.release
+    .onError(logErrorAndRelease(ioId)) >> semaphoreRelease(ioId)
 
   def getMissingAndChangedObjects(
       objects: List[CustodialCopyObject]
@@ -114,7 +118,7 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO
     }
 
   private def purgeObject(objectId: UUID) = {
-    semaphore.acquire >> IO.blocking(ocflRepository.purgeObject(objectId.toString)).onError(logErrorAndRelease) >> semaphore.release
+    semaphoreAcquire(objectId) >> IO.blocking(ocflRepository.purgeObject(objectId.toString)).onError(logErrorAndRelease(objectId)) >> semaphoreRelease(objectId)
   }
 
   private def isChecksumUnchanged(fixitiesMap: Map[DigestAlgorithm, String], checksums: List[Checksum]): IO[Boolean] = {
@@ -163,7 +167,7 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphore: Semaphore[IO
 }
 object OcflService {
 
-  def apply(config: Config, semaphore: Semaphore[IO]): IO[OcflService] = IO {
+  def apply(config: Config, semaphoreMap: MapRef[IO, UUID, Option[Semaphore[IO]]]): IO[OcflService] = IO {
     val repoDir = Paths.get(config.repoDir)
     val workDir =
       Paths.get(
@@ -185,7 +189,7 @@ object OcflService {
       .prettyPrintJson()
       .workDir(workDir)
       .buildMutable()
-    new OcflService(repo, semaphore)
+    new OcflService(repo, semaphoreMap)
   }
   case class MissingAndChangedObjects(
       missingObjects: List[CustodialCopyObject],
