@@ -75,7 +75,7 @@ object Main extends IOApp {
       .eval {
         for {
           logger <- Slf4jLogger.create[IO]
-          messages <- aggregateMessages[IO, OutputQueueMessage](sqsClient, config.sqsUrl)
+          messages <- aggregateMessages[IO, OutputQueueMessage](sqsClient, config.sqsUrl, config.maxMessages)
           _ <- IO.whenA(messages.nonEmpty)(logger.info(s"Processing message refs ${messages.map(_.message.payload.toString).mkString(",")}"))
           _ <- messages.parTraverse { sqsMessage =>
             val message = sqsMessage.message

@@ -181,7 +181,8 @@ class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
         |   "proxy-url": "http://localhost:1234",
         |   "sqs-url": "some_sqs_queue_url",
         |   "dynamo-table-name": "DYNAMO_TABLE",
-        |   "dynamo-attribute-name": "result_CC"
+        |   "dynamo-attribute-name": "result_CC",
+        |   "max-messages": "50"
         |}
         |""".stripMargin
 
@@ -206,7 +207,8 @@ class ModelsTest extends org.scalatest.flatspec.AnyFlatSpec {
         |   "scoutam-base-url":"http://scoutam-base:8080",
         |   "scoutam-username": "Scotty",
         |   "scoutam-password": "Beam Me",
-        |   "mount-root": "/mnt"
+        |   "mount-root": "/mnt",
+        |   "max-messages": "50"
         |}
         |""".stripMargin
 

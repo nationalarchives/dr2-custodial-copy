@@ -22,7 +22,7 @@ class OcflTest extends AnyFlatSpec:
     repository.putObject(ObjectVersionId.head(existingRef.toString), filePath, new VersionInfo())
     val refHex = DigestUtil.computeDigestHex(DigestAlgorithm.fromOcflName("sha256"), existingRef.toString)
     val path = s"${refHex.slice(0, 3)}/${refHex.slice(3, 6)}/${refHex.slice(6, 9)}/$refHex/v1/content"
-    val ocfl = Ocfl(CCConfig("table", "attribute", "", Some(URI.create("http://localhost")), repoDir, workDir))
+    val ocfl = Ocfl(CCConfig("table", "attribute", "", Some(URI.create("http://localhost")), repoDir, workDir, 50))
     ocfl.getFilePathsForObject(existingRef) should be(List(s"$path/${filePath.getFileName}"))
     ocfl.getFilePathsForObject(nonExistingRef) should be(Nil)
   }

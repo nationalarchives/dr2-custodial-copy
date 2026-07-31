@@ -27,6 +27,7 @@ sealed trait Config:
   def dynamoAttributeName: String
   def sqsUrl: String
   def proxyUrl: Option[URI]
+  def maxMessages: Int
 
 case class CCConfig(
     dynamoTableName: String,
@@ -34,7 +35,8 @@ case class CCConfig(
     sqsUrl: String,
     proxyUrl: Option[URI],
     ocflRepoDir: String,
-    ocflWorkDir: String
+    ocflWorkDir: String,
+    maxMessages: Int
 ) extends Config derives ConfigReader
 
 case class TCConfig(
@@ -45,7 +47,8 @@ case class TCConfig(
     scoutamBaseUrl: String,
     scoutamUsername: String,
     scoutamPassword: String,
-    mountRoot: String
+    mountRoot: String,
+    maxMessages: Int
 ) extends Config derives ConfigReader
 
 extension (s: String) def toAttributeValue: AttributeValue = AttributeValue.builder.s(s).build
