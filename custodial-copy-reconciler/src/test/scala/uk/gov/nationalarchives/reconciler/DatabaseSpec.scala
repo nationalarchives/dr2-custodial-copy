@@ -2,9 +2,9 @@ package uk.gov.nationalarchives.reconciler
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import doobie.Put
-import doobie.implicits.*
-import doobie.util.Get
+import org.typelevel.doobie.Put
+import org.typelevel.doobie.implicits.*
+import org.typelevel.doobie.util.Get
 import fs2.Chunk
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.flatspec.AnyFlatSpec
