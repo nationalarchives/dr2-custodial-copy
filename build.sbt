@@ -54,6 +54,7 @@ lazy val custodialCopyBackend = (project in file("custodial-copy-backend"))
     assembly / assemblyJarName := "custodial-copy.jar",
     scalacOptions += "-Wunused:imports",
     libraryDependencies ++= Seq(
+      commonsCodec,
       h2,
       preservicaClient,
       snsClient,
@@ -160,6 +161,7 @@ lazy val reconciler = (project in file("custodial-copy-reconciler"))
     scalacOptions += "-Wunused:imports",
     assembly / assemblyJarName := "custodial-copy-reconciler.jar",
     libraryDependencies ++= Seq(
+      commonsCodec,
       eventbridgeClient,
       fs2Core,
       h2,
