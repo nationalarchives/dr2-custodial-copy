@@ -168,7 +168,6 @@ lazy val reconciler = (project in file("custodial-copy-reconciler"))
   )
   .dependsOn(utils)
 
-
 lazy val mockTapeApi = (project in file("custodial-copy-mock-tape-api"))
   .enablePlugins(DockerPlugin)
   .settings(imageSettings)
