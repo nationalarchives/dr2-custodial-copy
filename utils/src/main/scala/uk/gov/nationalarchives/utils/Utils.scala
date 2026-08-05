@@ -5,7 +5,7 @@ import cats.syntax.all.*
 import doobie.util.{Get, Put}
 import io.circe.Decoder
 import io.ocfl.api.model.{DigestAlgorithm, ObjectVersionId, OcflObjectVersionFile}
-import io.ocfl.api.{OcflConfig, OcflRepository}
+import io.ocfl.api.{MutableOcflRepository, OcflConfig, OcflRepository}
 import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.storage.{OcflStorage, OcflStorageBuilder}
@@ -18,6 +18,7 @@ import java.nio.file.{Files, Paths}
 import java.time.Instant
 import java.util.UUID
 import scala.jdk.CollectionConverters.*
+import scala.jdk.FunctionConverters.*
 import scala.xml.XML
 object Utils:
 
@@ -105,7 +106,7 @@ object Utils:
     }
   }
 
-  def createOcflRepository(ocflRepoDir: String, ocflWorkDir: String): OcflRepository = {
+  def createOcflRepository(ocflRepoDir: String, ocflWorkDir: String): MutableOcflRepository = {
     val repoDir = Paths.get(ocflRepoDir)
     val workDir = Paths.get(ocflWorkDir)
     val storage: OcflStorage = OcflStorageBuilder.builder().fileSystem(repoDir).build
@@ -113,11 +114,17 @@ object Utils:
     ocflConfig.setDefaultDigestAlgorithm(DigestAlgorithm.fromOcflName("sha256"))
     new OcflRepositoryBuilder()
       .defaultLayoutConfig(new HashedNTupleLayoutConfig())
-      .storage(storage)
-      .ocflConfig(ocflConfig)
+      .storage(((osb: OcflStorageBuilder) => {
+        osb.fileSystem(repoDir)
+        ()
+      }).asJava)
+      .ocflConfig(((config: OcflConfig) => {
+        config.setDefaultDigestAlgorithm(DigestAlgorithm.fromOcflName("sha256"))
+        ()
+      }).asJava)
       .prettyPrintJson()
       .workDir(workDir)
-      .build()
+      .buildMutable()
   }
 
   def aggregateMessages[F[_]: Sync, T: Decoder](sqs: DASQSClient[F], sqsQueueUrl: String): F[List[MessageResponse[T]]] = {

@@ -1,5 +1,6 @@
 package uk.gov.nationalarchives.confirmer
 
+import io.ocfl.api.MutableOcflRepository
 import io.ocfl.api.model.{DigestAlgorithm, ObjectVersionId, VersionInfo}
 import io.ocfl.core.util.DigestUtil
 import org.scalatest.flatspec.AnyFlatSpec
@@ -12,7 +13,7 @@ import java.util.UUID
 
 class OcflTest extends AnyFlatSpec:
 
-  "getFilePathsforObject" should "return valid paths if an object exists or empty list otherwise" in {
+  "getFilePathsforObject" should "return valid paths if an object exists and there are no staged changes or empty list otherwise" in {
     val repoDir = Files.createTempDirectory("repo").toString
     val workDir = Files.createTempDirectory("work").toString
     val repository = createOcflRepository(repoDir, workDir)
@@ -25,4 +26,21 @@ class OcflTest extends AnyFlatSpec:
     val ocfl = Ocfl(CCConfig("table", "attribute", "", Some(URI.create("http://localhost")), repoDir, workDir))
     ocfl.getFilePathsForObject(existingRef) should be(List(s"$path/${filePath.getFileName}"))
     ocfl.getFilePathsForObject(nonExistingRef) should be(Nil)
+  }
+
+  "getFilePathsforObject" should "return an empty list if an object exists but there are staged changes" in {
+    val repoDir = Files.createTempDirectory("repo").toString
+    val workDir = Files.createTempDirectory("work").toString
+    val repository: MutableOcflRepository = createOcflRepository(repoDir, workDir)
+    val existingRef = UUID.randomUUID
+    val filePath = Files.createTempFile(existingRef.toString, "")
+    repository.stageChanges(
+      ObjectVersionId.head(existingRef.toString),
+      new VersionInfo(),
+      updater => {
+        updater.addPath(filePath)
+      }
+    )
+    val ocfl = Ocfl(CCConfig("table", "attribute", "", Some(URI.create("http://localhost")), repoDir, workDir))
+    ocfl.getFilePathsForObject(existingRef) should be(Nil)
   }

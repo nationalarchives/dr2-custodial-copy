@@ -346,8 +346,10 @@ In case of the CCConfirmer, the payload contains Preservation System ID, so the 
    "payload": "{\"preservationSystemId\": \"d48de631-6fb2-480b-989b-c3b8f48659ec\"}"
 }
 ```
-Based on this ID, the CCConfirmer looks into the OCFL
-repository, if the files are found in the OCFL repository, CCConfirmer, gets the File Paths for all the files. It then updates
+Based on this ID, the CCConfirmer looks into the OCFL repository. 
+If the object does not yet exist, an empty file list is returned. 
+If the object has been created but has staged changes, this means that the backend process is still running for an asset so an empty file list is returned.
+Otherwise, CCConfirmer, gets the File Paths for all the files. It then updates
 the POSTINGEST_STATE_TABLE and saves this list of File Paths into an attribute identified by the `DYNAMO_ATTRIBUTE_NAME`, in case
 of CCConfirmer, this attribute is called `result_CC`. Once this is done, the job of CCConfirmer for this particular Preservation 
 System ID is over.
