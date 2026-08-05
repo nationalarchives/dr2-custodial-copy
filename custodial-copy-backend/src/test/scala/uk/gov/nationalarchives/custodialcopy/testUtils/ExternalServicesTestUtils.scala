@@ -1,7 +1,7 @@
 package uk.gov.nationalarchives.custodialcopy.testUtils
 
 import cats.effect.IO
-import cats.effect.std.Semaphore
+import cats.effect.std.{MapRef, Semaphore}
 import cats.effect.unsafe.implicits.global
 import fs2.Stream
 import io.circe.{Decoder, Encoder}
@@ -53,6 +53,7 @@ import scala.jdk.FunctionConverters.*
 import java.net.URI
 import java.nio.file.{Files, Path, Paths}
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import scala.concurrent.duration.Duration
 import scala.jdk.CollectionConverters.ListHasAsScala
 import scala.util.{Failure, Success, Try}
@@ -209,9 +210,10 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     Files.createDirectories(Paths.get(path.toString, id.toString))
     val fullSourceFilePath = Paths.get(path.toString, sourceFilePath)
     Files.write(fullSourceFilePath, bodyAsString.getBytes)
-    val semaphore: Semaphore[IO] = Semaphore[IO](1).unsafeRunSync()
-    new OcflService(repo, semaphore)
-      .createObjects(List(FileDownloadInfo(id, Option(fullSourceFilePath), destinationPath)))
+    val underlyingMap: ConcurrentHashMap[UUID, Semaphore[IO]] = ConcurrentHashMap[UUID, Semaphore[IO]]()
+    val semaphoreMap: MapRef[IO, UUID, Option[Semaphore[IO]]] = MapRef.fromConcurrentHashMap(underlyingMap)
+    new OcflService(repo, semaphoreMap)
+      .createObjects(id, List(FileDownloadInfo(id, Option(fullSourceFilePath), destinationPath)))
       .unsafeRunSync()
   }
 
@@ -303,7 +305,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         s"/${Files.writeString(Files.createTempFile(cacheDir, "file", ""), "file content").toString}"
       else ""
 
-    val config: Config = Config("", "", repoDir.toString, workDir, downloadDir, None, "", "", Duration("1s"), potentialDbName, cacheDir.toString)
+    val config: Config = Config("", "", repoDir.toString, workDir, downloadDir, None, "", "", Duration("1s"), potentialDbName, cacheDir.toString, 50)
 
     val bitstreamInfoResponsesWithSameName: Seq[BitStreamInfo] = bitstreamInfo1Responses.flatMap { bitstreamInfo1Response =>
       bitstreamInfo2Responses.filter { bitstreamInfo2Response =>
@@ -419,8 +421,9 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       .foreach { case (data, name, destinationPath) =>
         addFileToRepo(ioId, repo, data, s"$ioId/$name", destinationPath)
       }
-    val semaphore: Semaphore[IO] = Semaphore[IO](1).unsafeRunSync()
-    val ocflService = new OcflService(repo, semaphore)
+    val underlyingMap: ConcurrentHashMap[UUID, Semaphore[IO]] = ConcurrentHashMap[UUID, Semaphore[IO]]()
+    val semaphoreMap: MapRef[IO, UUID, Option[Semaphore[IO]]] = MapRef.fromConcurrentHashMap(underlyingMap)
+    val ocflService = new OcflService(repo, semaphoreMap)
     val xmlValidator: ValidateXmlAgainstXsd[IO] = ValidateXmlAgainstXsd[IO](XipXsdSchemaV7)
     val processor = new Processor(config, sqsClient, ocflService, preservicaClient, xmlValidator, snsClient)
 
@@ -474,7 +477,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         "topicArn",
         Duration("1s"),
         if cacheDir then Some(databaseName) else None,
-        filesCacheDir.toString
+        filesCacheDir.toString,
+        1
       )
     val ioId: UUID = UUID.randomUUID()
     val coId: UUID = UUID.randomUUID()
@@ -496,7 +500,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       MessageResponse[ReceivedSnsMessage]("receiptHandle1", Option(ioMessage.ref.toString), ioMessage)
 
     val coMessageResponse: MessageResponse[ReceivedSnsMessage] =
-      MessageResponse[ReceivedSnsMessage]("receiptHandle2", Option(coMessage.ref.toString), coMessage)
+      MessageResponse[ReceivedSnsMessage]("receiptHandle2", Option(ioMessage.ref.toString), coMessage)
 
     private val potentialParentRef = if parentRefExists then Some(ioId) else None
 
@@ -565,6 +569,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     private val repTypeCaptor: ArgumentCaptor[RepresentationType] = ArgumentCaptor.forClass(classOf[RepresentationType])
     private val repIndexCaptor: ArgumentCaptor[Int] = ArgumentCaptor.forClass(classOf[Int])
 
+    private val idCaptor: ArgumentCaptor[UUID] = ArgumentCaptor.forClass(classOf[UUID])
     private val fileDownloadInfoCaptor: ArgumentCaptor[List[FileDownloadInfo]] =
       ArgumentCaptor.forClass(classOf[List[FileDownloadInfo]])
     private val metadataXmlStringToValidate: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
@@ -638,7 +643,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
               }
             )
           )
-      when(ocflService.createObjects(any[List[FileDownloadInfo]])).thenReturn(IO.unit)
+      when(ocflService.createObjects(any[UUID], any[List[FileDownloadInfo]])).thenReturn(IO.unit)
       when(ocflService.getAllFilePathsOnAnObject(any[UUID])).thenReturn(IO.pure(pathsOfObjects))
       when(ocflService.deleteObjects(any[UUID], any[List[String]])).thenReturn(IO.unit)
       when(ocflService.commitStagedChanges(commitIdCaptor.capture)).thenReturn(IO.unit)
@@ -757,7 +762,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         droLookupCaptor.capture()
       )
       verify(ocflService, times(createdFileDownloadInfo.length))
-        .createObjects(fileDownloadInfoCaptor.capture())
+        .createObjects(idCaptor.capture(), fileDownloadInfoCaptor.capture())
 
       val numOfTimesToDeleteObjects = if destinationPathsToDelete.nonEmpty then 1 else 0
       verify(ocflService, times(numOfTimesToDeleteObjects))
@@ -800,6 +805,10 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         capturedIdWithSourceAndDestPath.potentialIcInfo should equal(expectedIdWithSourceAndDestPath.potentialIcInfo)
 
         File(sourcePathString).exists() should equal(false)
+      }
+
+      idCaptor.getAllValues.asScala.headOption.map { id =>
+        id shouldEqual ioId
       }
       val capturedLookupDestinationPaths = droLookupCaptor.getAllValues.asScala.toList.map(_.map(_.destinationFilePath))
       capturedLookupDestinationPaths should equal(drosToLookup)

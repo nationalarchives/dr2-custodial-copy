@@ -1,7 +1,7 @@
 package uk.gov.nationalarchives.custodialcopy
 
 import cats.effect.IO
-import cats.effect.std.Semaphore
+import cats.effect.std.{MapRef, Semaphore}
 import cats.effect.unsafe.implicits.global
 import io.circe.Decoder
 import io.ocfl.api.MutableOcflRepository
@@ -33,6 +33,7 @@ import java.nio.file
 import java.nio.file.{Files, Path, Paths}
 import java.time.{LocalDate, LocalDateTime}
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import scala.jdk.CollectionConverters.*
 import scala.concurrent.duration.*
 import scala.xml.Utility.trim
@@ -57,7 +58,10 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
       sqsClient: DASQSClient[IO],
       config: Config,
       processor: Processor
-  ): List[Result] = Main.runCustodialCopy(sqsClient, config, processor).compile.toList.unsafeRunSync().flatten
+  ): List[Result] = {
+    val mapRef = MapRef.fromConcurrentHashMap[IO, UUID, Semaphore[IO]](ConcurrentHashMap[UUID, Semaphore[IO]]())
+    Main.runCustodialCopy(sqsClient, config, processor, mapRef).compile.toList.unsafeRunSync().flatten
+  }
 
   private val exampleUrl = "https://example.com"
 
@@ -252,7 +256,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     Files.write(tempFile, "test".getBytes)
     val destinationPath = s"${utils.ioId}/Preservation_1/${utils.coId1}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2"
     (for
-      _ <- utils.ocflService.createObjects(List(FileDownloadInfo(utils.ioId, Option(tempFile), destinationPath)))
+      _ <- utils.ocflService.createObjects(utils.ioId, List(FileDownloadInfo(utils.ioId, Option(tempFile), destinationPath)))
       _ <- utils.ocflService.commitStagedChanges(utils.ioId)
     yield ()).unsafeRunSync()
 
@@ -801,8 +805,9 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
 
     val repo = mock[MutableOcflRepository]
     when(repo.getObject(any[ObjectVersionId])).thenThrow(new RuntimeException("Unexpected Exception"))
-    val semaphore: Semaphore[IO] = Semaphore[IO](1).unsafeRunSync()
-    val ocflService = new OcflService(repo, semaphore)
+    val underlyingMap: ConcurrentHashMap[UUID, Semaphore[IO]] = ConcurrentHashMap[UUID, Semaphore[IO]]()
+    val semaphoreMap: MapRef[IO, UUID, Option[Semaphore[IO]]] = MapRef.fromConcurrentHashMap(underlyingMap)
+    val ocflService = new OcflService(repo, semaphoreMap)
     val processor =
       new Processor(
         utils.config,
@@ -916,7 +921,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     val messageIdOne = Option(UUID.randomUUID.toString)
     val messageIdTwo = Option(UUID.randomUUID.toString)
 
-    val config: Config = Config("", "https://queue", "", "", "", None, "", "", 2.seconds, Some(databaseName), "")
+    val config: Config = Config("", "https://queue", "", "", "", None, "", "", 2.seconds, Some(databaseName), "", 50)
     val sqsClient = mock[DASQSClient[IO]]
 
     val processor = new TestProcessor(
@@ -965,7 +970,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     val delayedId = UUID.randomUUID
     val id = UUID.randomUUID
     val messageId = Option(UUID.randomUUID.toString)
-    val config: Config = Config("", "https://queue", "", "", "", None, "", "", 2.seconds, Some(databaseName), "")
+    val config: Config = Config("", "https://queue", "", "", "", None, "", "", 2.seconds, Some(databaseName), "", 1)
     val sqsClient = mock[DASQSClient[IO]]
 
     val processor = new TestProcessor(
