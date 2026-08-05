@@ -13,7 +13,7 @@ import java.util.UUID
 
 class OcflTest extends AnyFlatSpec:
 
-  "getFilePathsforObject" should "return valid paths if an object exists or empty list otherwise" in {
+  "getFilePathsforObject" should "return valid paths if an object exists and there are no staged changes or empty list otherwise" in {
     val repoDir = Files.createTempDirectory("repo").toString
     val workDir = Files.createTempDirectory("work").toString
     val repository = createOcflRepository(repoDir, workDir)
@@ -28,7 +28,7 @@ class OcflTest extends AnyFlatSpec:
     ocfl.getFilePathsForObject(nonExistingRef) should be(Nil)
   }
 
-  "getFilePathsforObject" should "return an empty list if there are staged changes" in {
+  "getFilePathsforObject" should "return an empty list if an object exists but there are staged changes" in {
     val repoDir = Files.createTempDirectory("repo").toString
     val workDir = Files.createTempDirectory("work").toString
     val repository: MutableOcflRepository = createOcflRepository(repoDir, workDir)
