@@ -41,6 +41,6 @@ class OcflTest extends AnyFlatSpec:
         updater.addPath(filePath)
       }
     )
-    val ocfl = Ocfl(CCConfig("table", "attribute", "", Some(URI.create("http://localhost")), repoDir, workDir))
+    val ocfl = Ocfl(CCConfig("table", "attribute", "", Some(URI.create("http://localhost")), repoDir, workDir, 50))
     ocfl.getFilePathsForObject(existingRef) should be(Nil)
   }
