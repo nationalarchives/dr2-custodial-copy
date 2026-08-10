@@ -1,7 +1,7 @@
 package uk.gov.nationalarchives.custodialcopy
 
 import cats.effect.*
-import cats.effect.std.Semaphore
+import cats.effect.std.{MapRef, Semaphore}
 import cats.implicits.*
 import fs2.Stream
 import io.circe.{Decoder, HCursor}
@@ -19,6 +19,8 @@ import uk.gov.nationalarchives.utils.Utils.*
 import java.net.URI
 import java.nio.file
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import scala.jdk.CollectionConverters.*
 import scala.concurrent.duration.{Duration, DurationInt}
 
 object Main extends IOApp {
@@ -34,7 +36,8 @@ object Main extends IOApp {
       topicArn: String,
       queueTimeout: Duration,
       potentialIcDbPath: Option[String],
-      filesCacheDir: String
+      filesCacheDir: String,
+      maxMessages: Int
   ) derives ConfigReader
 
   given Decoder[ReceivedSnsMessage] = (c: HCursor) =>
@@ -60,28 +63,44 @@ object Main extends IOApp {
   private case class DedupedMessages(removedMessages: List[MessageResponse[ReceivedSnsMessage]], retainedMessages: List[MessageResponse[ReceivedSnsMessage]])
 
   override def run(args: List[String]): IO[ExitCode] =
+    val underlyingMap = ConcurrentHashMap[UUID, Semaphore[IO]]()
+    val semaphoreMap: MapRef[IO, UUID, Option[Semaphore[IO]]] = MapRef.fromConcurrentHashMap[IO, UUID, Semaphore[IO]](underlyingMap)
+
+    def semaphoreRelease() =
+      underlyingMap
+        .keySet()
+        .asScala
+        .toList
+        .traverse(id => semaphoreMap(id).get)
+        .flatMap(_.flatten.traverse(_.release))
+        .void
     for {
       config <- ConfigSource.default.loadF[IO, Config]()
       client <- Fs2Client.entityClient(
         config.preservicaSecretName,
         potentialProxyUrl = config.potentialProxyUrl
       )
-      semaphore <- Semaphore[IO](1)
-      service <- OcflService(config, semaphore)
+
+      service <- OcflService(config, semaphoreMap)
       sqs = sqsClient[IO](config.potentialProxyUrl)
       sns = DASNSClient[IO]()
       processor <- Processor(config, sqs, service, client, sns)
       _ <- {
         Stream.fixedRateStartImmediately[IO](10.seconds) >>
-          runCustodialCopy(sqs, config, processor)
-            .map(outcomes => if outcomes.exists(_.isError) then semaphore.release else IO.unit)
-            .handleErrorWith(err => Stream.eval(semaphore.release >> logError(err)))
+          runCustodialCopy(sqs, config, processor, semaphoreMap)
+            .map(outcomes => if outcomes.exists(_.isError) then semaphoreRelease() else IO.unit)
+            .handleErrorWith(err => Stream.eval(semaphoreRelease() >> logError(err)))
       }.compile.drain
     } yield ExitCode.Success
 
-  def runCustodialCopy(sqs: DASQSClient[IO], config: Config, processor: Processor): Stream[IO, List[Result]] =
+  def runCustodialCopy(
+      sqs: DASQSClient[IO],
+      config: Config,
+      processor: Processor,
+      semaphoreMap: MapRef[IO, UUID, Option[Semaphore[IO]]]
+  ): Stream[IO, List[Result]] =
     Stream
-      .eval(aggregateMessages(sqs, config.sqsQueueUrl))
+      .eval(aggregateMessages(sqs, config.sqsQueueUrl, config.maxMessages))
       .filter(messageResponses => messageResponses.nonEmpty)
       .evalMap { messageResponses =>
         messageResponses
@@ -90,13 +109,18 @@ object Main extends IOApp {
           .parTraverse { case (potentialMessageGroupId, responses) =>
             potentialMessageGroupId match
               case Some(groupId) =>
-                processMessages(processor, responses, groupId, config)
+                val groupUuid = UUID.fromString(groupId)
+                for
+                  semaphore <- Semaphore[IO](1)
+                  _ <- semaphoreMap(groupUuid).update(_ => semaphore.some)
+                  res <- processMessages(processor, responses, groupUuid, config)
+                yield res
               case None => IO.raiseError(new Exception("Message Group ID is missing"))
           }
           .map(_.flatten)
       }
 
-  private def processMessages(processor: Processor, responses: List[MessageResponse[ReceivedSnsMessage]], groupId: String, config: Config) = {
+  private def processMessages(processor: Processor, responses: List[MessageResponse[ReceivedSnsMessage]], groupId: UUID, config: Config) = {
     for {
       logger <- Slf4jLogger.create[IO]
       _ <- logger.info(s"Processing ${responses.length} messages")
@@ -111,7 +135,7 @@ object Main extends IOApp {
       results <- dedupedMessages.retainedMessages.traverse(processor.process)
       removedResults = dedupedMessages.removedMessages.map(r => Success(r.message.ref, Nil, 0L, Nil, 0L))
 
-      _ <- processor.commitStagedChanges(UUID.fromString(groupId))
+      _ <- processor.commitStagedChanges(groupId)
       _ <- logger.info(s"${results.count(_.isSuccess)} out of ${results.length} unique messages processed successfully")
       _ <- logger.info(s"${results.count(_.isError)} out of ${results.length} unique messages failed")
 

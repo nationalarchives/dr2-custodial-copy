@@ -7,11 +7,11 @@ import uk.gov.nationalarchives.confirmer.TestUtils.{OcflErrors, ScoutAmErrors}
 
 class ConfirmerTest extends AnyFlatSpec {
   "getConfirmer" should "return correct instance of confirmer based on the config type" in {
-    Confirmer.getConfirmer(CCConfig("table", result_CC.toString, "", null, "", "")).getClass.getDeclaredFields.apply(1).getType.getSimpleName should equal(
+    Confirmer.getConfirmer(CCConfig("table", result_CC.toString, "", null, "", "", 50)).getClass.getDeclaredFields.apply(1).getType.getSimpleName should equal(
       "Ocfl"
     )
     Confirmer
-      .getConfirmer(TCConfig("table", result_TC.toString, "", null, "", "", "", "mountRoot"))
+      .getConfirmer(TCConfig("table", result_TC.toString, "", null, "", "", "", "mountRoot", 50))
       .getClass
       .getDeclaredFields
       .apply(1)
@@ -24,7 +24,7 @@ class ConfirmerTest extends AnyFlatSpec {
   "CC Confirmer getResult" should "return success when the payload and service is valid" in {
     val uuid = java.util.UUID.randomUUID()
     val ccPayload = CCPayload(uuid)
-    val ocfl = TestUtils.ocfl(List(uuid), CCConfig("table", result_CC.toString, "", null, "", ""))
+    val ocfl = TestUtils.ocfl(List(uuid), CCConfig("table", result_CC.toString, "", null, "", "", 50))
     val ccResult = Confirmer.ccConfirmer(ocfl).getResult(ccPayload)
 
     ccResult.isSuccess should be(true)
@@ -37,7 +37,7 @@ class ConfirmerTest extends AnyFlatSpec {
 
   "CC Confirmer getResult" should "return failure when the payload is invalid" in {
     val tcPayload = TCPayload(List("file1.txt", "file2.txt")) // Invalid payload for CC confirmer
-    val ocfl = TestUtils.ocfl(List(java.util.UUID.randomUUID()), CCConfig("table", result_CC.toString, "", null, "", ""))
+    val ocfl = TestUtils.ocfl(List(java.util.UUID.randomUUID()), CCConfig("table", result_CC.toString, "", null, "", "", 50))
     val ccResult = Confirmer.ccConfirmer(ocfl).getResult(tcPayload)
 
     ccResult.isError should be(true)
@@ -51,7 +51,7 @@ class ConfirmerTest extends AnyFlatSpec {
   "CC Confirmer getResult" should "fail if the paths cannot be found" in {
     val uuid = java.util.UUID.randomUUID()
     val ccPayload = CCPayload(uuid)
-    val ocfl = TestUtils.ocfl(List(java.util.UUID.randomUUID()), CCConfig("table", result_CC.toString, "", null, "", ""), OcflErrors(true))
+    val ocfl = TestUtils.ocfl(List(java.util.UUID.randomUUID()), CCConfig("table", result_CC.toString, "", null, "", "", 50), OcflErrors(true))
     val ccResult = Confirmer.ccConfirmer(ocfl).getResult(ccPayload)
 
     ccResult.isError should be(true)
@@ -65,7 +65,7 @@ class ConfirmerTest extends AnyFlatSpec {
   "TC Confirmer getResult" should "return success when the payload and service is valid" in {
     val filePaths = List("file1.txt", "file2.txt")
     val tcPayload = TCPayload(filePaths)
-    val scoutAM = TestUtils.scoutAM(filePaths, TCConfig("table", result_TC.toString, "", null, "", "", "", "mountRoot"))
+    val scoutAM = TestUtils.scoutAM(filePaths, TCConfig("table", result_TC.toString, "", null, "", "", "", "mountRoot", 50))
     val tcResult = Confirmer.tcConfirmer(scoutAM).getResult(tcPayload)
 
     tcResult.isSuccess should be(true)
@@ -79,7 +79,7 @@ class ConfirmerTest extends AnyFlatSpec {
 
   "TC Confirmer getResult" should "return failure when the payload is invalid" in {
     val ccPayload = CCPayload(java.util.UUID.randomUUID()) // Invalid payload for TC confirmer
-    val scountAM = TestUtils.scoutAM(List("file1.txt", "file2.txt"), TCConfig("table", result_TC.toString, "", null, "", "", "", "mountRoot"))
+    val scountAM = TestUtils.scoutAM(List("file1.txt", "file2.txt"), TCConfig("table", result_TC.toString, "", null, "", "", "", "mountRoot", 50))
     val tcResult = Confirmer.tcConfirmer(scountAM).getResult(ccPayload)
 
     tcResult.isError should be(true)
@@ -93,7 +93,7 @@ class ConfirmerTest extends AnyFlatSpec {
   "TC Confirmer getResult" should "return failure when volumes cannot be found" in {
     val filePaths = List("file1.txt", "file2.txt")
     val tcPayload = TCPayload(filePaths)
-    val scoutAM = TestUtils.scoutAM(filePaths, TCConfig("table", result_TC.toString, "", null, "", "", "", "mountRoot"), ScoutAmErrors(true))
+    val scoutAM = TestUtils.scoutAM(filePaths, TCConfig("table", result_TC.toString, "", null, "", "", "", "mountRoot", 50), ScoutAmErrors(true))
     val tcResult = Confirmer.tcConfirmer(scoutAM).getResult(tcPayload)
 
     tcResult.isError should be(true)

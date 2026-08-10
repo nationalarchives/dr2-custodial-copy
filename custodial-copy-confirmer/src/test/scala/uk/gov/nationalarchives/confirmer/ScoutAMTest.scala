@@ -8,7 +8,7 @@ import java.net.http.{HttpRequest, HttpResponse}
 class ScoutAMTest extends org.scalatest.flatspec.AnyFlatSpec {
   "ScoutAM" should "return a valid instance of ScoutAM based on the config" in {
     val scoutAM = ScoutAM(
-      TCConfig("table", result_TC.toString, "", null, "http://scout.base.url:8080", "scout.username", "scout.password", "mountRoot"),
+      TCConfig("table", result_TC.toString, "", null, "http://scout.base.url:8080", "scout.username", "scout.password", "mountRoot", 50),
       new TestHttpService()
     )
     scoutAM shouldBe a[ScoutAM]
@@ -27,7 +27,7 @@ class ScoutAMTest extends org.scalatest.flatspec.AnyFlatSpec {
         |   "checksum": "someChecksumValue"
         |}""".stripMargin
     val scoutAM = ScoutAM(
-      TCConfig("table", result_TC.toString, "", null, "http://scout.base.url:8080", "scout.username", "scout.password", "mountRoot"),
+      TCConfig("table", result_TC.toString, "", null, "http://scout.base.url:8080", "scout.username", "scout.password", "mountRoot", 50),
       new TestHttpService("", responseForFileDetails, 200, 200)
     )
     val details = scoutAM.getFileDetails(List("/tmp/file1", "/tmp/file2"))
@@ -47,7 +47,7 @@ class ScoutAMTest extends org.scalatest.flatspec.AnyFlatSpec {
         |   "checksum": "someChecksumValue"
         |}""".stripMargin
     val scoutAM = ScoutAM(
-      TCConfig("table", result_TC.toString, "", null, "http://scout.base.url:8080", "scout.username", "scout.password", "mountRoot"),
+      TCConfig("table", result_TC.toString, "", null, "http://scout.base.url:8080", "scout.username", "scout.password", "mountRoot", 50),
       new TestHttpService("", responseForFileDetails, 200, 200)
     )
     val details = scoutAM.getFileDetails(List("/tmp/file1", "/tmp/file2"))
@@ -56,7 +56,7 @@ class ScoutAMTest extends org.scalatest.flatspec.AnyFlatSpec {
 
   "Authenticate" should "error when authentication is unsuccessful" in {
     val scoutAM = ScoutAM(
-      TCConfig("table", result_TC.toString, "", null, "http://scout.base.url:8080", "scout.username", "scout.password", "mountRoot"),
+      TCConfig("table", result_TC.toString, "", null, "http://scout.base.url:8080", "scout.username", "scout.password", "mountRoot", 50),
       new TestHttpService("", """{"status": "does-not-matter"}""", 401, 200)
     )
     val ex = intercept[Exception] {
@@ -67,7 +67,7 @@ class ScoutAMTest extends org.scalatest.flatspec.AnyFlatSpec {
 
   "Authenticate" should "error when authentication response cannot be parsed" in {
     val scoutAM = ScoutAM(
-      TCConfig("table", result_TC.toString, "", null, "http://scout.base.url:8080", "scout.username", "scout.password", "mountRoot"),
+      TCConfig("table", result_TC.toString, "", null, "http://scout.base.url:8080", "scout.username", "scout.password", "mountRoot", 50),
       new TestHttpService("""{"this": "cannot-be-parsed"}""", "", 200, 200)
     )
     val ex = intercept[Exception] {
@@ -78,7 +78,7 @@ class ScoutAMTest extends org.scalatest.flatspec.AnyFlatSpec {
 
   "Get file details" should "return an empty map when unable to retrieve file details" in {
     val scoutAM = ScoutAM(
-      TCConfig("table", result_TC.toString, "", null, "http://scout.base.url:8080", "scout.username", "scout.password", "mountRoot"),
+      TCConfig("table", result_TC.toString, "", null, "http://scout.base.url:8080", "scout.username", "scout.password", "mountRoot", 50),
       new TestHttpService("", """{"error":"Unauthorized"}""", 200, 401)
     )
     val details = scoutAM.getFileDetails(List("/tmp/file1", "/tmp/file2"))
@@ -87,7 +87,7 @@ class ScoutAMTest extends org.scalatest.flatspec.AnyFlatSpec {
 
   "Get file details" should "return an empty map when the mount root is incorrect" in {
     val scoutAM = ScoutAM(
-      TCConfig("table", result_TC.toString, "", null, "http://scout.base.url:8080", "scout.username", "scout.password", "incorrectMountRoot"),
+      TCConfig("table", result_TC.toString, "", null, "http://scout.base.url:8080", "scout.username", "scout.password", "incorrectMountRoot", 50),
       new TestHttpService("", """{"error":"Unauthorized"}""", 200, 401)
     )
     val details = scoutAM.getFileDetails(List("/tmp/file1", "/tmp/file2"))
@@ -106,7 +106,7 @@ class ScoutAMTest extends org.scalatest.flatspec.AnyFlatSpec {
         |  "checksum": null
         |}""".stripMargin
     val scoutAM = ScoutAM(
-      TCConfig("table", result_TC.toString, "", null, "http://scout.base.url:8080", "scout.username", "scout.password", "mountRoot"),
+      TCConfig("table", result_TC.toString, "", null, "http://scout.base.url:8080", "scout.username", "scout.password", "mountRoot", 50),
       new TestHttpService("", responseForFileDetails, 200, 200)
     )
     val details = scoutAM.getFileDetails(List("/tmp/file1", "/tmp/file2"))
@@ -126,7 +126,7 @@ class ScoutAMTest extends org.scalatest.flatspec.AnyFlatSpec {
         |  "checksum": null
         |}""".stripMargin
     val scoutAM = ScoutAM(
-      TCConfig("table", result_TC.toString, "", null, "http://scout.base.url:8080", "scout.username", "scout.password", "mountRoot"),
+      TCConfig("table", result_TC.toString, "", null, "http://scout.base.url:8080", "scout.username", "scout.password", "mountRoot", 50),
       new TestHttpService("", responseForFileDetails, 200, 200)
     )
     val details = scoutAM.getFileDetails(List("/tmp/file1", "/tmp/file2"))

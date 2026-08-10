@@ -127,13 +127,13 @@ object Utils:
       .buildMutable()
   }
 
-  def aggregateMessages[F[_]: Sync, T: Decoder](sqs: DASQSClient[F], sqsQueueUrl: String): F[List[MessageResponse[T]]] = {
+  def aggregateMessages[F[_]: Sync, T: Decoder](sqs: DASQSClient[F], sqsQueueUrl: String, maxMessages: Int): F[List[MessageResponse[T]]] = {
     def collectMessages(messages: List[MessageResponse[T]]): F[List[MessageResponse[T]]] = {
       sqs
         .receiveMessages[T](sqsQueueUrl)
         .flatMap { newMessages =>
           val allMessages = newMessages ++ messages
-          if newMessages.isEmpty || allMessages.size >= 50 then Sync[F].pure(allMessages) else collectMessages(allMessages)
+          if newMessages.isEmpty || allMessages.size >= maxMessages then Sync[F].pure(allMessages) else collectMessages(allMessages)
         }
         .handleErrorWith { err =>
           logError(err) >> Sync[F].pure[List[MessageResponse[T]]](messages)

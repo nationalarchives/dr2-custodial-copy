@@ -359,7 +359,8 @@ class Processor(
   }
 
   private def processNonDeletedMessages(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[ProcessorOutput] =
-    val downloadFile = download(_, UUID.fromString(messageResponse.messageGroupId.get))
+    val ioId = UUID.fromString(messageResponse.messageGroupId.get)
+    val downloadFile = download(_, ioId)
     for {
       logger <- Slf4jLogger.create[IO]
       custodialCopyObjects <- toCustodialCopyObject(messageResponse.message)
@@ -406,9 +407,9 @@ class Processor(
         )
       }
 
-      _ <- ocflService.createObjects(missingObjectsPaths)
+      _ <- ocflService.createObjects(ioId, missingObjectsPaths)
       _ <- logger.info(s"${missingObjectsPaths.length} objects created")
-      _ <- ocflService.createObjects(changedObjectsPaths)
+      _ <- ocflService.createObjects(ioId, changedObjectsPaths)
       _ <- logger.info(s"${changedObjectsPaths.length} objects updated")
 
       _ <- allObjectPaths.flatMap(_.sourceNioFilePath).parTraverse(deleteObjectPath)
