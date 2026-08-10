@@ -185,8 +185,9 @@ SQS queue.
 #### Parallel processing
 
 Each message is processed in parallel, except for writing to the OCFL repository.
-The OCFL library will throw an exception if you try to write to the same object at the same time so there is a single
-semaphore to prevent two fibers writing at the same time.
+The OCFL library will throw an exception if you try to write to the same object at the same time. 
+To prevent this, a semaphore with a single permit is created for each IO we have messages for. 
+This allows us to process individual objects in parallel but OCFL operations on any given object will be processed in sequence.   
 All other processes such as fetching the data from Preservica and deleting the SQS messages are processed in parallel.
 All non-deleted messages are processed (in parallel first) and then the deleted messages to prevent unwanted behaviour,
 like a
