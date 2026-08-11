@@ -8,6 +8,7 @@ import io.circe.{Decoder, HCursor}
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import pureconfig.ConfigReader
 import uk.gov.nationalarchives.DASQSClient
+import uk.gov.nationalarchives.utils.Utils.*
 
 import java.net.URI
 import java.util.UUID
@@ -15,7 +16,8 @@ import scala.concurrent.duration.*
 
 object Main extends IOApp {
 
-  case class Config(databasePath: String, queueUrl: String, ocflRepoDir: String, ocflWorkDir: String, proxyUrl: Option[URI] = None) derives ConfigReader
+  case class Config(databasePath: String, queueUrl: String, ocflRepoDir: String, ocflWorkDir: String, maxMessages: Int, proxyUrl: Option[URI] = None)
+      derives ConfigReader
 
   case class Message(id: UUID)
 
@@ -41,7 +43,7 @@ object Main extends IOApp {
   def runBuilder(sqs: DASQSClient[IO])(using configuration: Configuration): Stream[IO, Unit] = {
     val queueUrl = configuration.config.queueUrl
     Stream
-      .eval(sqs.receiveMessages[Message](queueUrl))
+      .eval(aggregateMessages[IO, Message](sqs, queueUrl, configuration.config.maxMessages))
       .evalMap { messages =>
         for {
           logger <- Slf4jLogger.create[IO]

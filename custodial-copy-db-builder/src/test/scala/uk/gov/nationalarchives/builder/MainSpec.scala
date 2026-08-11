@@ -57,7 +57,7 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
     initialiseSqs(id)
 
     given config: Configuration = new Configuration:
-      override def config: Config = Config("test-database", "http://localhost:9001", repoDir, workDir)
+      override def config: Config = Config("test-database", "http://localhost:9001", repoDir, workDir, 10)
 
     Main.runBuilder(daSQSClient).compile.drain.unsafeRunSync()
 
@@ -98,7 +98,7 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
     initialiseSqs(id)
 
     given config: Configuration = new Configuration:
-      override def config: Config = Config("test-database", "http://localhost:9001", repoDir, workDir)
+      override def config: Config = Config("test-database", "http://localhost:9001", repoDir, workDir, 1)
 
     Main.runBuilder(daSQSClient).compile.drain.unsafeRunSync()
 
@@ -122,7 +122,7 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
     initialiseSqs(id)
 
     given config: Configuration = new Configuration:
-      override def config: Config = Config("test-database", "http://localhost:9001", repoDir, workDir)
+      override def config: Config = Config("test-database", "http://localhost:9001", repoDir, workDir, 1)
 
     Main.runBuilder(daSQSClient).compile.drain.unsafeRunSync()
 
@@ -157,7 +157,7 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
     initialiseSqs(id)
 
     given config: Configuration = new Configuration:
-      override def config: Config = Config("test-database", "http://localhost:9001", repoDir, workDir)
+      override def config: Config = Config("test-database", "http://localhost:9001", repoDir, workDir, 1)
 
     Main.runBuilder(daSQSClient).compile.drain.unsafeRunSync()
 
@@ -179,7 +179,7 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach with BeforeAndAfterAl
     val (repoDir, workDir) = initialiseRepo(id)
 
     given config: Configuration = new Configuration:
-      override def config: Config = Config("test-database", "http://localhost:9001", repoDir, workDir)
+      override def config: Config = Config("test-database", "http://localhost:9001", repoDir, workDir, 10)
 
     Main.runBuilder(daSQSClient).compile.drain.unsafeRunSync()
 

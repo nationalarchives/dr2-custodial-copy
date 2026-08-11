@@ -16,7 +16,7 @@ class OcflSpec extends AnyFlatSpec:
     val id = UUID.randomUUID
     val (repoDir, workDir) = initialiseRepo(id)
     given Configuration = new Configuration:
-      override def config: Config = Config("test-database", "http://localhost:9001", repoDir, workDir)
+      override def config: Config = Config("test-database", "http://localhost:9001", repoDir, workDir, 10)
 
     val files = Ocfl[IO].generateOcflObjects(id).unsafeRunSync()
 
@@ -47,7 +47,7 @@ class OcflSpec extends AnyFlatSpec:
     val (repoDir, workDir) = initialiseRepo(id, addFilesToRepo = false)
 
     given Configuration = new Configuration:
-      override def config: Config = Config("test-database", "http://localhost:9001", repoDir, workDir)
+      override def config: Config = Config("test-database", "http://localhost:9001", repoDir, workDir, 10)
 
     val err = intercept[NotFoundException] {
       Ocfl[IO].generateOcflObjects(id).unsafeRunSync()
