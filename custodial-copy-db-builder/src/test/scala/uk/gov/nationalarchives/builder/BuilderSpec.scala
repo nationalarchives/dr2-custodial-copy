@@ -15,7 +15,7 @@ import java.util.UUID
 class BuilderSpec extends AnyFlatSpec:
 
   "Builder run" should "call the Ocfl and Database methods with the correct arguments" in {
-    val config = Config("", "", Files.createTempDirectory("work").toString, Files.createTempDirectory("repo").toString)
+    val config = Config("", "", Files.createTempDirectory("work").toString, Files.createTempDirectory("repo").toString, 10)
     val idOne = UUID.randomUUID
     val idTwo = UUID.randomUUID
     val ids = List(idOne, idTwo)
@@ -52,7 +52,7 @@ class BuilderSpec extends AnyFlatSpec:
   }
 
   "Builder run" should "not call the Ocfl generate method and will call the the database method with an empty list if an empty list is passed" in {
-    val config = Config("", "", Files.createTempDirectory("work").toString, Files.createTempDirectory("repo").toString)
+    val config = Config("", "", Files.createTempDirectory("work").toString, Files.createTempDirectory("repo").toString, 10)
     val idOne = UUID.randomUUID
     val idTwo = UUID.randomUUID
     val ids = List(idOne, idTwo)

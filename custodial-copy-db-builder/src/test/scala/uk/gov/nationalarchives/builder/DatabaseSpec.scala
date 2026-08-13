@@ -20,7 +20,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
   override def afterEach(): Unit = Files.delete(Path.of("test-database"))
 
   given Configuration = new Configuration:
-    override def config: Config = Config("test-database", "", "", "")
+    override def config: Config = Config("test-database", "", "", "", 10)
 
   "write" should "should write the values to the database" in {
     createFilesTable()
