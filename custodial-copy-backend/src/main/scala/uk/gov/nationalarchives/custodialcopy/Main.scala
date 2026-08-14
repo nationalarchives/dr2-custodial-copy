@@ -57,7 +57,13 @@ object Main extends IOApp {
         case Array(ref) => DeletionReceivedSnsMessage(UUID.fromString(ref))
     }
   case class IntelligentCachingInfo(id: String, downloadedLocally: Boolean)
-  case class FileDownloadInfo(id: UUID, sourceNioFilePath: Option[file.Path], destinationPath: String, potentialIcInfo: Option[IntelligentCachingInfo] = None)
+  case class FileDownloadInfo(
+      id: UUID,
+      sourceNioFilePath: Option[file.Path],
+      destinationPath: String,
+      psChecksums: List[Checksum],
+      potentialIcInfo: Option[IntelligentCachingInfo] = None
+  )
   case class IntelligentCachingDownloads(localIds: List[String], bytesDownloadedFromCache: Long, psIds: List[String], bytesDownloadedFromPs: Long)
 
   private case class DedupedMessages(removedMessages: List[MessageResponse[ReceivedSnsMessage]], retainedMessages: List[MessageResponse[ReceivedSnsMessage]])

@@ -66,7 +66,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
     utils.verifyCallsAndArguments(
       repTypes = Nil,
       repIndexes = Nil,
-      createdFileDownloadInfo = List(Nil, List(FileDownloadInfo(id, Path(s"$id/IO_Metadata_changed.xml").toNioPath.some, "destinationPath"))),
+      createdFileDownloadInfo = List(Nil, List(FileDownloadInfo(id, Path(s"$id/IO_Metadata_changed.xml").toNioPath.some, "destinationPath", Nil))),
       snsMessagesToSend = List(SendSnsMessage(InformationObject, id, Metadata, Updated))
     )
   }
@@ -93,10 +93,11 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
             id,
             Path(s"$id/missing").toNioPath.some,
             "destinationPath",
+            Nil,
             Some(IntelligentCachingInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16", false))
           )
         ),
-        List(FileDownloadInfo(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath"))
+        List(FileDownloadInfo(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath", Nil))
       ),
       drosToLookup = List(
         List(
@@ -146,10 +147,11 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
             id,
             Path(s"$id/missing").toNioPath.some,
             "destinationPath",
+            Nil,
             Some(IntelligentCachingInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16", true))
           )
         ),
-        List(FileDownloadInfo(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath"))
+        List(FileDownloadInfo(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath", Nil))
       ),
       drosToLookup = List(
         List(
@@ -199,10 +201,11 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
             id,
             Path(s"$id/missing").toNioPath.some,
             "destinationPath",
+            Nil,
             Some(IntelligentCachingInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16", false))
           )
         ),
-        List(FileDownloadInfo(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath"))
+        List(FileDownloadInfo(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath", Nil))
       ),
       drosToLookup = List(
         List(
@@ -288,10 +291,11 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
             parentRef,
             Path(s"$parentRef/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt").toNioPath.some,
             s"${utils.ioId}/Preservation_1/$id/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+            Nil,
             Some(IntelligentCachingInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16", false))
           ),
-          FileDownloadInfo(parentRef, Path(s"$parentRef/CO_Metadata.xml").toNioPath.some, s"${utils.ioId}/Preservation_1/$id/CO_Metadata.xml"),
-          FileDownloadInfo(parentRef, Path(s"$parentRef/IO_Metadata_missing.xml").toNioPath.some, "destinationPath")
+          FileDownloadInfo(parentRef, Path(s"$parentRef/CO_Metadata.xml").toNioPath.some, s"${utils.ioId}/Preservation_1/$id/CO_Metadata.xml", Nil),
+          FileDownloadInfo(parentRef, Path(s"$parentRef/IO_Metadata_missing.xml").toNioPath.some, "destinationPath", Nil)
         ),
         Nil
       ),
@@ -321,10 +325,11 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
             id,
             Path(s"$id/missing").toNioPath.some,
             "destinationPath",
+            Nil,
             Some(IntelligentCachingInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16", false))
           )
         ),
-        List(FileDownloadInfo(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath"))
+        List(FileDownloadInfo(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath", Nil))
       ),
       drosToLookup = List(
         List(
@@ -361,7 +366,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
       createdFileDownloadInfo = List(
         List(), // 1st call to 'createObjects' with missingObjectsPaths arg
         List(
-          FileDownloadInfo(id, Path(s"$id/IO_Metadata_changed.xml").toNioPath.some, "destinationPath")
+          FileDownloadInfo(id, Path(s"$id/IO_Metadata_changed.xml").toNioPath.some, "destinationPath", Nil)
         ) // 2nd call to 'createObjects' with changedObjectsPaths arg
       ),
       snsMessagesToSend = List(
@@ -389,10 +394,11 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
             id,
             Path(s"$id/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt").toNioPath.some,
             s"${utils.ioId}/Preservation_1/${utils.coId}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+            Nil,
             Some(IntelligentCachingInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16", false))
           ),
-          FileDownloadInfo(id, Path(s"$id/CO_Metadata.xml").toNioPath.some, s"${utils.ioId}/Preservation_1/${utils.coId}/CO_Metadata.xml"),
-          FileDownloadInfo(id, Path(s"$id/IO_Metadata_missing.xml").toNioPath.some, "destinationPath")
+          FileDownloadInfo(id, Path(s"$id/CO_Metadata.xml").toNioPath.some, s"${utils.ioId}/Preservation_1/${utils.coId}/CO_Metadata.xml", Nil),
+          FileDownloadInfo(id, Path(s"$id/IO_Metadata_missing.xml").toNioPath.some, "destinationPath", Nil)
         ),
         List()
       ),
@@ -421,7 +427,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
       xmlRequestsToValidate = List(utils.ioXmlToValidate),
       createdFileDownloadInfo = List(
         Nil,
-        List(FileDownloadInfo(changedFileId, Path(s"$changedFileId/IO_Metadata_changed.xml").toNioPath.some, "destinationPath"))
+        List(FileDownloadInfo(changedFileId, Path(s"$changedFileId/IO_Metadata_changed.xml").toNioPath.some, "destinationPath", Nil))
       ),
       drosToLookup = List(
         List(
@@ -459,14 +465,16 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
             missingFileId,
             Path(s"$missingFileId/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt").toNioPath.some,
             s"${utils.ioId}/Preservation_1/${utils.coId}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+            Nil,
             Some(IntelligentCachingInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16", false))
           ),
           FileDownloadInfo(
             missingFileId,
             Path(s"$missingFileId/CO_Metadata.xml").toNioPath.some,
-            s"${utils.ioId}/Preservation_1/${utils.coId}/CO_Metadata.xml"
+            s"${utils.ioId}/Preservation_1/${utils.coId}/CO_Metadata.xml",
+            Nil
           ),
-          FileDownloadInfo(missingFileId, Path(s"$missingFileId/IO_Metadata_missing.xml").toNioPath.some, "destinationPath")
+          FileDownloadInfo(missingFileId, Path(s"$missingFileId/IO_Metadata_missing.xml").toNioPath.some, "destinationPath", Nil)
         ),
         Nil
       ),

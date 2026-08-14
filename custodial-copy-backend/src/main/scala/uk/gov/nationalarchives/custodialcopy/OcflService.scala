@@ -55,6 +55,14 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphoreMap: MapRef[IO
                 OcflOption.MOVE_SOURCE,
                 OcflOption.OVERWRITE
               )
+              updater.addFileFixity(
+                path.destinationPath,
+                DigestAlgorithmRegistry.sha256,
+                path.psChecksums
+                  .find(_.algorithm == "SHA256")
+                  .map(_.fingerprint)
+                  .getOrElse(s"No SHA256 algorithm returned from PS for file '${path.destinationPath}'")
+              )
               ()
             }.asJava
           )
