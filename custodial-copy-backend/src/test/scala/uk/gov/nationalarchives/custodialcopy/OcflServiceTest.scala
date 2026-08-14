@@ -240,44 +240,64 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     val ocflRepository = mock[MutableOcflRepository]
     val service = new OcflService(ocflRepository, semaphoreMap)
     val id = UUID.randomUUID
-    service.createObjects(id, List(FileDownloadInfo(id, None, "destination"))).unsafeRunSync()
+    service.createObjects(id, List(FileDownloadInfo(id, None, "destination", Nil))).unsafeRunSync()
 
     verifyNoInteractions(ocflRepository)
   }
 
-  "createObjects" should "create DR objects in the OCFL repository" in {
-    val id = UUID.randomUUID()
-    val ocflRepository = mock[MutableOcflRepository]
-    val objectVersionCaptor: ArgumentCaptor[ObjectVersionId] = ArgumentCaptor.forClass(classOf[ObjectVersionId])
-    val updater = mock[OcflObjectUpdater]
-    val sourceNioFilePathToAdd: ArgumentCaptor[Path] = ArgumentCaptor.forClass(classOf[Path])
-    val destinationPathToAdd: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
-    val optionMoveToAdd: ArgumentCaptor[OcflOption] = ArgumentCaptor.forClass(classOf[OcflOption])
-    val optionOverwriteToAdd: ArgumentCaptor[OcflOption] = ArgumentCaptor.forClass(classOf[OcflOption])
+  List(
+    (List(Checksum("SHA256", "fingerprint")), "fingerprint", "if a SHA256 can be found"),
+    (List(Checksum("SHA512", "fingerprint")), "No SHA256 algorithm returned from PS for file 'destinationPath'", "if a SHA256 can't be found")
+  ).foreach { (checksums, value, description) =>
+    "createObjects" should s"create DR objects in the OCFL repository and add the PS fixity of $value if $description" in {
+      val id = UUID.randomUUID()
+      val ocflRepository = mock[MutableOcflRepository]
+      val objectVersionCaptor: ArgumentCaptor[ObjectVersionId] = ArgumentCaptor.forClass(classOf[ObjectVersionId])
+      val updater = mock[OcflObjectUpdater]
+      val sourceNioFilePathToAdd: ArgumentCaptor[Path] = ArgumentCaptor.forClass(classOf[Path])
+      val destinationPathToAdd: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
+      val optionMoveToAdd: ArgumentCaptor[OcflOption] = ArgumentCaptor.forClass(classOf[OcflOption])
+      val optionOverwriteToAdd: ArgumentCaptor[OcflOption] = ArgumentCaptor.forClass(classOf[OcflOption])
 
-    val inputPath = Files.createTempFile("ocfl", "test")
+      val logicalPathToAdd: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
+      val digestAlgorithmToAdd: ArgumentCaptor[DigestAlgorithm] = ArgumentCaptor.forClass(classOf[DigestAlgorithm])
+      val valueToAdd: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
 
-    when(ocflRepository.stageChanges(objectVersionCaptor.capture, any[VersionInfo], any[Consumer[OcflObjectUpdater]]))
-      .thenAnswer { invocation =>
-        val consumer = invocation.getArgument[Consumer[OcflObjectUpdater]](2)
-        consumer.accept(updater)
-        ObjectVersionId.head(id.toString)
-      }
-    val service = new OcflService(ocflRepository, semaphoreMap)
+      val inputPath = Files.createTempFile("ocfl", "test")
 
-    service.createObjects(id, List(FileDownloadInfo(id, Option(inputPath), destinationPath))).unsafeRunSync()
+      when(ocflRepository.stageChanges(objectVersionCaptor.capture, any[VersionInfo], any[Consumer[OcflObjectUpdater]]))
+        .thenAnswer { invocation =>
+          val consumer = invocation.getArgument[Consumer[OcflObjectUpdater]](2)
+          consumer.accept(updater)
+          ObjectVersionId.head(id.toString)
+        }
 
-    UUID.fromString(objectVersionCaptor.getValue.getObjectId) should equal(id)
-    verify(updater, times(1)).addPath(
-      sourceNioFilePathToAdd.capture(),
-      destinationPathToAdd.capture,
-      optionMoveToAdd.capture,
-      optionOverwriteToAdd.capture()
-    )
-    sourceNioFilePathToAdd.getAllValues.asScala.toList should equal(List(inputPath))
-    destinationPathToAdd.getAllValues.asScala.toList should equal(List(destinationPath))
-    optionMoveToAdd.getAllValues.asScala.toList.head should equal(OcflOption.MOVE_SOURCE)
-    optionOverwriteToAdd.getAllValues.asScala.toList.head should equal(OcflOption.OVERWRITE)
+      val service = new OcflService(ocflRepository, semaphoreMap)
+
+      service.createObjects(id, List(FileDownloadInfo(id, Option(inputPath), destinationPath, checksums))).unsafeRunSync()
+
+      UUID.fromString(objectVersionCaptor.getValue.getObjectId) should equal(id)
+      verify(updater, times(1)).addPath(
+        sourceNioFilePathToAdd.capture(),
+        destinationPathToAdd.capture,
+        optionMoveToAdd.capture,
+        optionOverwriteToAdd.capture()
+      )
+      sourceNioFilePathToAdd.getAllValues.asScala.toList should equal(List(inputPath))
+      destinationPathToAdd.getAllValues.asScala.toList should equal(List(destinationPath))
+      optionMoveToAdd.getAllValues.asScala.toList.head should equal(OcflOption.MOVE_SOURCE)
+      optionOverwriteToAdd.getAllValues.asScala.toList.head should equal(OcflOption.OVERWRITE)
+
+      verify(updater, times(1)).addFileFixity(
+        logicalPathToAdd.capture(),
+        digestAlgorithmToAdd.capture,
+        valueToAdd.capture
+      )
+
+      logicalPathToAdd.getAllValues.asScala.toList should equal(List(destinationPath))
+      digestAlgorithmToAdd.getAllValues.asScala.toList should equal(List(DigestAlgorithmRegistry.sha256))
+      valueToAdd.getAllValues.asScala.toList.head should equal(value)
+    }
   }
 
   "getAllFilePathsOnAnObject" should "return a path if the repository contains the OCFL object" in {
