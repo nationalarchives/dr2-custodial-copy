@@ -16,7 +16,7 @@ object Dependencies {
   lazy val log4jCore = "org.apache.logging.log4j" % "log4j-core" % logbackVersion
   lazy val log4jSlf4j = "org.apache.logging.log4j" % "log4j-slf4j2-impl" % logbackVersion
   lazy val log4jTemplateJson = "org.apache.logging.log4j" % "log4j-layout-template-json" % logbackVersion
-  lazy val mockito = "org.scalatestplus" %% "mockito-5-10" % "3.2.18.0"
+  lazy val mockito = "org.scalatestplus" %% "mockito-5-12" % "3.2.19.0"
   lazy val ocfl = "io.ocfl" % "ocfl-java-core" % "2.2.3"
   lazy val preservicaClient = "uk.gov.nationalarchives" %% "preservica-client-fs2" % "0.0.171"
   lazy val pureConfigCatsEffect = "com.github.pureconfig" %% "pureconfig-cats-effect" % pureConfigVersion
