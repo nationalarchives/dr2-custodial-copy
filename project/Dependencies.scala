@@ -24,6 +24,7 @@ object Dependencies {
   lazy val pureConfig = "com.github.pureconfig" %% "pureconfig-core" % pureConfigVersion
   lazy val scalaCheck = "org.scalacheck" %% "scalacheck" % "1.20.0"
   lazy val scalaCheckPlus = "org.scalatestplus" %% "scalacheck-1-18" % "3.2.18.0"
+  lazy val scalacCompatAnnotation = "org.typelevel" %% "scalac-compat-annotation" % "0.1.5"
   lazy val scalaTest = "org.scalatest" %% "scalatest" % scalaTestVersion
   lazy val scalaXml = "org.scala-lang.modules" %% "scala-xml" % "2.4.0"
   lazy val snsClient = "uk.gov.nationalarchives" %% "da-sns-client" % daAwsClientsVersion

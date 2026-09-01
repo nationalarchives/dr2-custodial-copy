@@ -89,6 +89,9 @@ lazy val reIndexer = (project in file("custodial-copy-re-indexer"))
   .enablePlugins(UniversalPlugin, JavaAppPackaging)
   .settings(commonSettings)
   .settings(imageSettings)
+  .settings(
+    libraryDependencies += scalacCompatAnnotation
+  )
   .dependsOn(utils)
 
 lazy val builder = (project in file("custodial-copy-db-builder"))
