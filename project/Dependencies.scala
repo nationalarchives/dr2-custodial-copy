@@ -7,6 +7,7 @@ object Dependencies {
   private lazy val scalaTestVersion = "3.2.20"
   private lazy val http4sVersion = "1.0.0-M47"
 
+  lazy val commonsCompress = "org.apache.commons" % "commons-compress" % "1.28.0"
   lazy val dynamoClient = "uk.gov.nationalarchives" %% "da-dynamodb-client" % daAwsClientsVersion
   lazy val eventbridgeClient = "uk.gov.nationalarchives" %% "da-eventbridge-client" % daAwsClientsVersion
   lazy val fs2Core = "co.fs2" %% "fs2-core" % "3.13.0"

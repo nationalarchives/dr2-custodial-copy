@@ -69,6 +69,7 @@ lazy val utils = (project in file("utils"))
     scalacOptions += "-Wunused:imports",
     publish / skip := true,
     libraryDependencies ++= Seq(
+      commonsCompress,
       log4jSlf4j,
       log4jCore,
       log4jTemplateJson,
