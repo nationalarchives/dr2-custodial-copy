@@ -36,12 +36,17 @@ object TestUtils:
         startEntry: Int,
         maxEntries: Int,
         potentialEndDate: Option[ZonedDateTime]
-    ): IO[EntitiesUpdated] = entitiesRef
-      .getAndUpdate {
-        case Nil          => Nil
-        case head :: tail => tail
-      }
-      .map(e => EntitiesUpdated(false, e.filter(each => potentialEndDate.exists(_.isAfter(each.date.toZonedDateTime))).map(_.entity)))
+    ): IO[EntitiesUpdated] = entitiesRef.get.map { allEntities =>
+      val matching = allEntities
+        .filter { dated =>
+          val entityDate = dated.date.toZonedDateTime
+          !entityDate.isBefore(dateTime) && potentialEndDate.forall(entityDate.isBefore)
+        }
+        .sortBy(_.date.toInstant)
+      val page = matching.slice(startEntry, startEntry + maxEntries)
+      val hasNext = matching.size > startEntry + maxEntries
+      EntitiesUpdated(hasNext, page.map(_.entity))
+    }
 
     override def getBitstreamInfo(contentRef: UUID): IO[Seq[BitStreamInfo]] = IO.pure(bitstreams)
   }

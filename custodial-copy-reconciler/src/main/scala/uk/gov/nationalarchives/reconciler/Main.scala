@@ -33,7 +33,9 @@ object Main extends IOApp {
       ocflRepoDir: String,
       ocflWorkDir: String,
       daysToIgnore: Int,
-      proxyUrl: Option[URI] = None
+      proxyUrl: Option[URI] = None,
+      entitiesUpdatedSinceWindowDays: Int = 10,
+      entitiesUpdatedSinceConcurrency: Int = 20
   ) derives ConfigReader
 
   case class Message(id: UUID)
@@ -93,15 +95,28 @@ object Main extends IOApp {
       .drain
 
     val startOfEpoch = ZonedDateTime.ofInstant(Instant.ofEpochSecond(0), ZoneId.systemDefault())
-    def updatedSince(start: Int): IO[EntityClient.EntitiesUpdated] = client.entitiesUpdatedSince(startOfEpoch, start, potentialEndDate = Option(endDate))
+    val windowDays = configuration.config.entitiesUpdatedSinceWindowDays
 
-    def getEntities(start: Int = 0): Stream[IO, CoRow] =
+    // Precompute the fixed [windowStart, windowEnd) date windows spanning epoch -> endDate. Windows are independent
+    // of each other, so unlike the pagination within a window (which must be sequential, since each 'start' offset
+    // depends on the previous call's 'hasNext'), separate windows can be queried concurrently.
+    def windows(current: ZonedDateTime): LazyList[(ZonedDateTime, ZonedDateTime)] =
+      if !current.isBefore(endDate) then LazyList.empty
+      else {
+        val windowEnd = if current.plusDays(windowDays).isBefore(endDate) then current.plusDays(windowDays) else endDate
+        (current, windowEnd) #:: windows(windowEnd)
+      }
+
+    // Each window is bounded by [windowStart, windowEnd) so that 'entitiesUpdatedSince' isn't asked to search
+    // across the whole date range (epoch to now) in one go, which was timing out. Within a window, pagination
+    // continues (incrementing 'start') until the API reports there are no more entries.
+    def fetchWindow(windowStart: ZonedDateTime, windowEnd: ZonedDateTime): Stream[IO, CoRow] =
       Stream
-        .unfoldEval(0) { start =>
-          updatedSince(start).map(_.entities).flatMap {
-            case Nil      => IO.none
-            case entities =>
-              entities
+        .unfoldEval(Option(0)) {
+          case None        => IO.none
+          case Some(start) =>
+            client.entitiesUpdatedSince(windowStart, start, potentialEndDate = Option(windowEnd)).flatMap { entitiesUpdated =>
+              entitiesUpdated.entities
                 .filter(e => e.entityType.contains(ContentObject) && !e.deleted)
                 .groupBy(_.ref)
                 .keys
@@ -109,12 +124,19 @@ object Main extends IOApp {
                 .grouped(configuration.config.maxConcurrency)
                 .toList
                 .parFlatTraverse(builder.run)
-                .map(rows => (rows, start + 1000).some)
-          }
+                .map(rows => (rows, if entitiesUpdated.hasNext then Some(start + 1000) else None).some)
+            }
         }
         .flatMap(Stream.emits)
 
-    val ps = getEntities()
+    def getEntities: Stream[IO, CoRow] =
+      Stream
+        .emits(windows(startOfEpoch))
+        .covary[IO]
+        .map(fetchWindow.tupled)
+        .parJoin(configuration.config.entitiesUpdatedSinceConcurrency)
+
+    val ps = getEntities
       .chunkN(1000)
       .evalTap(database.writeToPreservicaCOsTable)
       .compile
