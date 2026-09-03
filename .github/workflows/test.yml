@@ -13,15 +13,6 @@ jobs:
         with:
           distribution: "temurin"
           java-version: "21"
-      - uses: nationalarchives/ds-docker-actions/.github/actions/wiz-install-cli@a37bebac8d11fa61ca7a539863fe45cfa00cdfc6
-      - run: |
-          python3 -m unittest discover -s custodial-copy-mock-tape-api -p "test_*.py"
-          sbt scalafmtCheckAll test Docker/publishLocal scanDockerImage
-        env:
-          MANAGEMENT_ACCOUNT_NUMBER: 1
-          DOCKER_TAG: 1
-          WIZ_CLIENT_ID: ${{ secrets.WIZ_CLIENT_ID }}
-          WIZ_CLIENT_SECRET: ${{ secrets.WIZ_CLIENT_SECRET }}
       - name: Configure AWS credentials for ECR
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
@@ -34,8 +25,17 @@ jobs:
           registry: ${{ secrets.MANAGEMENT_ACCOUNT }}.dkr.ecr.eu-west-2.amazonaws.com
       - id: build-image
         run: |
-          sbt Docker/publish
+          sbt reconciler/Docker/publish
         env:
           GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
           MANAGEMENT_ACCOUNT_NUMBER: ${{ secrets.MANAGEMENT_ACCOUNT }}
           DOCKER_TAG: test
+      - uses: nationalarchives/ds-docker-actions/.github/actions/wiz-install-cli@a37bebac8d11fa61ca7a539863fe45cfa00cdfc6
+      - run: |
+          python3 -m unittest discover -s custodial-copy-mock-tape-api -p "test_*.py"
+          sbt scalafmtCheckAll test Docker/publishLocal scanDockerImage
+        env:
+          MANAGEMENT_ACCOUNT_NUMBER: 1
+          DOCKER_TAG: 1
+          WIZ_CLIENT_ID: ${{ secrets.WIZ_CLIENT_ID }}
+          WIZ_CLIENT_SECRET: ${{ secrets.WIZ_CLIENT_SECRET }}
