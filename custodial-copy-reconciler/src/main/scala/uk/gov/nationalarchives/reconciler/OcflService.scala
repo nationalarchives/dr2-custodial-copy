@@ -26,8 +26,7 @@ trait OcflService[F[_]] {
 }
 object OcflService {
 
-  def apply[F[_]: Async](config: Config): OcflService[F] = {
-    val startTime = OffsetDateTime.now
+  def apply[F[_]: Async](config: Config, startTime: OffsetDateTime): OcflService[F] = {
     val repoDir = Paths.get(config.ocflRepoDir)
     val workDir =
       Paths.get(
@@ -51,7 +50,7 @@ object OcflService {
       .buildMutable()
 
     def isNotMetadataFile(storageRelativePath: String) =
-      (storageRelativePath.contains("/Preservation_") || storageRelativePath.contains("/Access_")) && !storageRelativePath.contains("CO_Metadata.xml")
+      storageRelativePath.contains("/Preservation_") && !storageRelativePath.contains("CO_Metadata.xml")
 
     def filesForId(id: String) = {
       val ioRef = UUID.fromString(id)
@@ -74,7 +73,7 @@ object OcflService {
       override def getAllObjectFiles: Stream[F, CoRow] =
         Stream
           .fromIterator(repo.listObjectIds().iterator().asScala, config.maxConcurrency)
-          .chunkN(50)
+          .chunkN(500)
           .flatMap(chunk => Stream.evalUnChunk(chunk.parFlatTraverse(filesForId)))
     }
   }

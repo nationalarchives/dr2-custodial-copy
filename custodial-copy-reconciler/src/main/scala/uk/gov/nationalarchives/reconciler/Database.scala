@@ -1,6 +1,7 @@
 package uk.gov.nationalarchives.reconciler
 
 import cats.effect.Async
+import cats.effect.std.Mutex
 import cats.implicits.*
 import org.typelevel.doobie.Update
 import org.typelevel.doobie.free.connection.ConnectionIO
@@ -29,7 +30,7 @@ object Database:
   enum TableName:
     case OcflCOs, PreservicaCOs
 
-  def apply[F[_]: Async](using configuration: Configuration): Database[F] = new Database[F] {
+  def apply[F[_]: Async](mutex: Mutex[F])(using configuration: Configuration): Database[F] = new Database[F] {
 
     val xa: Aux[F, Unit] = Transactor.fromDriverManager[F](
       driver = "org.sqlite.JDBC",
@@ -56,13 +57,15 @@ object Database:
       writeTransaction(PreservicaCOs, Update[CoRow](insertSql).updateMany(cosInPS))
     }
 
-    override def findAllMissingCOs(): F[Result] =
-      for {
+    override def findAllMissingCOs(): F[Result] = mutex.lock.surround {
+      for
         psCOsCount <- preservicaCOsCount
         ccCOsCount <- ccCOsCount
         psCOsMissingFromCc <- findPsCOsMissingFromOcfl()
         ccCOsMissingFromPs <- findOcflCOsMissingFromPs()
-      } yield Result(psCOsCount, psCOsMissingFromCc.distinct, ccCOsCount, ccCOsMissingFromPs.distinct)
+      yield Result(psCOsCount, psCOsMissingFromCc.distinct, ccCOsCount, ccCOsMissingFromPs.distinct)
+    }
+
 
     private def findPsCOsMissingFromOcfl(): F[List[String]] = {
       val selectSql = sql"select p.* from PreservicaCOs p LEFT JOIN OcflCOs o on p.sha256checksum = o.sha256Checksum WHERE o.sha256Checksum is null;"
@@ -100,18 +103,20 @@ object Database:
       selectSql.transact(xa)
     }
 
-    private def writeTransaction(tableName: TableName, connection: ConnectionIO[Int]) = for {
-      logger <- Slf4jLogger.create[F]
-      updateCount <- connection.transact(xa)
-      _ <- logger.info(s"$tableName: $updateCount rows updated.")
-    } yield ()
+    private def writeTransaction(tableName: TableName, connection: ConnectionIO[Int]) = mutex.lock.surround {
+      for
+        logger <- Slf4jLogger.create[F]
+        updateCount <- connection.transact(xa)
+        _ <- logger.info(s"$tableName: $updateCount rows updated.")
+      yield ()
+    }
 
     override def deleteFromTables(): F[Unit] =
       val deleteUpdates = for
         _ <- sql"delete from OcflCOs;".update.run
         _ <- sql"delete from PreservicaCOs;".update.run
       yield ()
-      deleteUpdates.transact(xa)
+      mutex.lock.surround(deleteUpdates.transact(xa))
   }
 
   case class CoRow(

@@ -1,6 +1,7 @@
 package uk.gov.nationalarchives.reconciler
 
 import cats.effect.IO
+import cats.effect.std.Mutex
 import cats.effect.unsafe.implicits.global
 import org.typelevel.doobie.Put
 import org.typelevel.doobie.implicits.*
@@ -63,6 +64,8 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
 
   given Configuration = new Configuration:
     override def config: Config = Config("", databaseName, 5, "", "", 0, Some(URI.create("http://localhost")))
+    
+  val mutex: Mutex[IO] = Mutex[IO].unsafeRunSync()
 
   "writeToOcflCOsTable" should "should write the values to the OcflCOs table" in {
     createOcflCOsTable()
@@ -73,7 +76,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     val CoRows = Chunk(
       CoRow(coRef, Option(ioRef), "sha256Checksum1")
     )
-    Database[IO].writeToOcflCOsTable(CoRows).unsafeRunSync()
+    Database[IO](mutex).writeToOcflCOsTable(CoRows).unsafeRunSync()
     val response = getCoRows(coRef).unsafeRunSync()
 
     initialResponse should equal(Nil)
@@ -88,7 +91,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     val initialResponse = getPreservicaCoRows(coRef).unsafeRunSync()
     val preservicaCoRows = Chunk(CoRow(coRef, Option(ioRef), "sha256Checksum1"))
 
-    Database[IO].writeToPreservicaCOsTable(preservicaCoRows).unsafeRunSync()
+    Database[IO](mutex).writeToPreservicaCOsTable(preservicaCoRows).unsafeRunSync()
     val response = getPreservicaCoRows(coRef).unsafeRunSync()
 
     initialResponse should equal(Nil)
@@ -99,7 +102,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     createOcflCOsTable()
     val initialResponse = getCoRows(coRef).unsafeRunSync()
 
-    Database[IO].writeToOcflCOsTable(Chunk.empty).unsafeRunSync()
+    Database[IO](mutex).writeToOcflCOsTable(Chunk.empty).unsafeRunSync()
     val response = getCoRows(coRef).unsafeRunSync()
 
     initialResponse should equal(Nil)
@@ -110,7 +113,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     createPreservicaCOsTable()
     val initialResponse = getPreservicaCoRows(coRef).unsafeRunSync()
 
-    Database[IO].writeToPreservicaCOsTable(Chunk.empty).unsafeRunSync()
+    Database[IO](mutex).writeToPreservicaCOsTable(Chunk.empty).unsafeRunSync()
     val response = getPreservicaCoRows(coRef).unsafeRunSync()
 
     initialResponse should equal(Nil)
@@ -118,12 +121,12 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
   }
 
   "writeToOcflCOsTable" should "return an error if there is an error with the OcflCOs table or DB" in {
-    val ex = intercept[Exception](Database[IO].writeToOcflCOsTable(Chunk.empty).unsafeRunSync())
+    val ex = intercept[Exception](Database[IO](mutex).writeToOcflCOsTable(Chunk.empty).unsafeRunSync())
     ex.getMessage should equal("[SQLITE_ERROR] SQL error or missing database (no such table: OcflCOs)")
   }
 
   "writeToPreservicaCOsTable" should "return an error if there is an error with the PreservicaCOs table or DB" in {
-    val ex = intercept[Exception](Database[IO].writeToPreservicaCOsTable(Chunk.empty).unsafeRunSync())
+    val ex = intercept[Exception](Database[IO](mutex).writeToPreservicaCOsTable(Chunk.empty).unsafeRunSync())
     ex.getMessage should equal("[SQLITE_ERROR] SQL error or missing database (no such table: PreservicaCOs)")
   }
 
@@ -132,7 +135,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     createOcflCOsTable()
     (createCoRow(coRef, ioRef, "checksum1") >> createPSCoRow(coRef, ioRef, "checksum1")).unsafeRunSync()
 
-    val result = Database[IO].findAllMissingCOs().unsafeRunSync()
+    val result = Database[IO](mutex).findAllMissingCOs().unsafeRunSync()
 
     result.psCOsCount should equal(1)
     result.psCOsMissingFromCc should be(Nil)
@@ -143,7 +146,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     createOcflCOsTable()
     (createPSCoRow(coRef, ioRef, "checksum1") >> createCoRow(coRef, ioRef, "checksum1")).unsafeRunSync()
 
-    val result = Database[IO].findAllMissingCOs().unsafeRunSync()
+    val result = Database[IO](mutex).findAllMissingCOs().unsafeRunSync()
 
     result.ccCOsCount should equal(1)
     result.ccCOsMissingFromPs should be(Nil)
@@ -157,7 +160,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     countPreservicaCORows() should equal(1)
     countOcflCORows() should equal(1)
 
-    Database[IO].deleteFromTables().unsafeRunSync()
+    Database[IO](mutex).deleteFromTables().unsafeRunSync()
 
     countPreservicaCORows() should equal(0)
     countOcflCORows() should equal(0)
@@ -170,7 +173,7 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
     createOcflCOsTable()
     (createPSCoRow(coRef, ioRef, preservicaChecksum) >> createCoRow(coRefTwo, ioRef, ocflChecksum)).unsafeRunSync()
 
-    val result = Database[IO].findAllMissingCOs().unsafeRunSync()
+    val result = Database[IO](mutex).findAllMissingCOs().unsafeRunSync()
 
     result.ccCOsMissingFromPs should be(
       List(

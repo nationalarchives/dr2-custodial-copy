@@ -1,11 +1,13 @@
 package uk.gov.nationalarchives.reconciler
 
+import cats.effect.std.Mutex
 import cats.effect.{IO, Ref}
 import cats.effect.unsafe.implicits.global
 import io.circe.Encoder
 import software.amazon.awssdk.services.eventbridge.model.PutEventsResponse
 import sttp.capabilities
 import sttp.capabilities.fs2.Fs2Streams
+import fs2.Stream
 import uk.gov.nationalarchives.DAEventBridgeClient
 import uk.gov.nationalarchives.dp.client.Client.BitStreamInfo
 import uk.gov.nationalarchives.dp.client.Entities.Entity
@@ -26,24 +28,14 @@ object TestUtils:
   }
 
   def testEntityClient(idToBitstreams: Map[UUID, List[BitStreamInfo]]): EntityClient[IO, Fs2Streams[IO]] = new TestEntityClient {
-    override def getBitstreamInfo(contentRef: UUID): IO[Seq[BitStreamInfo]] = IO.pure(idToBitstreams.getOrElse(contentRef, Nil))
+    override def bitstreamForAsset(assetId: UUID): IO[Seq[BitStreamInfo]] = IO.pure(idToBitstreams.getOrElse(assetId, Nil))
   }
 
-  def testEntityClient(entitiesRef: Ref[IO, List[DatedEntity]], bitstreams: List[BitStreamInfo]): EntityClient[IO, Fs2Streams[IO]] = new TestEntityClient {
+  def testEntityClient(entitiesRef: Ref[IO, List[Entity]], bitstreams: List[BitStreamInfo]): EntityClient[IO, Fs2Streams[IO]] = new TestEntityClient {
 
-    override def entitiesUpdatedSince(
-        dateTime: ZonedDateTime,
-        startEntry: Int,
-        maxEntries: Int,
-        potentialEndDate: Option[ZonedDateTime]
-    ): IO[EntitiesUpdated] = entitiesRef
-      .getAndUpdate {
-        case Nil          => Nil
-        case head :: tail => tail
-      }
-      .map(e => EntitiesUpdated(false, e.filter(each => potentialEndDate.exists(_.isAfter(each.date.toZonedDateTime))).map(_.entity)))
+    override def getAllAssetIds(maxConcurrency: Int): Stream[IO, UUID] = Stream.eval(entitiesRef.get).flatMap(Stream.emits).map(_.ref)
 
-    override def getBitstreamInfo(contentRef: UUID): IO[Seq[BitStreamInfo]] = IO.pure(bitstreams)
+    override def bitstreamForAsset(assetRef: UUID): IO[Seq[BitStreamInfo]] = IO.pure(bitstreams)
   }
 
   def eventBridgeClient(ref: Ref[IO, List[Detail]]): DAEventBridgeClient[IO] = new DAEventBridgeClient[IO] {
@@ -51,13 +43,13 @@ object TestUtils:
       ref.update(existing => detail.asInstanceOf[Detail] :: existing).map(_ => PutEventsResponse.builder.build)
   }
 
-  case class DatedEntity(date: OffsetDateTime, entity: Entity)
-
-  def runTestReconciler(entities: List[DatedEntity], bitstreams: List[BitStreamInfo])(using configuration: Configuration): List[Detail] = (for {
+  def runTestReconciler(entities: List[Entity], bitstreams: List[BitStreamInfo])(using configuration: Configuration): List[Detail] = (for {
     detailRef <- Ref.of[IO, List[Detail]](Nil)
-    ocflService = OcflService[IO](configuration.config)
-    entitiesRef <- Ref.of[IO, List[DatedEntity]](entities)
-    _ <- Main.runReconciler(testEntityClient(entitiesRef, bitstreams), ocflService, eventBridgeClient(detailRef))
+    ocflService = OcflService[IO](configuration.config, OffsetDateTime.now)
+    startTime = OffsetDateTime.now
+    entitiesRef <- Ref.of[IO, List[Entity]](entities)
+    mutex <- Mutex[IO]
+    _ <- Main.runReconciler(testEntityClient(entitiesRef, bitstreams), ocflService, eventBridgeClient(detailRef), Database[IO](mutex), startTime)
     eventBridgeDetails <- detailRef.get
   } yield eventBridgeDetails).unsafeRunSync()
 
@@ -107,3 +99,7 @@ object TestUtils:
     override def addIdentifierForEntity(entityRef: UUID, entityType: EntityClient.EntityType, identifier: EntityClient.Identifier): IO[String] = notImplemented
 
     override def getPreservicaNamespaceVersion(endpoint: String): IO[Float] = notImplemented
+
+    override def bitstreamForAsset(entityRef: UUID): IO[Seq[BitStreamInfo]] = notImplemented
+
+    override def getAllAssetIds(maxConcurrency: Int): fs2.Stream[IO, UUID] = Stream.empty

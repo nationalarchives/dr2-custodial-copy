@@ -180,7 +180,7 @@ lazy val mockTapeApi = (project in file("custodial-copy-mock-tape-api"))
     publish / skip := true,
 
     dockerRepository := Some(s"${sys.env.getOrElse("MANAGEMENT_ACCOUNT_NUMBER", "")}.dkr.ecr.eu-west-2.amazonaws.com"),
-    dockerBuildOptions ++= Seq("--no-cache", "--pull"),
+    dockerBuildOptions ++= Seq("--no-cache", "--pull", "--platform", "linux/amd64"),
     Docker / packageName := s"dr2-${baseDirectory.value.getName}",
     Docker / version := sys.env.getOrElse("DOCKER_TAG", version.value),
 
@@ -243,7 +243,7 @@ lazy val commonSettings = Seq(
     filtered ++ Seq(fatJar -> ("lib/" + fatJar.getName), properties -> "lib/log4j2.properties")
   },
   dockerRepository := Some(s"${sys.env.getOrElse("MANAGEMENT_ACCOUNT_NUMBER", "")}.dkr.ecr.eu-west-2.amazonaws.com"),
-  dockerBuildOptions ++= Seq("--no-cache", "--pull"),
+  dockerBuildOptions ++= Seq("--no-cache", "--pull", "--platform", "linux/amd64"),
   Docker / packageName := s"dr2-${baseDirectory.value.getName}",
   Docker / version := sys.env.getOrElse("DOCKER_TAG", version.value),
   dockerCommands := Seq(

@@ -11,6 +11,7 @@ import uk.gov.nationalarchives.reconciler.Main.Config
 import uk.gov.nationalarchives.utils.Utils.*
 
 import java.nio.file.{Files, Path}
+import java.time.OffsetDateTime
 import java.util.UUID
 
 class OcflServiceSpec extends AnyFlatSpec {
@@ -38,7 +39,7 @@ class OcflServiceSpec extends AnyFlatSpec {
     )
 
     val config = Config("", "test-database", 1, repoDir, workDir, 0)
-    val allFiles = OcflService[IO](config).getAllObjectFiles.compile.toList.unsafeRunSync()
+    val allFiles = OcflService[IO](config, OffsetDateTime.now).getAllObjectFiles.compile.toList.unsafeRunSync()
     allFiles.length should equal(100)
 
     idPaths.map(_.preservationId).map { preservationId =>
@@ -48,7 +49,7 @@ class OcflServiceSpec extends AnyFlatSpec {
     }
   }
 
-  "getAllObjectFiles" should "return 'Preservation' and 'Access' copies" in {
+  "getAllObjectFiles" should "return only 'Preservation' copies" in {
     val (repoDir, workDir) = (Files.createTempDirectory("repo").toString, Files.createTempDirectory("work").toString)
     val repository = createOcflRepository(repoDir, workDir)
     val preservationId = UUID.randomUUID
@@ -68,11 +69,11 @@ class OcflServiceSpec extends AnyFlatSpec {
           .addPath(accessTestFile, s"$id/Access_1/$accessId")
     )
     val config = Config("", "test-database", 1, repoDir, workDir, 0)
-    val allFiles = OcflService[IO](config).getAllObjectFiles.compile.toList.unsafeRunSync()
-    allFiles.length should equal(2)
+    val allFiles = OcflService[IO](config, OffsetDateTime.now).getAllObjectFiles.compile.toList.unsafeRunSync()
+    allFiles.length should equal(1)
 
     allFiles.contains(CoRow(preservationId, Option(id), DigestUtils.sha256Hex(preservationId.toString))) should equal(true)
-    allFiles.contains(CoRow(accessId, Option(id), DigestUtils.sha256Hex(accessId.toString))) should equal(true)
+    allFiles.contains(CoRow(accessId, Option(id), DigestUtils.sha256Hex(accessId.toString))) should equal(false)
 
   }
 }
