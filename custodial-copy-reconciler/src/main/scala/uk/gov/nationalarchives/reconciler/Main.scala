@@ -21,7 +21,7 @@ import uk.gov.nationalarchives.utils.Detail
 import uk.gov.nationalarchives.utils.DetailType.DR2DevMessage
 
 import java.net.URI
-import java.time.{Instant, ZoneId, ZonedDateTime}
+import java.time.{Instant, LocalDate, LocalTime, ZoneId, ZonedDateTime}
 import java.util.UUID
 import scala.concurrent.duration.*
 
@@ -94,7 +94,7 @@ object Main extends IOApp {
       .compile
       .drain
 
-    val startOfEpoch = ZonedDateTime.ofInstant(Instant.ofEpochSecond(0), ZoneId.systemDefault())
+    val startDate = ZonedDateTime.of(LocalDate.of(2024, 1, 1), LocalTime.MIDNIGHT, ZoneId.systemDefault())
     val windowDays = configuration.config.entitiesUpdatedSinceWindowDays
 
     // Precompute the fixed [windowStart, windowEnd) date windows spanning epoch -> endDate. Windows are independent
@@ -131,7 +131,7 @@ object Main extends IOApp {
 
     def getEntities: Stream[IO, CoRow] =
       Stream
-        .emits(windows(startOfEpoch))
+        .emits(windows(startDate))
         .covary[IO]
         .map(fetchWindow.tupled)
         .parJoin(configuration.config.entitiesUpdatedSinceConcurrency)
