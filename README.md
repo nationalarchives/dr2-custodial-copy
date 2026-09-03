@@ -406,16 +406,15 @@ two storage mediums to become out of sync.
 
 ### The process
 
-1. Stream every entity from Preservica via paginated calls to the `updated-since` endpoint. Set the end date for the API call to the current date minus `DAYS_TO_IGNORE` days. 
-2. It will filter out anything that is not a CO ref.
-3. Splits the remaining object refs into Chunks:
-4. Run this process for each Chunk:
+1. Stream every entity from Preservica via a recursive walking of the entity tree. Set the end date for the API call to the current date minus `DAYS_TO_IGNORE` days. This method returns only asset IDs. 
+2. Splits the object refs into Chunks:
+3. Run this process for each Chunk:
    1. get the bitstream info from Preservica
    2. retrieve the IO ref and sha256 checksum. If there is no checksum (as is the case for files extracted from email attachments), then this CO is ignored.
    3. Return these `CoRow`s
-5. There is a parallel process which streams all OCFL objects from the repository and writes them in chunks to the database. It will ignore any objects which were created more than `DAYS_TO_IGNORE` days before the current date ago.   
-6. Once both processes have completed and all rows have been written to the database, the stream can be drained (in order to discard anything returned)
-7. Find the missing COs in each table
+4. There is a parallel process which streams all OCFL objects from the repository and writes them in chunks to the database. It will ignore any objects which were created more than `DAYS_TO_IGNORE` days before the current date ago.   
+5. Once both processes have completed and all rows have been written to the database, the stream can be drained (in order to discard anything returned)
+6. Find the missing COs in each table
    1. first parse the `PreservicaCOs` table and check if the checksum(s) appear in the `OcflCos` table
       1. if not, for each missing CO
          1. generate an informative message
@@ -427,7 +426,7 @@ two storage mediums to become out of sync.
           2. log that message
           3. return the message
    3. return both sets of messages concatenated
-8. If there are messages, send them to Slack via EventBridge
+7. If there are messages, send them to Slack via EventBridge
    1. if the number of messages is 10 or fewer, then send the messages one by one to EventBridge
    2. if the number of messages is greater than 10, then send a general message to EventBridge informing clients that
       there are more than 10 messages and to check the logs for more details

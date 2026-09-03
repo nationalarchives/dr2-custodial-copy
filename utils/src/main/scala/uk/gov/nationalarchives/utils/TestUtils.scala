@@ -61,7 +61,7 @@ object TestUtils:
       val transaction = for {
         _ <- sql"DROP TABLE IF EXISTS OcflCOs".update.run
         _ <-
-          sql"CREATE TABLE OcflCOs(id text, parent text, sha256Checksum text);".update.run
+          sql"CREATE TABLE OcflCOs(id text, parent text, sha256Checksum text, createdDate text);".update.run
       } yield ()
       transaction.transact(xa).unsafeRunSync()
     }
@@ -69,14 +69,14 @@ object TestUtils:
     def createPreservicaCOsTable(): Unit = {
       val transaction = for {
         _ <- sql"DROP TABLE IF EXISTS PreservicaCOs".update.run
-        _ <- sql"CREATE TABLE PreservicaCOs(id text, parent text, sha256Checksum text);".update.run
+        _ <- sql"CREATE TABLE PreservicaCOs(id text, parent text, sha256Checksum text, createdDate text);".update.run
       } yield ()
       transaction.transact(xa).unsafeRunSync()
     }
 
-    def createPreservicaCORow(): Unit = sql"INSERT INTO PreservicaCOs SELECT 1,1,1".update.run.transact(xa).unsafeRunSync()
+    def createPreservicaCORow(): Unit = sql"INSERT INTO PreservicaCOs SELECT 1,1,1,1".update.run.transact(xa).unsafeRunSync()
 
-    def createOcflCORow(): Unit = sql"INSERT INTO OcflCOs SELECT 1,1,1".update.run.transact(xa).unsafeRunSync()
+    def createOcflCORow(): Unit = sql"INSERT INTO OcflCOs SELECT 1,1,1,1".update.run.transact(xa).unsafeRunSync()
 
     def countPreservicaCORows(): Int =
       sql"SELECT count(*) FROM PreservicaCOs;".query[Int].unique.transact(xa).unsafeRunSync()
