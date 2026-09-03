@@ -48,7 +48,7 @@ class OcflServiceSpec extends AnyFlatSpec {
     }
   }
 
-  "getAllObjectFiles" should "return 'Preservation' and 'Access' copies" in {
+  "getAllObjectFiles" should "return only 'Preservation' copies" in {
     val (repoDir, workDir) = (Files.createTempDirectory("repo").toString, Files.createTempDirectory("work").toString)
     val repository = createOcflRepository(repoDir, workDir)
     val preservationId = UUID.randomUUID
@@ -69,10 +69,12 @@ class OcflServiceSpec extends AnyFlatSpec {
     )
     val config = Config("", "test-database", 1, repoDir, workDir, 0)
     val allFiles = OcflService[IO](config).getAllObjectFiles.compile.toList.unsafeRunSync()
-    allFiles.length should equal(2)
+    allFiles.length should equal(1)
 
-    allFiles.contains(CoRow(preservationId, Option(id), DigestUtils.sha256Hex(preservationId.toString))) should equal(true)
-    allFiles.contains(CoRow(accessId, Option(id), DigestUtils.sha256Hex(accessId.toString))) should equal(true)
+    val expectedCreatedDate = repository.getObject(ObjectVersionId.head(id.toString)).getCreated
+
+    allFiles.contains(CoRow(preservationId, Option(id), DigestUtils.sha256Hex(preservationId.toString), expectedCreatedDate)) should equal(true)
+    allFiles.contains(CoRow(accessId, Option(id), DigestUtils.sha256Hex(accessId.toString), expectedCreatedDate)) should equal(false)
 
   }
 }

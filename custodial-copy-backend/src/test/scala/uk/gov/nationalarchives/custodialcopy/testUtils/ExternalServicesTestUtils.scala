@@ -53,6 +53,7 @@ import java.io.File
 import scala.jdk.FunctionConverters.*
 import java.net.URI
 import java.nio.file.{Files, Path, Paths}
+import java.time.ZonedDateTime
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import scala.concurrent.duration.Duration
@@ -282,12 +283,12 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         BitStreamInfo(
           "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           1,
-          "https://example.com",
+          Option("https://example.com"),
           List(Fixity("SHA256", "7294da41da9bd3ebc55a906ec5ad6a01da8f9fd32800eac3505518d064edf18e")),
-          1,
-          Original,
           None,
-          Some(UUID.randomUUID())
+          Some(UUID.randomUUID()),
+          Generation(ZonedDateTime.now, Original, 1),
+          UUID.randomUUID
         )
       ),
       bitstreamInfo2Responses: Seq[BitStreamInfo] = Nil,
@@ -504,16 +505,16 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       MessageResponse[ReceivedSnsMessage]("receiptHandle2", Option(ioMessage.ref.toString), coMessage)
 
     private val potentialParentRef = if parentRefExists then Some(ioId) else None
-
+    val generation = Generation(ZonedDateTime.now, genType, genVersion)
     val bitstreamFromApi: BitStreamInfo = BitStreamInfo(
       "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
       1,
-      bitstreamUrl,
+      Option(bitstreamUrl),
       List(Fixity("sha256", fileChecksum)),
-      genVersion,
-      genType,
       Some("CoTitle"),
-      potentialParentRef
+      potentialParentRef,
+      generation,
+      UUID.randomUUID
     )
     val entityClient: EntityClient[IO, Fs2Streams[IO]] =
       mockPreservicaClient(ioId, coId, bitstreamInfo1 = Seq(bitstreamFromApi), urlsToRepresentations = urlsToRepresentations)

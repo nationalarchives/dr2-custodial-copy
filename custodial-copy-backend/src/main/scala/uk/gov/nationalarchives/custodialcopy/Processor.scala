@@ -194,8 +194,8 @@ class Processor(
         parentRef,
         Some(entity.ref),
         representationTypeGroup,
-        Some(bitStreamInfo.generationType),
-        Some(bitStreamInfo.generationVersion),
+        Some(bitStreamInfo.generation.generationType),
+        Some(bitStreamInfo.generation.version),
         bitStreamInfo.name
       )
 
@@ -203,7 +203,7 @@ class Processor(
         parentRef,
         bitStreamInfo.name,
         bitStreamInfo.fixities.map(eachFixity => Checksum(eachFixity.algorithm, eachFixity.value)),
-        bitStreamInfo.url,
+        bitStreamInfo.potentialUrl.getOrElse(""),
         destinationFilePath,
         removeFileExtension(bitStreamInfo.name)
       )
