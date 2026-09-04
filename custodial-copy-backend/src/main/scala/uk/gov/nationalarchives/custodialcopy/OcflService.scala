@@ -60,7 +60,7 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphoreMap: MapRef[IO
                   path.destinationPath,
                   DigestAlgorithmRegistry.sha256,
                   path.psChecksums
-                    .find(_.algorithm == "SHA256")
+                    .find(_.algorithm.toUpperCase == "SHA256")
                     .map(_.fingerprint)
                     .orNull
                 )
