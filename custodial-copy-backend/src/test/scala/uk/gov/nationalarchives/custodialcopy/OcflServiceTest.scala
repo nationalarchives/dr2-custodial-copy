@@ -246,8 +246,8 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
   }
 
   List(
-    (List(Checksum("SHA256", "fingerprint")), "fingerprint", "if a SHA256 can be found"),
-    (List(Checksum("SHA512", "fingerprint")), "No SHA256 algorithm returned from PS for file 'destinationPath'", "if a SHA256 can't be found")
+    (List(Checksum("SHA256", "fingerprint")), "fingerprint", "a SHA256 can be found"),
+    (List(Checksum("SHA512", "fingerprint")), null, "a SHA256 can't be found")
   ).foreach { (checksums, value, description) =>
     "createObjects" should s"create DR objects in the OCFL repository and add the PS fixity of $value if $description" in {
       val id = UUID.randomUUID()
@@ -264,6 +264,8 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
       val valueToAdd: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
 
       val inputPath = Files.createTempFile("ocfl", "test")
+
+      when(updater.addPath(any[Path], any[String], any[OcflOption], any[OcflOption])).thenReturn(updater)
 
       when(ocflRepository.stageChanges(objectVersionCaptor.capture, any[VersionInfo], any[Consumer[OcflObjectUpdater]]))
         .thenAnswer { invocation =>
