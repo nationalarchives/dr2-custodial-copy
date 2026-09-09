@@ -251,7 +251,7 @@ class Processor(
   private def download(custodialCopyObject: CustodialCopyObject, ioId: UUID) = custodialCopyObject match {
     case fo: FileObject =>
       ocflService.fileInRepository(fo, ioId).flatMap { isFileInRepository =>
-        if isFileInRepository then IO.pure(FileDownloadInfo(fo.id, None, fo.destinationFilePath))
+        if isFileInRepository then IO.pure(FileDownloadInfo(fo.id, None, fo.destinationFilePath, fo.checksums))
         else
           for
             logger <- Slf4jLogger.create[IO]
@@ -307,7 +307,13 @@ class Processor(
                       .map(_ => nioWritePath)
                   else IO.pure(None)
               yield (potentialNioWritePath, localChecksumsMatchPs)
-          yield FileDownloadInfo(fo.id, potentialWritePath, fo.destinationFilePath, Some(IntelligentCachingInfo(fo.tableItemIdentifier, downloadedLocally)))
+          yield FileDownloadInfo(
+            fo.id,
+            potentialWritePath,
+            fo.destinationFilePath,
+            fo.checksums,
+            Some(IntelligentCachingInfo(fo.tableItemIdentifier, downloadedLocally))
+          )
       }
 
     case mo: MetadataObject =>
@@ -319,7 +325,7 @@ class Processor(
           .through(Files[IO].writeUtf8(writePath))
           .compile
           .drain
-      } yield FileDownloadInfo(mo.id, Option(writePath.toNioPath), mo.destinationFilePath)
+      } yield FileDownloadInfo(mo.id, Option(writePath.toNioPath), mo.destinationFilePath, mo.checksums)
   }
 
   private def removeFileExtension(bitstreamName: String) =

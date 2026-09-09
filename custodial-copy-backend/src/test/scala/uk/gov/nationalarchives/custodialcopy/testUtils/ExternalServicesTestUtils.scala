@@ -11,6 +11,7 @@ import io.ocfl.core.OcflRepositoryBuilder
 import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.lock.ObjectLockBuilder
 import io.ocfl.core.storage.OcflStorageBuilder
+import org.apache.commons.codec.digest.DigestUtils
 import org.h2.jdbcx.JdbcDataSource
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doReturn, spy, times, verify, when}
@@ -213,7 +214,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val underlyingMap: ConcurrentHashMap[UUID, Semaphore[IO]] = ConcurrentHashMap[UUID, Semaphore[IO]]()
     val semaphoreMap: MapRef[IO, UUID, Option[Semaphore[IO]]] = MapRef.fromConcurrentHashMap(underlyingMap)
     new OcflService(repo, semaphoreMap)
-      .createObjects(id, List(FileDownloadInfo(id, Option(fullSourceFilePath), destinationPath)))
+      .createObjects(id, List(FileDownloadInfo(id, Option(fullSourceFilePath), destinationPath, List(Checksum("SHA256", DigestUtils.sha256Hex(bodyAsString))))))
       .unsafeRunSync()
   }
 
@@ -282,7 +283,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
           "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           1,
           "https://example.com",
-          List(Fixity("SHA256", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")),
+          List(Fixity("SHA256", "7294da41da9bd3ebc55a906ec5ad6a01da8f9fd32800eac3505518d064edf18e")),
           1,
           Original,
           None,

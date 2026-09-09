@@ -190,7 +190,7 @@ lazy val mockTapeApi = (project in file("custodial-copy-mock-tape-api"))
 
     dockerCommands := Seq(
       Cmd("FROM", "alpine:latest"),
-      Cmd("RUN", "apk add --no-cache python3"),
+      Cmd("RUN", "apk add --no-cache python3 && apk upgrade libcrypto3 libssl3"),
       Cmd("WORKDIR", "/app"),
       Cmd("COPY", "app/mock_tape_api.py", "/app/mock_tape_api.py"),
       ExecCmd("CMD", "python", "mock_tape_api.py")

@@ -49,12 +49,21 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphoreMap: MapRef[IO
             path.id.toHeadVersion,
             null,
             { (updater: OcflObjectUpdater) =>
-              updater.addPath(
-                path.sourceNioFilePath.get,
-                path.destinationPath,
-                OcflOption.MOVE_SOURCE,
-                OcflOption.OVERWRITE
-              )
+              updater
+                .addPath(
+                  path.sourceNioFilePath.get,
+                  path.destinationPath,
+                  OcflOption.MOVE_SOURCE,
+                  OcflOption.OVERWRITE
+                )
+                .addFileFixity(
+                  path.destinationPath,
+                  DigestAlgorithmRegistry.sha256,
+                  path.psChecksums
+                    .find(_.algorithm.toUpperCase == "SHA256")
+                    .map(_.fingerprint)
+                    .orNull
+                )
               ()
             }.asJava
           )

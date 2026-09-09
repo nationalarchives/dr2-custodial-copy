@@ -21,6 +21,7 @@ import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.Main.*
 import uk.gov.nationalarchives.custodialcopy.Message.{IoReceivedSnsMessage, ReceivedSnsMessage, SoReceivedSnsMessage}
 import uk.gov.nationalarchives.custodialcopy.Processor.Result
+import uk.gov.nationalarchives.custodialcopy.Processor.Result.{Failure, Success}
 import uk.gov.nationalarchives.custodialcopy.testUtils.ExternalServicesTestUtils.{MainTestUtils, TestProcessor, databaseName}
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.Entity
@@ -159,6 +160,44 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
       )
     }
 
+  "runCustodialCopy" should "return a Failure if the PS Fixity that is added to the OCFL Object doesn't match what OCFL generated for it" in {
+    val utils = new MainTestUtils(
+      List((ContentObject, false)),
+      typesOfMetadataFilesInRepo = List(ContentObject),
+      bitstreamInfo1Responses = Seq(
+        BitStreamInfo(
+          "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+          1,
+          "https://example.com",
+          List(Fixity("SHA256", "nonMatchingFixity")),
+          1,
+          Original,
+          None,
+          Some(UUID.randomUUID())
+        )
+      )
+    )
+    val repo = utils.repo
+    val ioId = utils.ioId
+
+    val expectedCoFileDestinationFilePath = utils.expectedCoFileDestinationPath
+
+    val results = runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
+
+    results.foreach {
+      case Failure(e) =>
+        e.getMessage must equal(
+          s"Expected sha-256 digest of $ioId/Preservation_1/${utils.coId1}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt " +
+            "to be nonMatchingFixity, but was 9cb2951e055b501ad6a6a27ed0cafe7740b1046dfd755836b0a723c7e3602d9a."
+        )
+      case _ => ()
+    }
+
+    utils.latestObjectVersion(repo, ioId) must equal(2)
+    repo.containsObject(ioId.toString) must be(true)
+    repo.getObject(ioId.toHeadVersion).containsFile(expectedCoFileDestinationFilePath) must be(false)
+  }
+
   "runCustodialCopy" should "set downloaded to true for the rows found in the intelligent cache database and where checksums matched PS" in {
     val bitstreamId1 = "90dfb573-7419-4e89-8558-6cfa29f8fb16"
     val bitstreamId2 = "de35982b-4a3a-48ad-888d-fe41f3532d36"
@@ -184,7 +223,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
           f"$bitstreamId2.testExt",
           1,
           "https://example.com",
-          List(Fixity("SHA256", "fixityDifferentFromIC")),
+          List(Fixity("SHA256", "efc7f9a23093e744c2819cac0a709ca7ea40512d6062ada35cc27c1f3a3ac0e9")), // fixity different from IC's
           1,
           Original,
           None,
@@ -256,7 +295,17 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     Files.write(tempFile, "test".getBytes)
     val destinationPath = s"${utils.ioId}/Preservation_1/${utils.coId1}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2"
     (for
-      _ <- utils.ocflService.createObjects(utils.ioId, List(FileDownloadInfo(utils.ioId, Option(tempFile), destinationPath)))
+      _ <- utils.ocflService.createObjects(
+        utils.ioId,
+        List(
+          FileDownloadInfo(
+            utils.ioId,
+            Option(tempFile),
+            destinationPath,
+            List(Checksum("SHA256", "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"))
+          )
+        )
+      )
       _ <- utils.ocflService.commitStagedChanges(utils.ioId)
     yield ()).unsafeRunSync()
 
@@ -323,6 +372,18 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
   }
 
   "runCustodialCopy" should "write multiple metadata fragments to the same file" in {
+    val bitstreamInfoResponse = Seq(
+      BitStreamInfo(
+        "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+        1,
+        "https://example.com",
+        List(Fixity("SHA256", "9cb2951e055b501ad6a6a27ed0cafe7740b1046dfd755836b0a723c7e3602d9a")),
+        1,
+        Original,
+        None,
+        Some(UUID.randomUUID())
+      )
+    )
     val utils =
       new MainTestUtils(
         objectVersion = 0,
@@ -330,18 +391,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>,
           <Metadata><Ref/><Entity/><Content><anotherThing xmlns="http://www.mockSchema.com/test/v42"></anotherThing></Content></Metadata>
         ),
-        bitstreamInfo2Responses = Seq(
-          BitStreamInfo(
-            "90dfb573-7419-4e89-8558-6cfa29f8fb16.testEx2",
-            1,
-            "",
-            List(Fixity("SHA256", "")),
-            1,
-            Original,
-            None,
-            Some(UUID.randomUUID())
-          )
-        )
+        bitstreamInfo1Responses = bitstreamInfoResponse,
+        bitstreamInfo2Responses = bitstreamInfoResponse
       )
     val ioId = utils.ioId
     val repo = utils.repo
@@ -511,7 +562,19 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     "if it doesn't already exist" in {
       val utils = new MainTestUtils(
         List((ContentObject, false)),
-        typesOfMetadataFilesInRepo = List(ContentObject)
+        typesOfMetadataFilesInRepo = List(ContentObject),
+        bitstreamInfo1Responses = Seq(
+          BitStreamInfo(
+            "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+            1,
+            "https://example.com",
+            List(Fixity("SHA256", "9cb2951e055b501ad6a6a27ed0cafe7740b1046dfd755836b0a723c7e3602d9a")),
+            1,
+            Original,
+            None,
+            Some(UUID.randomUUID())
+          )
+        )
       )
       val repo = utils.repo
       val ioId = utils.ioId
@@ -598,7 +661,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
         repo.getObject(ioId.toHeadVersion).getFile(expectedCoFileDestinationFilePath).getStorageRelativePath
       val coContent = Files.readAllBytes(Paths.get(utils.repoDir.toString, coStoragePath)).map(_.toChar).mkString
 
-      coContent must equal(s"File content for 90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt")
+      coContent must equal("Test")
     }
 
   "runCustodialCopy" should "not write a new version and a bitstream to a file if the CO bitstream has no url" in {
@@ -636,7 +699,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
 
   "runCustodialCopy" should "write multiple bitstreams to the same version and to the correct location" in {
     val ioId = UUID.randomUUID()
-    val fixity = List(Fixity("SHA256", ""))
+    val fixity = List(Fixity("SHA256", "b459ef618a7deec01aad321b6489f59afd50c22853740b3b9a7f1aff26b29d03"))
     val bitStreamInfoList = Seq(
       BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt", 1, exampleUrl, fixity, 1, Original, None, Some(ioId)),
       BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2", 1, exampleUrl, fixity, 2, Derived, None, Some(ioId))
