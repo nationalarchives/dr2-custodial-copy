@@ -254,13 +254,15 @@ class DatabaseSpec extends AnyFlatSpec with BeforeAndAfterEach:
       .writeToPreservicaCOsTable(Chunk.singleton(row))
       .guarantee(completed.complete(()).void)
 
-    val (writeFiber, completedWhileLocked) = mutex.lock.surround(
-      for
-        fiber <- write.start
-        _ <- IO.sleep(100.millis)
-        completion <- completed.tryGet
-      yield (fiber, completion)
-    ).unsafeRunSync()
+    val (writeFiber, completedWhileLocked) = mutex.lock
+      .surround(
+        for
+          fiber <- write.start
+          _ <- IO.sleep(100.millis)
+          completion <- completed.tryGet
+        yield (fiber, completion)
+      )
+      .unsafeRunSync()
 
     completedWhileLocked should equal(None)
     writeFiber.join.unsafeRunSync()

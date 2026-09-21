@@ -11,6 +11,7 @@ import org.typelevel.doobie.util.log.LogHandler
 import org.typelevel.doobie.util.transactor.Transactor
 import org.typelevel.doobie.util.transactor.Transactor.Aux
 import fs2.Chunk
+import org.sqlite.SQLiteConfig
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
@@ -36,10 +37,14 @@ object Database:
 
   def apply[F[_]: Async](mutex: Mutex[F])(using configuration: Configuration): Database[F] = new Database[F] {
 
+    val sqliteConfig = new SQLiteConfig()
+    sqliteConfig.setBusyTimeout(30000)
+
     val xa: Aux[F, Unit] = Transactor.fromDriverManager[F](
       driver = "org.sqlite.JDBC",
       url = s"jdbc:sqlite:${configuration.config.databasePath}",
-      logHandler = Option(LogHandler.jdkLogHandler)
+      logHandler = Option(LogHandler.jdkLogHandler),
+      info = sqliteConfig.toProperties
     )
 
     given Put[EntityType] = Put[String].contramap(_.entityTypeShort)
