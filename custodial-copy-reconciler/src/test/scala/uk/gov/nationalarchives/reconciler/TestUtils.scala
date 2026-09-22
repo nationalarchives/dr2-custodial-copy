@@ -53,9 +53,6 @@ object TestUtils:
   } yield eventBridgeDetails).unsafeRunSync()
 
   class TestEntityClient extends EntityClient[IO, Fs2Streams[IO]]:
-    override def streamAllEntityRefs(repTypeFilter: Option[EntityClient.RepresentationType]): fs2.Stream[IO, Entities.EntityRef] =
-      fs2.Stream.raiseError(new Exception("Not implemented"))
-
     override def getBitstreamInfo(contentRef: UUID): IO[Seq[BitStreamInfo]] = notImplemented
 
     override val dateFormatter: DateTimeFormatter = DateTimeFormatter.ISO_DATE_TIME
