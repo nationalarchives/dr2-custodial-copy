@@ -68,7 +68,7 @@ object OcflService {
     new OcflService[F] {
       override def getAllObjectFiles: Stream[F, CoRow] =
         Stream
-          .fromIterator(repo.listObjectIds().iterator().asScala, config.maxConcurrency)
+          .fromIterator(repo.listObjectIds().iterator().asScala, 10_000)
           .chunkN(500)
           .flatMap(chunk => Stream.evalUnChunk(chunk.parFlatTraverse(filesForId)))
     }
