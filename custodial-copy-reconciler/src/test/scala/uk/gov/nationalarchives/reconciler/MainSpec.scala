@@ -34,12 +34,12 @@ class MainSpec extends AnyFlatSpec with BeforeAndAfterEach {
   private lazy val httpClient: SdkAsyncHttpClient = NettyNioAsyncHttpClient.builder().build()
 
   private def configuration(repoDir: String, workDir: String) = new Configuration:
-    override def config: Config = Config("", databaseName, 5, repoDir, workDir, 0)
+    override def config: Config = Config("", databaseName, 5, repoDir, workDir, -10)
 
   given config: Configuration = new Configuration:
     override def config: Config = Config("", databaseName, 5, "ocflRepoDir", "ocflWorkDir", 0)
 
-  val generation = Generation(ZonedDateTime.now, Original, 1)
+  val generation = Generation(ZonedDateTime.now.plusDays(10), Original, 1)
   val bitStreamInfo = BitStreamInfo(
     s"$coRef.testExt",
     1,
