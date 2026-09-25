@@ -173,7 +173,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
         BitStreamInfo(
           "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           1,
-          Option("https://example.com"),
+          exampleUrl,
           List(Fixity("SHA256", "nonMatchingFixity")),
           None,
           Some(UUID.randomUUID()),
@@ -216,7 +216,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
         BitStreamInfo(
           "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           1,
-          Option("https://example.com"),
+          exampleUrl,
           List(Fixity("SHA256", "e0ac3601005dfa1864f5392aabaf7d898b1b5bab854f1acb4491bcd806b76b0c")),
           None,
           Some(parentRef),
@@ -228,7 +228,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
         BitStreamInfo(
           f"$bitstreamId2.testExt",
           1,
-          Option("https://example.com"),
+          exampleUrl,
           List(Fixity("SHA256", "efc7f9a23093e744c2819cac0a709ca7ea40512d6062ada35cc27c1f3a3ac0e9")), // fixity different from IC's
           None,
           Some(parentRef),
@@ -285,7 +285,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
       BitStreamInfo(
         "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2",
         1,
-        Option("https://example.com"),
+        exampleUrl,
         List(Fixity("SHA256", DigestUtils.sha256Hex("test"))),
         None,
         Some(UUID.randomUUID()),
@@ -385,7 +385,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
       BitStreamInfo(
         "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
         1,
-        Option("https://example.com"),
+        exampleUrl,
         List(Fixity("SHA256", "9cb2951e055b501ad6a6a27ed0cafe7740b1046dfd755836b0a723c7e3602d9a")),
         None,
         Some(UUID.randomUUID()),

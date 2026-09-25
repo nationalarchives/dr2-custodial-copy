@@ -56,7 +56,7 @@ object OcflService {
       val chunk = Chunk.from(obj.getFiles.asScala).collect {
         case coFile if isNotMetadataFile(coFile.getPath) =>
           val pathAsList = coFile.getPath.split("/")
-          val pathStartingFromRepType = pathAsList.dropWhile(pathPart => !pathPart.startsWith("Preservation_") && !pathPart.startsWith("Access_"))
+          val pathStartingFromRepType = pathAsList.dropWhile(pathPart => !pathPart.startsWith("Preservation_"))
           val coRef = UUID.fromString(pathStartingFromRepType(1))
           val fixities = coFile.getFixity.asScala.toMap.map { case (digestAlgo, value) => (digestAlgo.getOcflName, value) }
           val sha256 = fixities("sha256")

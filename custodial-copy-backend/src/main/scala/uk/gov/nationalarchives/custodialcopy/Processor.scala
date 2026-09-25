@@ -248,7 +248,7 @@ class Processor(
 
   private def createHasher(algorithm: HashAlgorithm) = Hashing[IO].hash(algorithm)
 
-  private def download(custodialCopyObject: CustodialCopyObject, ioId: UUID) = custodialCopyObject match {
+  def download(custodialCopyObject: CustodialCopyObject, ioId: UUID) = custodialCopyObject match {
     case fo: FileObject =>
       ocflService.fileInRepository(fo, ioId).flatMap { isFileInRepository =>
         if isFileInRepository then IO.pure(FileDownloadInfo(fo.id, None, fo.destinationFilePath, fo.checksums))
