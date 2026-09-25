@@ -27,12 +27,13 @@ import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.Entity
 import uk.gov.nationalarchives.dp.client.EntityClient
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
+import uk.gov.nationalarchives.dp.client.EntityClient.Generation
 import uk.gov.nationalarchives.dp.client.EntityClient.GenerationType.*
 import uk.gov.nationalarchives.utils.TestUtils.*
 
 import java.nio.file
 import java.nio.file.{Files, Path, Paths}
-import java.time.{LocalDate, LocalDateTime}
+import java.time.{LocalDate, LocalDateTime, ZonedDateTime}
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import scala.jdk.CollectionConverters.*
@@ -64,17 +65,19 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     Main.runCustodialCopy(sqsClient, config, processor, mapRef).compile.toList.unsafeRunSync().flatten
   }
 
-  private val exampleUrl = "https://example.com"
+  private val exampleUrl = Option("https://example.com")
 
   "runCustodialCopy" should "(given an IO message with 'deleted' set to 'true') delete all objects underneath it" in {
     val fixity = List(Fixity("SHA256", ""))
     val ioId = UUID.randomUUID()
+    val originalGen = Generation(ZonedDateTime.now, Original, 1)
+    val derivedGen = Generation(ZonedDateTime.now, Derived, 1)
     val bitStreamInfoList = Seq(
-      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt", 1, "", fixity, 1, Original, None, Some(ioId)),
-      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2", 1, "", fixity, 2, Derived, None, Some(ioId))
+      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt", 1, Option(""), fixity, None, Some(ioId), originalGen, UUID.randomUUID),
+      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2", 1, Option(""), fixity, None, Some(ioId), derivedGen, UUID.randomUUID)
     )
     val bitStreamInfoList2 = Seq(
-      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt3", 1, "", fixity, 1, Original, None, Some(ioId))
+      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt3", 1, Option(""), fixity, None, Some(ioId), originalGen, UUID.randomUUID)
     )
     val utils = new MainTestUtils(
       List((ContentObject, false), (InformationObject, true)),
@@ -116,18 +119,19 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
 
   "runCustodialCopy" should "write a new version and new IO metadata object, to the correct location in the repository " +
     "if it doesn't already exist" in {
+      val originalGen = Generation(ZonedDateTime.now, Original, 1)
       val utils = new MainTestUtils(
         List((InformationObject, false)),
         bitstreamInfo2Responses = Seq(
           BitStreamInfo(
             "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2",
             1,
-            "",
+            Option(""),
             List(Fixity("SHA256", "")),
-            1,
-            Original,
             None,
-            Some(UUID.randomUUID())
+            Some(UUID.randomUUID()),
+            originalGen,
+            UUID.randomUUID
           )
         ),
         objectVersion = 0
@@ -161,6 +165,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     }
 
   "runCustodialCopy" should "return a Failure if the PS Fixity that is added to the OCFL Object doesn't match what OCFL generated for it" in {
+    val originalGen = Generation(ZonedDateTime.now, Original, 1)
     val utils = new MainTestUtils(
       List((ContentObject, false)),
       typesOfMetadataFilesInRepo = List(ContentObject),
@@ -168,12 +173,12 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
         BitStreamInfo(
           "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           1,
-          "https://example.com",
+          exampleUrl,
           List(Fixity("SHA256", "nonMatchingFixity")),
-          1,
-          Original,
           None,
-          Some(UUID.randomUUID())
+          Some(UUID.randomUUID()),
+          originalGen,
+          UUID.randomUUID
         )
       )
     )
@@ -199,6 +204,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
   }
 
   "runCustodialCopy" should "set downloaded to true for the rows found in the intelligent cache database and where checksums matched PS" in {
+    val originalGen = Generation(ZonedDateTime.now, Original, 1)
     val bitstreamId1 = "90dfb573-7419-4e89-8558-6cfa29f8fb16"
     val bitstreamId2 = "de35982b-4a3a-48ad-888d-fe41f3532d36"
     val parentRef = UUID.randomUUID()
@@ -210,24 +216,24 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
         BitStreamInfo(
           "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           1,
-          "https://example.com",
+          exampleUrl,
           List(Fixity("SHA256", "e0ac3601005dfa1864f5392aabaf7d898b1b5bab854f1acb4491bcd806b76b0c")),
-          1,
-          Original,
           None,
-          Some(parentRef)
+          Some(parentRef),
+          originalGen,
+          UUID.randomUUID
         )
       ),
       bitstreamInfo2Responses = Seq(
         BitStreamInfo(
           f"$bitstreamId2.testExt",
           1,
-          "https://example.com",
+          exampleUrl,
           List(Fixity("SHA256", "efc7f9a23093e744c2819cac0a709ca7ea40512d6062ada35cc27c1f3a3ac0e9")), // fixity different from IC's
-          1,
-          Original,
           None,
-          Some(parentRef)
+          Some(parentRef),
+          originalGen,
+          UUID.randomUUID
         )
       )
     )
@@ -249,18 +255,19 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
   }
 
   "runCustodialCopy" should "only download a file once if there are IO and CO messages for the same IO" in {
+    val originalGen = Generation(ZonedDateTime.now, Original, 1)
     val utils = new MainTestUtils(
       List((ContentObject, false), (InformationObject, false)),
       bitstreamInfo2Responses = Seq(
         BitStreamInfo(
           "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2",
           1,
-          "",
+          Option(""),
           List(Fixity("SHA256", "")),
-          1,
-          Original,
           None,
-          Some(UUID.randomUUID())
+          Some(UUID.randomUUID()),
+          originalGen,
+          UUID.randomUUID
         )
       ),
       objectVersion = 0
@@ -273,16 +280,17 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
   }
 
   "runCustodialCopy" should "only download the missing CO file if there is an IO message with two COs and one CO file for that IO is in the repository" in {
+    val originalGen = Generation(ZonedDateTime.now, Original, 1)
     val bitstreamResponse = Seq(
       BitStreamInfo(
         "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2",
         1,
-        "https://example.com",
+        exampleUrl,
         List(Fixity("SHA256", DigestUtils.sha256Hex("test"))),
-        1,
-        Original,
         None,
-        Some(UUID.randomUUID())
+        Some(UUID.randomUUID()),
+        originalGen,
+        UUID.randomUUID
       )
     )
     val utils = new MainTestUtils(
@@ -372,16 +380,17 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
   }
 
   "runCustodialCopy" should "write multiple metadata fragments to the same file" in {
+    val originalGen = Generation(ZonedDateTime.now, Original, 1)
     val bitstreamInfoResponse = Seq(
       BitStreamInfo(
         "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
         1,
-        "https://example.com",
+        exampleUrl,
         List(Fixity("SHA256", "9cb2951e055b501ad6a6a27ed0cafe7740b1046dfd755836b0a723c7e3602d9a")),
-        1,
-        Original,
         None,
-        Some(UUID.randomUUID())
+        Some(UUID.randomUUID()),
+        originalGen,
+        UUID.randomUUID
       )
     )
     val utils =
@@ -426,18 +435,19 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
   }
 
   "runCustodialCopy" should "only write one version if there are two identical IO messages" in {
+    val originalGen = Generation(ZonedDateTime.now, Original, 1)
     val utils = new MainTestUtils(
       List((InformationObject, false), (InformationObject, false)),
       bitstreamInfo2Responses = Seq(
         BitStreamInfo(
           "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2",
           1,
-          "",
+          Option(""),
           List(Fixity("SHA256", "")),
-          1,
-          Original,
           None,
-          Some(UUID.randomUUID())
+          Some(UUID.randomUUID()),
+          originalGen,
+          UUID.randomUUID
         )
       ),
       objectVersion = 0
@@ -512,16 +522,17 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     }
 
   "runCustodialCopy" should "return an error if a CO has no parent" in {
+    val originalGen = Generation(ZonedDateTime.now, Original, 1)
     val bitstreamInfo = Seq(
       BitStreamInfo(
         "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
         1,
-        "",
+        Option(""),
         List(Fixity("SHA256", "")),
-        1,
-        Original,
         None,
-        None
+        None,
+        originalGen,
+        UUID.randomUUID
       )
     )
     val utils = new MainTestUtils(List((ContentObject, false)), 0, bitstreamInfo1Responses = bitstreamInfo)
@@ -531,6 +542,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
   }
 
   "runCustodialCopy" should "return an error if a CO belongs to more than one Representation type" in {
+    val originalGen = Generation(ZonedDateTime.now, Original, 1)
     val ioId = UUID.randomUUID()
     val utils = new MainTestUtils(
       List((ContentObject, false)),
@@ -539,12 +551,12 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
         BitStreamInfo(
           "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           1,
-          "",
+          Option(""),
           List(Fixity("SHA256", "")),
-          1,
-          Original,
           None,
-          Some(ioId)
+          Some(ioId),
+          originalGen,
+          UUID.randomUUID
         )
       ),
       addAccessRepUrl = true
@@ -560,6 +572,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
 
   "runCustodialCopy" should "write a new version and a bitstream to a file, to the correct location in the repository " +
     "if it doesn't already exist" in {
+      val originalGen = Generation(ZonedDateTime.now, Original, 1)
       val utils = new MainTestUtils(
         List((ContentObject, false)),
         typesOfMetadataFilesInRepo = List(ContentObject),
@@ -567,12 +580,12 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
           BitStreamInfo(
             "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
             1,
-            "https://example.com",
+            Option("https://example.com"),
             List(Fixity("SHA256", "9cb2951e055b501ad6a6a27ed0cafe7740b1046dfd755836b0a723c7e3602d9a")),
-            1,
-            Original,
             None,
-            Some(UUID.randomUUID())
+            Some(UUID.randomUUID()),
+            originalGen,
+            UUID.randomUUID
           )
         )
       )
@@ -595,6 +608,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     }
 
   "runCustodialCopy" should "not write a new version, nor a new bitstream if there is an CO message with the same bitstream" in {
+    val originalGen = Generation(ZonedDateTime.now, Original, 1)
     val ioId = UUID.randomUUID()
     val fileContent = "Test"
     val checksum = DigestUtils.sha256Hex(fileContent)
@@ -608,12 +622,12 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
         BitStreamInfo(
           "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           1,
-          "",
+          Option(""),
           List(Fixity("SHA256", checksum)),
-          1,
-          Original,
           None,
-          Some(ioId)
+          Some(ioId),
+          originalGen,
+          UUID.randomUUID
         )
       )
     )
@@ -626,6 +640,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
 
   "runCustodialCopy" should "write a new version and a bitstream to a file, to the correct location in the repository, " +
     "if there is a CO message with different metadata" in {
+      val originalGen = Generation(ZonedDateTime.now, Original, 1)
       val fileContent = "Test"
       val ioId = UUID.randomUUID()
 
@@ -640,10 +655,10 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
             1,
             exampleUrl,
             List(Fixity("SHA256", "DifferentContent")),
-            1,
-            Original,
             None,
-            Some(ioId)
+            Some(ioId),
+            originalGen,
+            UUID.randomUUID
           )
         )
       )
@@ -665,6 +680,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     }
 
   "runCustodialCopy" should "not write a new version and a bitstream to a file if the CO bitstream has no url" in {
+    val originalGen = Generation(ZonedDateTime.now, Original, 1)
     val fileContent = "Test"
     val ioId = UUID.randomUUID()
 
@@ -675,12 +691,12 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
         BitStreamInfo(
           "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           1,
-          "",
+          Option(""),
           List(Fixity("SHA256", "DifferentContent")),
-          1,
-          Original,
           None,
-          Some(ioId)
+          Some(ioId),
+          originalGen,
+          UUID.randomUUID
         )
       )
     )
@@ -698,14 +714,16 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
   }
 
   "runCustodialCopy" should "write multiple bitstreams to the same version and to the correct location" in {
+    val originalGen = Generation(ZonedDateTime.now, Original, 1)
+    val derivedGen = Generation(ZonedDateTime.now, Derived, 2)
     val ioId = UUID.randomUUID()
     val fixity = List(Fixity("SHA256", "b459ef618a7deec01aad321b6489f59afd50c22853740b3b9a7f1aff26b29d03"))
     val bitStreamInfoList = Seq(
-      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt", 1, exampleUrl, fixity, 1, Original, None, Some(ioId)),
-      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2", 1, exampleUrl, fixity, 2, Derived, None, Some(ioId))
+      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt", 1, exampleUrl, fixity, None, Some(ioId), originalGen, UUID.randomUUID),
+      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt2", 1, exampleUrl, fixity, None, Some(ioId), derivedGen, UUID.randomUUID)
     )
     val bitStreamInfoList2 = Seq(
-      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt3", 1, exampleUrl, fixity, 1, Original, None, Some(ioId))
+      BitStreamInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt3", 1, exampleUrl, fixity, None, Some(ioId), originalGen, UUID.randomUUID)
     )
 
     val utils = new MainTestUtils(
@@ -760,6 +778,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
 
   "runCustodialCopy" should "write a new version and new CO metadata object, to the correct location in the repository " +
     "if it doesn't already exist" in {
+      val originalGen = Generation(ZonedDateTime.now, Original, 1)
       val fileContent = "File content for name"
       val checksum = DigestUtils.sha256Hex(fileContent)
       val ioId = UUID.randomUUID()
@@ -771,12 +790,12 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
           BitStreamInfo(
             "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
             1,
-            "",
+            Option(""),
             List(Fixity("SHA256", checksum)),
-            1,
-            Original,
             None,
-            Some(ioId)
+            Some(ioId),
+            originalGen,
+            UUID.randomUUID
           )
         )
       )
@@ -808,6 +827,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     }
 
   "runCustodialCopy" should "write a new version and new CO metadata object if there is a CO message with different metadata" in {
+    val originalGen = Generation(ZonedDateTime.now, Original, 1)
     val fileContent = "Test"
     val checksum = DigestUtils.sha256Hex(fileContent)
     val ioId = UUID.randomUUID()
@@ -823,12 +843,12 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
         BitStreamInfo(
           "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
           1,
-          "",
+          Option(""),
           List(Fixity("SHA256", checksum)),
-          1,
-          Original,
           None,
-          Some(ioId)
+          Some(ioId),
+          originalGen,
+          UUID.randomUUID
         )
       )
     )

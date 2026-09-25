@@ -194,8 +194,8 @@ class Processor(
         parentRef,
         Some(entity.ref),
         representationTypeGroup,
-        Some(bitStreamInfo.generationType),
-        Some(bitStreamInfo.generationVersion),
+        Some(bitStreamInfo.generation.generationType),
+        Some(bitStreamInfo.generation.version),
         bitStreamInfo.name
       )
 
@@ -203,7 +203,7 @@ class Processor(
         parentRef,
         bitStreamInfo.name,
         bitStreamInfo.fixities.map(eachFixity => Checksum(eachFixity.algorithm, eachFixity.value)),
-        bitStreamInfo.url,
+        bitStreamInfo.potentialUrl.getOrElse(""),
         destinationFilePath,
         removeFileExtension(bitStreamInfo.name)
       )
@@ -248,7 +248,7 @@ class Processor(
 
   private def createHasher(algorithm: HashAlgorithm) = Hashing[IO].hash(algorithm)
 
-  private def download(custodialCopyObject: CustodialCopyObject, ioId: UUID) = custodialCopyObject match {
+  def download(custodialCopyObject: CustodialCopyObject, ioId: UUID) = custodialCopyObject match {
     case fo: FileObject =>
       ocflService.fileInRepository(fo, ioId).flatMap { isFileInRepository =>
         if isFileInRepository then IO.pure(FileDownloadInfo(fo.id, None, fo.destinationFilePath, fo.checksums))

@@ -1,6 +1,7 @@
 package uk.gov.nationalarchives.reconciler
 
 import cats.effect.Async
+import cats.effect.std.Mutex
 import cats.implicits.*
 import org.typelevel.doobie.Update
 import org.typelevel.doobie.free.connection.ConnectionIO
@@ -10,6 +11,7 @@ import org.typelevel.doobie.util.log.LogHandler
 import org.typelevel.doobie.util.transactor.Transactor
 import org.typelevel.doobie.util.transactor.Transactor.Aux
 import fs2.Chunk
+import org.sqlite.SQLiteConfig
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
@@ -17,24 +19,32 @@ import uk.gov.nationalarchives.reconciler.Database.{CoRow, Result}
 import uk.gov.nationalarchives.reconciler.Database.TableName.{OcflCOs, PreservicaCOs}
 import uk.gov.nationalarchives.utils.Utils.given
 
+import java.time.OffsetDateTime
 import java.util.UUID
 
 trait Database[F[_]]:
   def writeToPreservicaCOsTable(cosInPS: Chunk[CoRow]): F[Unit]
   def writeToOcflCOsTable(expectedCosInPS: Chunk[CoRow]): F[Unit]
-  def findAllMissingCOs(): F[Result]
+  def findAllMissingCOs(endDate: OffsetDateTime): F[Result]
   def deleteFromTables(): F[Unit]
 
 object Database:
   enum TableName:
     case OcflCOs, PreservicaCOs
 
-  def apply[F[_]: Async](using configuration: Configuration): Database[F] = new Database[F] {
+  given Put[OffsetDateTime] = Put[String].contramap(_.toString)
+  given Get[OffsetDateTime] = Get[String].map(OffsetDateTime.parse)
+
+  def apply[F[_]: Async](mutex: Mutex[F])(using configuration: Configuration): Database[F] = new Database[F] {
+
+    val sqliteConfig = new SQLiteConfig()
+    sqliteConfig.setBusyTimeout(30000)
 
     val xa: Aux[F, Unit] = Transactor.fromDriverManager[F](
       driver = "org.sqlite.JDBC",
       url = s"jdbc:sqlite:${configuration.config.databasePath}",
-      logHandler = Option(LogHandler.jdkLogHandler)
+      logHandler = Option(LogHandler.jdkLogHandler),
+      info = sqliteConfig.toProperties
     )
 
     given Put[EntityType] = Put[String].contramap(_.entityTypeShort)
@@ -47,25 +57,29 @@ object Database:
     given Read[EntityType] = Read.fromGet
 
     override def writeToOcflCOsTable(expectedCosInPS: Chunk[CoRow]): F[Unit] = {
-      val insertSql = s"insert into OcflCOs (id, parent, sha256Checksum) values (?, ?, ?)"
+      val insertSql = s"insert into OcflCOs (id, parent, sha256Checksum, createdDate) values (?, ?, ?, ?)"
       writeTransaction(OcflCOs, Update[CoRow](insertSql).updateMany(expectedCosInPS))
     }
 
     override def writeToPreservicaCOsTable(cosInPS: Chunk[CoRow]): F[Unit] = {
-      val insertSql = s"insert into PreservicaCOs (id, parent, sha256Checksum) values (?, ?, ?)"
+      val insertSql = s"insert into PreservicaCOs (id, parent, sha256Checksum, createdDate) values (?, ?, ?, ?)"
       writeTransaction(PreservicaCOs, Update[CoRow](insertSql).updateMany(cosInPS))
     }
 
-    override def findAllMissingCOs(): F[Result] =
-      for {
+    override def findAllMissingCOs(endDate: OffsetDateTime): F[Result] = mutex.lock.surround {
+      for
         psCOsCount <- preservicaCOsCount
         ccCOsCount <- ccCOsCount
-        psCOsMissingFromCc <- findPsCOsMissingFromOcfl()
+        psCOsMissingFromCc <- findPsCOsMissingFromOcfl(endDate)
         ccCOsMissingFromPs <- findOcflCOsMissingFromPs()
-      } yield Result(psCOsCount, psCOsMissingFromCc.distinct, ccCOsCount, ccCOsMissingFromPs.distinct)
+      yield Result(psCOsCount, psCOsMissingFromCc.distinct, ccCOsCount, ccCOsMissingFromPs.distinct)
+    }
 
-    private def findPsCOsMissingFromOcfl(): F[List[String]] = {
-      val selectSql = sql"select p.* from PreservicaCOs p LEFT JOIN OcflCOs o on p.sha256checksum = o.sha256Checksum WHERE o.sha256Checksum is null;"
+    private def findPsCOsMissingFromOcfl(endDate: OffsetDateTime): F[List[String]] = {
+      val selectSql =
+        sql"""select p.* from PreservicaCOs p
+             LEFT JOIN OcflCOs o on p.sha256checksum = o.sha256Checksum
+             WHERE o.sha256Checksum is null AND p.createdDate < $endDate;"""
       selectSql.query[CoRow].to[List].transact(xa).flatMap { psRefs =>
         for {
           logger <- Slf4jLogger.create[F]
@@ -78,7 +92,10 @@ object Database:
     }
 
     private def findOcflCOsMissingFromPs(): F[List[String]] = {
-      val selectSql = sql"select o.* from OcflCOs o LEFT JOIN PreservicaCOs p on p.sha256checksum = o.sha256Checksum where p.sha256Checksum is null"
+      val selectSql =
+        sql"""select o.* from OcflCOs o
+             LEFT JOIN PreservicaCOs p on p.sha256checksum = o.sha256Checksum
+             where p.sha256Checksum is null AND o.createdDate < (select max(createdDate) from PreservicaCOs);"""
       selectSql.query[CoRow].to[List].transact(xa).flatMap { ocflRefs =>
         for {
           logger <- Slf4jLogger.create[F]
@@ -100,24 +117,27 @@ object Database:
       selectSql.transact(xa)
     }
 
-    private def writeTransaction(tableName: TableName, connection: ConnectionIO[Int]) = for {
-      logger <- Slf4jLogger.create[F]
-      updateCount <- connection.transact(xa)
-      _ <- logger.info(s"$tableName: $updateCount rows updated.")
-    } yield ()
+    private def writeTransaction(tableName: TableName, connection: ConnectionIO[Int]) = mutex.lock.surround {
+      for
+        logger <- Slf4jLogger.create[F]
+        updateCount <- connection.transact(xa)
+        _ <- logger.info(s"$tableName: $updateCount rows updated.")
+      yield ()
+    }
 
     override def deleteFromTables(): F[Unit] =
       val deleteUpdates = for
         _ <- sql"delete from OcflCOs;".update.run
         _ <- sql"delete from PreservicaCOs;".update.run
       yield ()
-      deleteUpdates.transact(xa)
+      mutex.lock.surround(deleteUpdates.transact(xa))
   }
 
   case class CoRow(
       id: UUID,
       parent: Option[UUID],
-      sha256Checksum: String
+      sha256Checksum: String,
+      createdDate: OffsetDateTime
   )
 
   case class Result(

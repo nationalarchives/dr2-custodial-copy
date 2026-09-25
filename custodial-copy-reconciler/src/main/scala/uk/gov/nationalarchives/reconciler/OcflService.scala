@@ -16,7 +16,6 @@ import uk.gov.nationalarchives.reconciler.Main.Config
 import uk.gov.nationalarchives.utils.Utils.*
 
 import java.nio.file.Paths
-import java.time.OffsetDateTime
 import java.util.UUID
 import scala.jdk.CollectionConverters.*
 import scala.jdk.FunctionConverters.*
@@ -27,7 +26,6 @@ trait OcflService[F[_]] {
 object OcflService {
 
   def apply[F[_]: Async](config: Config): OcflService[F] = {
-    val startTime = OffsetDateTime.now
     val repoDir = Paths.get(config.ocflRepoDir)
     val workDir =
       Paths.get(
@@ -50,31 +48,28 @@ object OcflService {
       .workDir(workDir)
       .buildMutable()
 
-    def isNotMetadataFile(storageRelativePath: String) =
-      (storageRelativePath.contains("/Preservation_") || storageRelativePath.contains("/Access_")) && !storageRelativePath.contains("CO_Metadata.xml")
+    def isNotMetadataFile(path: String) = path.contains("Preservation_") && !path.contains("CO_Metadata.xml")
 
     def filesForId(id: String) = {
       val ioRef = UUID.fromString(id)
       val obj = repo.getObject(ioRef.toHeadVersion)
-      if obj.getCreated.isAfter(startTime.minusDays(config.daysToIgnore)) then Async[F].pure(Chunk.empty)
-      else
-        val chunk = Chunk.from(obj.getFiles.asScala).collect {
-          case coFile if isNotMetadataFile(coFile.getStorageRelativePath) =>
-            val pathAsList = coFile.getPath.split("/")
-            val pathStartingFromRepType = pathAsList.dropWhile(pathPart => !pathPart.startsWith("Preservation_") && !pathPart.startsWith("Access_"))
-            val coRef = UUID.fromString(pathStartingFromRepType(1))
-            val fixities = coFile.getFixity.asScala.toMap.map { case (digestAlgo, value) => (digestAlgo.getOcflName, value) }
-            val sha256 = fixities("sha256")
-            CoRow(coRef, Option(ioRef), sha256)
-        }
-        Async[F].pure(chunk)
+      val chunk = Chunk.from(obj.getFiles.asScala).collect {
+        case coFile if isNotMetadataFile(coFile.getPath) =>
+          val pathAsList = coFile.getPath.split("/")
+          val pathStartingFromRepType = pathAsList.dropWhile(pathPart => !pathPart.startsWith("Preservation_"))
+          val coRef = UUID.fromString(pathStartingFromRepType(1))
+          val fixities = coFile.getFixity.asScala.toMap.map { case (digestAlgo, value) => (digestAlgo.getOcflName, value) }
+          val sha256 = fixities("sha256")
+          CoRow(coRef, Option(ioRef), sha256, obj.getCreated)
+      }
+      Async[F].pure(chunk)
     }
 
     new OcflService[F] {
       override def getAllObjectFiles: Stream[F, CoRow] =
         Stream
-          .fromIterator(repo.listObjectIds().iterator().asScala, config.maxConcurrency)
-          .chunkN(50)
+          .fromIterator(repo.listObjectIds().iterator().asScala, 10_000)
+          .chunkN(500)
           .flatMap(chunk => Stream.evalUnChunk(chunk.parFlatTraverse(filesForId)))
     }
   }
