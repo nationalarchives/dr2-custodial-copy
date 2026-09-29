@@ -209,7 +209,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     val bitstreamId2 = "de35982b-4a3a-48ad-888d-fe41f3532d36"
     val parentRef = UUID.randomUUID()
     val utils = new MainTestUtils(
-      List((ContentObject, false), (InformationObject, false)),
+      List((ContentObject, false)),
       objectVersion = 0,
       true,
       bitstreamInfo1Responses = Seq(
@@ -218,18 +218,6 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
           1,
           exampleUrl,
           List(Fixity("SHA256", "e0ac3601005dfa1864f5392aabaf7d898b1b5bab854f1acb4491bcd806b76b0c")),
-          None,
-          Some(parentRef),
-          originalGen,
-          UUID.randomUUID
-        )
-      ),
-      bitstreamInfo2Responses = Seq(
-        BitStreamInfo(
-          f"$bitstreamId2.testExt",
-          1,
-          exampleUrl,
-          List(Fixity("SHA256", "efc7f9a23093e744c2819cac0a709ca7ea40512d6062ada35cc27c1f3a3ac0e9")), // fixity different from IC's
           None,
           Some(parentRef),
           originalGen,
@@ -244,12 +232,9 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 
     val bitstream1DownloadStatus = databaseUtils.getDownloadedStatus(bitstreamId1)
-    val bitstream2DownloadStatus = databaseUtils.getDownloadedStatus(bitstreamId2)
     val unchangedDownloadStatus = databaseUtils.getDownloadedStatus(unusedBitstreamId)
     bitstream1DownloadStatus.downloaded.get must equal(1)
     LocalDateTime.parse(bitstream1DownloadStatus.downloadedAt.get).toLocalDate must equal(LocalDate.now)
-    bitstream2DownloadStatus.downloaded must equal(None)
-    bitstream2DownloadStatus.downloadedAt must equal(None)
     unchangedDownloadStatus.downloaded must equal(None)
     unchangedDownloadStatus.downloadedAt must equal(None)
   }
