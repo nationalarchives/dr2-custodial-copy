@@ -254,7 +254,7 @@ class Processor(
               potentialIcDatabase.flatTraverse { db =>
                 for
                   path <- db.getPathFromDri(fo.tableItemIdentifier)
-                  _ <- logger.info(s"Found path for bitstream name ${fo.tableItemIdentifier} in local cache")
+                  _ <- IO.whenA(path.isDefined)(logger.info(s"Found path for bitstream name ${fo.tableItemIdentifier} in local cache"))
                 yield path
               }
             writePath <- fo.sourceFilePath(config.downloadDir)
