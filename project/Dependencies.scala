@@ -5,7 +5,7 @@ object Dependencies {
   private lazy val log4CatsVersion = "2.8.0"
   private lazy val pureConfigVersion = "0.17.10"
   private lazy val scalaTestVersion = "3.2.20"
-  private lazy val http4sVersion = "1.0.0-M47"
+  private lazy val http4sVersion = "1.0.0-M48"
 
   lazy val commonsCompress = "org.apache.commons" % "commons-compress" % "1.28.0"
   lazy val dynamoClient = "uk.gov.nationalarchives" %% "da-dynamodb-client" % daAwsClientsVersion
