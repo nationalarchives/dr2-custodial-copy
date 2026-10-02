@@ -3,7 +3,7 @@ package uk.gov.nationalarchives.custodialcopy
 import cats.effect.IO
 import cats.implicits.*
 import fs2.Stream
-import fs2.io.file.{Files, Flags, Path}
+import fs2.io.file.{CopyFlag, CopyFlags, Files, Flags, Path}
 
 import java.nio.file.{Files as JFiles, Path as JPath}
 import io.circe.Encoder
@@ -14,7 +14,7 @@ import sttp.capabilities.fs2.Fs2Streams
 import uk.gov.nationalarchives.{DASNSClient, DASQSClient}
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.*
-import uk.gov.nationalarchives.custodialcopy.Main.{Config, FileDownloadInfo, IntelligentCachingInfo, IntelligentCachingDownloads}
+import uk.gov.nationalarchives.custodialcopy.Main.{Config, FileDownloadInfo, IntelligentCachingDownloads, IntelligentCachingInfo}
 import uk.gov.nationalarchives.custodialcopy.Message.*
 import uk.gov.nationalarchives.custodialcopy.Processor.{ObjectStatus, ProcessorOutput, Result}
 import uk.gov.nationalarchives.custodialcopy.Processor.Result.*
@@ -27,8 +27,6 @@ import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.*
 import uk.gov.nationalarchives.dp.client.Entities.{Entity, fromType}
 import uk.gov.nationalarchives.dp.client.ValidateXmlAgainstXsd.PreservicaSchema.XipXsdSchemaV7
-import fs2.hashing.{HashAlgorithm, Hashing}
-import fs2.text
 
 import java.util.UUID
 import scala.annotation.tailrec
@@ -44,7 +42,6 @@ class Processor(
     snsClient: DASNSClient[IO]
 ) {
   lazy val potentialIcDatabase: Option[Database[IO]] = config.potentialIcDbPath.map(Database[IO])
-  private lazy val fs2HashNamesToAlgos: Map[String, HashAlgorithm] = HashAlgorithm.BuiltIn.map(algo => (algo.toString, algo)).toMap
 
   private val newlineAndIndent = "\n          "
 
@@ -246,9 +243,7 @@ class Processor(
     case _ => IO.pure(Nil)
   }
 
-  private def createHasher(algorithm: HashAlgorithm) = Hashing[IO].hash(algorithm)
-
-  def download(custodialCopyObject: CustodialCopyObject, ioId: UUID) = custodialCopyObject match {
+  private def download(custodialCopyObject: CustodialCopyObject, ioId: UUID) = custodialCopyObject match {
     case fo: FileObject =>
       ocflService.fileInRepository(fo, ioId).flatMap { isFileInRepository =>
         if isFileInRepository then IO.pure(FileDownloadInfo(fo.id, None, fo.destinationFilePath, fo.checksums))
@@ -259,54 +254,25 @@ class Processor(
               potentialIcDatabase.flatTraverse { db =>
                 for
                   path <- db.getPathFromDri(fo.tableItemIdentifier)
-                  _ <- logger.info(s"Found path for bitstream name ${fo.tableItemIdentifier} in local cache")
+                  _ <- IO.whenA(path.isDefined)(logger.info(s"Found path for bitstream name ${fo.tableItemIdentifier} in local cache"))
                 yield path
               }
             writePath <- fo.sourceFilePath(config.downloadDir)
             potentialReadFilePath = potentialFilePath.map(filePath => Path(config.filesCacheDir).resolve(Path(filePath.stripPrefix("/"))))
             (potentialWritePath, downloadedLocally) <-
-              for
-                localChecksumsMatchPs <-
-                  potentialReadFilePath
-                    .map { readFilePath =>
-                      val hashers = fo.checksums.map(checksum => createHasher(fs2HashNamesToAlgos(checksum.algorithm.toUpperCase)))
-
-                      Files[IO]
-                        .readAll(readFilePath)
-                        .broadcastThrough(hashers*)
-                        .flatMap(hash => text.hex.encode(Stream.emits(hash.bytes.toList)))
-                        .compile
-                        .toList
-                        .map(localFileChecksums => fo.checksums.forall(checksum => localFileChecksums.contains(checksum.fingerprint)))
-                        .flatTap { localChecksumsMatchPs =>
-                          if !localChecksumsMatchPs then
-                            logger.info(
-                              s"File with bitstream name ${fo.tableItemIdentifier} was found in the local cache but its checksum(s)" +
-                                s" didn't match the one(s) from the Preservation System...downloading the file from the Preservation System instead."
-                            )
-                          else IO.unit
-                        }
-                    }
-                    .getOrElse(IO.pure(false))
-                potentialNioWritePath <-
-                  val nioWritePath = Option(writePath.toNioPath)
-                  if localChecksumsMatchPs then
-                    Files[IO]
-                      .readAll(potentialReadFilePath.get)
-                      .through(Files[IO].writeAll(writePath, Flags.Write))
-                      .compile
-                      .drain
-                      .map(_ => nioWritePath)
-                  else // if checksums don't match, local filePath doesn't exist or caching database not provided
-                  if fo.url.nonEmpty then
-                    entityClient
-                      .streamBitstreamContent[Unit](Fs2Streams.apply)(
-                        fo.url,
-                        s => s.through(Files[IO].writeAll(writePath, Flags.Write)).compile.drain
-                      )
-                      .map(_ => nioWritePath)
-                  else IO.pure(None)
-              yield (potentialNioWritePath, localChecksumsMatchPs)
+              val nioWritePath = Option(writePath.toNioPath)
+              if potentialReadFilePath.isDefined then
+                Files[IO]
+                  .copy(potentialReadFilePath.get, writePath, CopyFlags(CopyFlag.ReplaceExisting))
+                  .map(_ => nioWritePath -> true)
+              else if fo.url.nonEmpty then // if local filePath doesn't exist or caching database not provided
+                entityClient
+                  .streamBitstreamContent[Unit](Fs2Streams.apply)(
+                    fo.url,
+                    s => s.through(Files[IO].writeAll(writePath, Flags.Write)).compile.drain
+                  )
+                  .map(_ => nioWritePath -> false)
+              else IO.pure(None -> false)
           yield FileDownloadInfo(
             fo.id,
             potentialWritePath,

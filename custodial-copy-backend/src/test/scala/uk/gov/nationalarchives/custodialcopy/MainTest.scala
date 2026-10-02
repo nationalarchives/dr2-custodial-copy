@@ -209,7 +209,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     val bitstreamId2 = "de35982b-4a3a-48ad-888d-fe41f3532d36"
     val parentRef = UUID.randomUUID()
     val utils = new MainTestUtils(
-      List((ContentObject, false), (InformationObject, false)),
+      List((ContentObject, false)),
       objectVersion = 0,
       true,
       bitstreamInfo1Responses = Seq(
@@ -218,18 +218,6 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
           1,
           exampleUrl,
           List(Fixity("SHA256", "e0ac3601005dfa1864f5392aabaf7d898b1b5bab854f1acb4491bcd806b76b0c")),
-          None,
-          Some(parentRef),
-          originalGen,
-          UUID.randomUUID
-        )
-      ),
-      bitstreamInfo2Responses = Seq(
-        BitStreamInfo(
-          f"$bitstreamId2.testExt",
-          1,
-          exampleUrl,
-          List(Fixity("SHA256", "efc7f9a23093e744c2819cac0a709ca7ea40512d6062ada35cc27c1f3a3ac0e9")), // fixity different from IC's
           None,
           Some(parentRef),
           originalGen,
@@ -244,14 +232,75 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
 
     val bitstream1DownloadStatus = databaseUtils.getDownloadedStatus(bitstreamId1)
-    val bitstream2DownloadStatus = databaseUtils.getDownloadedStatus(bitstreamId2)
     val unchangedDownloadStatus = databaseUtils.getDownloadedStatus(unusedBitstreamId)
     bitstream1DownloadStatus.downloaded.get must equal(1)
     LocalDateTime.parse(bitstream1DownloadStatus.downloadedAt.get).toLocalDate must equal(LocalDate.now)
-    bitstream2DownloadStatus.downloaded must equal(None)
-    bitstream2DownloadStatus.downloadedAt must equal(None)
     unchangedDownloadStatus.downloaded must equal(None)
     unchangedDownloadStatus.downloadedAt must equal(None)
+  }
+
+  "runCustodialCopy" should "return an error and not update the downloaded status if the checksum in Preservica doesn't match the file checksum" in {
+    val originalGen = Generation(ZonedDateTime.now, Original, 1)
+    val bitstreamId1 = "90dfb573-7419-4e89-8558-6cfa29f8fb16"
+    val bitstreamId2 = "de35982b-4a3a-48ad-888d-fe41f3532d36"
+    val parentRef = UUID.randomUUID()
+    val utils = new MainTestUtils(
+      List((ContentObject, false)),
+      objectVersion = 0,
+      true,
+      bitstreamInfo1Responses = Seq(
+        BitStreamInfo(
+          "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+          1,
+          exampleUrl,
+          List(Fixity("SHA256", "invalidchecksum")),
+          None,
+          Some(parentRef),
+          originalGen,
+          UUID.randomUUID
+        )
+      )
+    )
+    databaseUtils.addFilesToDriFilesTable(List(DriFile(bitstreamId2, utils.cachedFilePath, utils.ioId.toString)))
+    databaseUtils.addFilesToDriFilesTable(List(DriFile(bitstreamId1, utils.cachedFilePath, utils.ioId.toString)))
+    val result = runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
+
+    result.head.isError must equal(true)
+    result.head.asInstanceOf[Failure].ex.getMessage must equal(
+      s"Expected sha-256 digest of ${utils.ioId}/Preservation_1/${utils.coId1}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt to be invalidchecksum, but was e0ac3601005dfa1864f5392aabaf7d898b1b5bab854f1acb4491bcd806b76b0c."
+    )
+
+    val bitstream1DownloadStatus = databaseUtils.getDownloadedStatus(bitstreamId1)
+    bitstream1DownloadStatus.downloaded must equal(None)
+    bitstream1DownloadStatus.downloadedAt must equal(None)
+  }
+
+  "runCustodialCopy" should "download the file from Preservica if the file is not in the IC database" in {
+    val originalGen = Generation(ZonedDateTime.now, Original, 1)
+    val bitstreamId1 = "90dfb573-7419-4e89-8558-6cfa29f8fb16"
+    val bitstreamId2 = "de35982b-4a3a-48ad-888d-fe41f3532d36"
+    val parentRef = UUID.randomUUID()
+    val utils = new MainTestUtils(
+      List((ContentObject, false)),
+      objectVersion = 0,
+      true,
+      bitstreamInfo1Responses = Seq(
+        BitStreamInfo(
+          "90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+          1,
+          exampleUrl,
+          List(Fixity("SHA256", "e0ac3601005dfa1864f5392aabaf7d898b1b5bab854f1acb4491bcd806b76b0c")),
+          None,
+          Some(parentRef),
+          originalGen,
+          UUID.randomUUID
+        )
+      )
+    )
+    val unusedBitstreamId = UUID.randomUUID.toString
+    runCustodialCopy(utils.sqsClient, utils.config, utils.processor)
+
+    verify(utils.preservicaClient, times(1)).streamBitstreamContent(any[Fs2Streams[IO]])(any[String], any())
   }
 
   "runCustodialCopy" should "only download a file once if there are IO and CO messages for the same IO" in {

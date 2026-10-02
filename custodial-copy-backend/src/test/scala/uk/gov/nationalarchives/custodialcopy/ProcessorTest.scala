@@ -166,60 +166,6 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
     )
   }
 
-  "process" should "not source the file locally and download it instead, if it's found in the DB but its checksum doesn't match Preservica's" in {
-    val utils = new ProcessorTestUtils(ContentObject, cacheDir = true)
-    val id = utils.coId
-    val parentRef = utils.ioId
-    val bitstreamId = utils.bitstreamFromApi.name.split("\\.").head
-
-    databaseUtils.addFilesToDriFilesTable(List(DriFile(bitstreamId, utils.cachedFilePath, parentRef.toString)))
-
-    val res = utils.processMessage.unsafeRunSync()
-
-    res.isSuccess should equal(true)
-    res match
-      case Success(ref, icIds, filesDownloadedSize, psIds, filesNotFoundViaIcSize) =>
-        icIds should equal(Nil)
-        filesDownloadedSize should equal(0)
-        psIds should equal(List("90dfb573-7419-4e89-8558-6cfa29f8fb16"))
-        filesNotFoundViaIcSize should equal(61)
-      case Failure(_) => ()
-
-    val bitstreamCalls = 1
-
-    utils.verifyCallsAndArguments(
-      bitstreamCalls,
-      1,
-      1,
-      idsOfEntityToGetMetadataFrom = List(id),
-      entityTypesToGetMetadataFrom = List(ContentObject),
-      xmlRequestsToValidate = List(utils.coXmlToValidate),
-      numOfStreamBitstreamContentCalls = bitstreamCalls,
-      createdFileDownloadInfo = List(
-        List(
-          FileDownloadInfo(
-            id,
-            Path(s"$id/missing").toNioPath.some,
-            "destinationPath",
-            Nil,
-            Some(IntelligentCachingInfo("90dfb573-7419-4e89-8558-6cfa29f8fb16", false))
-          )
-        ),
-        List(FileDownloadInfo(id, Path(s"$id/CO_Metadata_missing.xml").toNioPath.some, "destinationPath", Nil))
-      ),
-      drosToLookup = List(
-        List(
-          s"$parentRef/Preservation_1/$id/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
-          s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
-        )
-      ),
-      snsMessagesToSend = List(
-        SendSnsMessage(ContentObject, id, Bitstream, Created),
-        SendSnsMessage(ContentObject, id, Metadata, Created)
-      )
-    )
-  }
-
   "process" should "return a Failure if a Content Object does not have a parent" in {
     val utils = new ProcessorTestUtils(ContentObject, parentRefExists = false)
 
