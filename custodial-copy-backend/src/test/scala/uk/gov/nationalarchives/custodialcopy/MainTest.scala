@@ -152,7 +152,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
         Files.readAllBytes(Paths.get(utils.repoDir.toString, metadataStoragePath)).map(_.toChar).mkString
 
       metadataContent must equal(
-        <XIP xmlns="http://preservica.com/XIP/v7.7">
+        <XIP xmlns="http://preservica.com/XIP/v9.3">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
           <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>
@@ -415,7 +415,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
 
     metadataContent must equal(
       trim(
-        <XIP xmlns="http://preservica.com/XIP/v7.7">
+        <XIP xmlns="http://preservica.com/XIP/v9.3">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
           <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>
@@ -469,7 +469,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
 
     metadataContent must equal(
       trim(
-        <XIP xmlns="http://preservica.com/XIP/v7.7">
+        <XIP xmlns="http://preservica.com/XIP/v9.3">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
           <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>
@@ -863,7 +863,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
         Files.readAllBytes(Paths.get(utils.repoDir.toString, metadataStoragePath)).map(_.toChar).mkString
 
       metadataContent must equal(
-        <XIP xmlns="http://preservica.com/XIP/v7.7">
+        <XIP xmlns="http://preservica.com/XIP/v9.3">
           <ContentObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></ContentObject>
           <Generation original="true" active="true"><ContentObject>someContent</ContentObject></Generation>
           <Bitstream><Filename>90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt</Filename><FileSize>1</FileSize><Fixities><Fixity><FixityAlgorithmRef>SHA256</FixityAlgorithmRef><FixityValue>a3f79ff30708357d9b94d2e11507a9b30bef88d816bfffdc0ec3136939289ff3</FixityValue></Fixity></Fixities></Bitstream>
@@ -918,7 +918,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
 
     metadataContent must equal(
       trim(
-        <XIP xmlns="http://preservica.com/XIP/v7.7">
+        <XIP xmlns="http://preservica.com/XIP/v9.3">
           <ContentObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></ContentObject>
           <Generation original="true" active="true"><ContentObject>someContent</ContentObject></Generation>
           <Bitstream><Filename>90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt</Filename><FileSize>1</FileSize><Fixities><Fixity><FixityAlgorithmRef>SHA256</FixityAlgorithmRef><FixityValue>532eaabd9574880dbf76b9b8cc00832c20a6ec113d682299550d7a6e0f345e25</FixityValue></Fixity></Fixities></Bitstream>

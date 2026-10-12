@@ -361,7 +361,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     )
 
     private val ioMetadataInRepo =
-      <XIP xmlns="http://preservica.com/XIP/v7.7">
+      <XIP xmlns="http://preservica.com/XIP/v9.3">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
           <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>
@@ -384,7 +384,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       )
     }
     private val coMetadataInRepo =
-      <XIP xmlns="http://preservica.com/XIP/v7.7">
+      <XIP xmlns="http://preservica.com/XIP/v9.3">
           <ContentObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></ContentObject>
           <Generation original="true" active="true"><ContentObject>someContent</ContentObject></Generation>{
         bitstreamNodesInRepo
@@ -712,7 +712,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       }
 
     val ioXmlToValidate: Elem =
-      <XIP xmlns="http://preservica.com/XIP/v7.7">
+      <XIP xmlns="http://preservica.com/XIP/v9.3">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
           <Identifier><ApiId/><Type>SourceID</Type><Value>SourceIDValue</Value><Entity/></Identifier>
@@ -723,7 +723,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         </XIP>
 
     val coXmlToValidate: Elem =
-      <XIP xmlns="http://preservica.com/XIP/v7.7">
+      <XIP xmlns="http://preservica.com/XIP/v9.3">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Generation original="true" active="true"><ContentObject/></Generation>
           <Bitstream><Filename>90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt</Filename><FileSize>1</FileSize><Fixities/></Bitstream>
