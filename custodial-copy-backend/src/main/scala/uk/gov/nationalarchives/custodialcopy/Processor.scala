@@ -89,7 +89,7 @@ class Processor(
             .flatMap(eventAction => Seq(newlineAndIndent, eventAction))
 
       allMetadataAsXml =
-        <XIP xmlns="http://preservica.com/XIP/v7.7">
+        <XIP xmlns="http://preservica.com/XIP/v9.3">
           {consolidatedMetadata}
         </XIP>
 
