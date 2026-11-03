@@ -3,7 +3,7 @@ object Dependencies {
   private lazy val daAwsClientsVersion = "0.1.166"
   private lazy val logbackVersion = "2.26.1"
   private lazy val log4CatsVersion = "2.8.0"
-  private lazy val pureConfigVersion = "0.17.10"
+  private lazy val pureConfigVersion = "0.17.11"
   private lazy val scalaTestVersion = "3.2.20"
   private lazy val http4sVersion = "1.0.0-M49"
 
