@@ -1,11 +1,11 @@
 import sbt.*
 object Dependencies {
-  private lazy val daAwsClientsVersion = "0.1.163"
+  private lazy val daAwsClientsVersion = "0.1.166"
   private lazy val logbackVersion = "2.26.1"
   private lazy val log4CatsVersion = "2.8.0"
-  private lazy val pureConfigVersion = "0.17.10"
+  private lazy val pureConfigVersion = "0.17.11"
   private lazy val scalaTestVersion = "3.2.20"
-  private lazy val http4sVersion = "1.0.0-M48"
+  private lazy val http4sVersion = "1.0.0-M49"
 
   lazy val commonsCompress = "org.apache.commons" % "commons-compress" % "1.28.0"
   lazy val dynamoClient = "uk.gov.nationalarchives" %% "da-dynamodb-client" % daAwsClientsVersion
@@ -23,7 +23,7 @@ object Dependencies {
   lazy val pureConfigCatsEffect = "com.github.pureconfig" %% "pureconfig-cats-effect" % pureConfigVersion
   lazy val pureConfig = "com.github.pureconfig" %% "pureconfig-core" % pureConfigVersion
   lazy val scalaCheck = "org.scalacheck" %% "scalacheck" % "1.20.0"
-  lazy val scalaCheckPlus = "org.scalatestplus" %% "scalacheck-1-18" % "3.2.19.0"
+  lazy val scalaCheckPlus = "org.scalatestplus" %% "scalacheck-1-19" % "3.2.20.0"
   lazy val scalacCompatAnnotation = "org.typelevel" %% "scalac-compat-annotation" % "0.1.5"
   lazy val scalaTest = "org.scalatest" %% "scalatest" % scalaTestVersion
   lazy val scalaXml = "org.scala-lang.modules" %% "scala-xml" % "2.5.0"
@@ -33,5 +33,5 @@ object Dependencies {
   lazy val http4sEmber = "org.http4s" %% "http4s-ember-server" % http4sVersion
   lazy val http4sDsl = "org.http4s" %% "http4s-dsl" % http4sVersion
   lazy val doobieCore = "org.typelevel" %% "doobie-core" % "1.0.0-RC13"
-  lazy val sqlite = "org.xerial" % "sqlite-jdbc" % "3.53.4.0"
+  lazy val sqlite = "org.xerial" % "sqlite-jdbc" % "3.54.1.0"
 }
