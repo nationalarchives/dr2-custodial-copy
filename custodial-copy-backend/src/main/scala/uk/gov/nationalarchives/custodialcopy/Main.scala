@@ -13,8 +13,11 @@ import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.Message.*
 import uk.gov.nationalarchives.custodialcopy.Processor.Result
 import uk.gov.nationalarchives.custodialcopy.Processor.Result.*
+import uk.gov.nationalarchives.dp.client.ValidateXmlAgainstXsd
+import uk.gov.nationalarchives.dp.client.ValidateXmlAgainstXsd.PreservicaSchema.XipXsdSchemaV7
 import uk.gov.nationalarchives.dp.client.fs2.Fs2Client
 import uk.gov.nationalarchives.utils.Utils.*
+
 
 import java.net.URI
 import java.nio.file
@@ -90,7 +93,8 @@ object Main extends IOApp {
       service <- OcflService(config, semaphoreMap)
       sqs = sqsClient[IO](config.potentialProxyUrl)
       sns = DASNSClient[IO]()
-      processor <- Processor(config, sqs, service, client, sns)
+      xmlValidator = ValidateXmlAgainstXsd[IO](XipXsdSchemaV7)
+      processor = Processor(config, sqs, service, client, xmlValidator, sns)
       _ <- {
         Stream.fixedRateStartImmediately[IO](10.seconds) >>
           runCustodialCopy(sqs, config, processor, semaphoreMap)
@@ -148,7 +152,7 @@ object Main extends IOApp {
       _ <- (results ++ removedResults).parTraverse {
         case Failure(e)                   => logError[IO](e)
         case Success(ref, icIds, _, _, _) =>
-          processor.potentialIcDatabase.traverse(_.setAsDownloaded(icIds)) >>
+          config.potentialIcDbPath.map(Database[IO]).traverse(_.setAsDownloaded(icIds)) >>
             responses
               .filter(_.message.ref == ref)
               .map(_.receiptHandle)

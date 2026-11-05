@@ -427,7 +427,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val semaphoreMap: MapRef[IO, UUID, Option[Semaphore[IO]]] = MapRef.fromConcurrentHashMap(underlyingMap)
     val ocflService = new OcflService(repo, semaphoreMap)
     val xmlValidator: ValidateXmlAgainstXsd[IO] = ValidateXmlAgainstXsd[IO](XipXsdSchemaV7)
-    val processor = new Processor(config, sqsClient, ocflService, preservicaClient, xmlValidator, snsClient)
+    val processor: Processor = Processor(config, sqsClient, ocflService, preservicaClient, xmlValidator, snsClient)
 
     def latestObjectVersion(repo: MutableOcflRepository, id: UUID): Long =
       repo.getObject(id.toHeadVersion).getObjectVersionId.getVersionNum.getVersionNum
@@ -699,7 +699,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     val ocflService: OcflService = mockOcflService(entityType, objectHasChanged, pathsOfObjectsUnderIo, throwErrorInMissingAndChangedObjects, bitstreamUrl)
     val xmlValidator: ValidateXmlAgainstXsd[IO] = spy(ValidateXmlAgainstXsd[IO](XipXsdSchemaV7))
 
-    val processor: Processor = new Processor(config, sqsClient, ocflService, entityClient, xmlValidator, snsClient)
+    val processor: Processor = Processor(config, sqsClient, ocflService, entityClient, xmlValidator, snsClient)
 
     def files: List[Path] = Files.list(java.nio.file.Path.of(downloadDir)).toList.asScala.toList
 
@@ -830,10 +830,14 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
     }
   }
 
-  class TestProcessor(config: Config, sqsClient: DASQSClient[IO], fn: MessageResponse[ReceivedSnsMessage] => IO[Result])
-      extends Processor(config, sqsClient, mock[OcflService], mock[EntityClient[IO, Fs2Streams[IO]]], mock[ValidateXmlAgainstXsd[IO]], mock[DASNSClient[IO]]) {
+  def testProcessor(config: Config, sqsClient: DASQSClient[IO], fn: MessageResponse[ReceivedSnsMessage] => IO[Result]): Processor = new Processor {
+    override def sendHeartbeat(receiptHandle: String): IO[Unit] = IO.unit
+
+    override def deleteMessage(receiptHandle: String): IO[DeleteMessageResponse] = IO.pure(DeleteMessageResponse.builder.build)
+
     override def process(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[Result] = fn(messageResponse)
 
     override def commitStagedChanges(id: UUID): IO[Unit] = IO.unit
   }
+
 }

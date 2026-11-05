@@ -22,7 +22,7 @@ import uk.gov.nationalarchives.custodialcopy.Main.*
 import uk.gov.nationalarchives.custodialcopy.Message.{IoReceivedSnsMessage, ReceivedSnsMessage, SoReceivedSnsMessage}
 import uk.gov.nationalarchives.custodialcopy.Processor.Result
 import uk.gov.nationalarchives.custodialcopy.Processor.Result.{Failure, Success}
-import uk.gov.nationalarchives.custodialcopy.testUtils.ExternalServicesTestUtils.{MainTestUtils, TestProcessor, databaseName}
+import uk.gov.nationalarchives.custodialcopy.testUtils.ExternalServicesTestUtils.{MainTestUtils, testProcessor, databaseName}
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
 import uk.gov.nationalarchives.dp.client.Entities.Entity
 import uk.gov.nationalarchives.dp.client.EntityClient
@@ -151,7 +151,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
       val metadataContent =
         Files.readAllBytes(Paths.get(utils.repoDir.toString, metadataStoragePath)).map(_.toChar).mkString
 
-      metadataContent must equal(
+      trim(XML.loadString(metadataContent)) must equal(trim(
         <XIP xmlns="http://preservica.com/XIP/v9.3">
           <InformationObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></InformationObject>
           <Representation><InformationObject/><Name/><Type/><ContentObjects><ContentObject/></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
@@ -160,8 +160,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
           <Link><Type/><FromEntity/><ToEntity/></Link>
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
           <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
-        </XIP>.toString
-      )
+        </XIP>
+      ))
     }
 
   "runCustodialCopy" should "return a Failure if the PS Fixity that is added to the OCFL Object doesn't match what OCFL generated for it" in {
@@ -515,7 +515,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     when(preservicaClient.metadataForEntity(any[Entity])).thenThrow(new RuntimeException("Error getting metadata"))
 
     val processor =
-      new Processor(
+      Processor(
         utils.config,
         utils.sqsClient,
         utils.ocflService,
@@ -819,7 +819,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     when(preservicaClient.getBitstreamInfo(any[UUID])).thenThrow(new RuntimeException("Error getting bitstream info"))
 
     val processor =
-      new Processor(utils.config, sqsClient, utils.ocflService, preservicaClient, utils.xmlValidator, utils.snsClient)
+      Processor(utils.config, sqsClient, utils.ocflService, preservicaClient, utils.xmlValidator, utils.snsClient)
 
     val err: Throwable = getError(sqsClient, utils.config, processor)
     err.getMessage must equal("Error getting bitstream info")
@@ -862,7 +862,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
       val metadataContent =
         Files.readAllBytes(Paths.get(utils.repoDir.toString, metadataStoragePath)).map(_.toChar).mkString
 
-      metadataContent must equal(
+      trim(XML.loadString(metadataContent)) must equal(trim(
         <XIP xmlns="http://preservica.com/XIP/v9.3">
           <ContentObject><Ref/><Title/><Description/><SecurityTag/><CustomType/><Parent/></ContentObject>
           <Generation original="true" active="true"><ContentObject>someContent</ContentObject></Generation>
@@ -871,8 +871,8 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
           <Link><Type/><FromEntity/><ToEntity/></Link>
           <Metadata><Ref/><Entity/><Content><thing xmlns="http://www.mockSchema.com/test/v42"></thing></Content></Metadata>
           <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>
-        </XIP>.toString
-      )
+        </XIP>
+      ))
     }
 
   "runCustodialCopy" should "write a new version and new CO metadata object if there is a CO message with different metadata" in {
@@ -941,7 +941,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     val semaphoreMap: MapRef[IO, UUID, Option[Semaphore[IO]]] = MapRef.fromConcurrentHashMap(underlyingMap)
     val ocflService = new OcflService(repo, semaphoreMap)
     val processor =
-      new Processor(
+      Processor(
         utils.config,
         utils.sqsClient,
         ocflService,
@@ -1056,7 +1056,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     val config: Config = Config("", "https://queue", "", "", "", None, "", "", 2.seconds, Some(databaseName), "", 50)
     val sqsClient = mock[DASQSClient[IO]]
 
-    val processor = new TestProcessor(
+    val processor = testProcessor(
       config,
       sqsClient,
       { messageResponse =>
@@ -1105,7 +1105,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     val config: Config = Config("", "https://queue", "", "", "", None, "", "", 2.seconds, Some(databaseName), "", 1)
     val sqsClient = mock[DASQSClient[IO]]
 
-    val processor = new TestProcessor(
+    val processor = testProcessor(
       config,
       sqsClient,
       { messageResponse =>
