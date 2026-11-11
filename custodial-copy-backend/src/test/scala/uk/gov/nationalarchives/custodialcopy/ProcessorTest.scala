@@ -14,8 +14,6 @@ import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.Main.{FileDownloadInfo, IntelligentCachingInfo}
 import uk.gov.nationalarchives.custodialcopy.Message.{IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
-import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Updated}
-import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Bitstream, Metadata}
 import uk.gov.nationalarchives.custodialcopy.Processor.Result.{Failure, Success}
 import uk.gov.nationalarchives.custodialcopy.testUtils.ExternalServicesTestUtils.*
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
@@ -67,7 +65,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
       repTypes = Nil,
       repIndexes = Nil,
       createdFileDownloadInfo = List(Nil, List(FileDownloadInfo(id, Path(s"$id/IO_Metadata_changed.xml").toNioPath.some, "destinationPath", Nil))),
-      snsMessagesToSend = List(SendSnsMessage(InformationObject, id, Metadata, Updated))
+      snsMessagesToSend = List(SendSnsMessage(id))
     )
   }
 
@@ -105,10 +103,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
           s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
         )
       ),
-      snsMessagesToSend = List(
-        SendSnsMessage(ContentObject, id, Bitstream, Created),
-        SendSnsMessage(ContentObject, id, Metadata, Created)
-      )
+      snsMessagesToSend = List(SendSnsMessage(parentRef))
     )
   }
 
@@ -159,10 +154,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
           s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
         )
       ),
-      snsMessagesToSend = List(
-        SendSnsMessage(ContentObject, id, Bitstream, Created),
-        SendSnsMessage(ContentObject, id, Metadata, Created)
-      )
+      snsMessagesToSend = List(SendSnsMessage(parentRef))
     )
   }
 
@@ -245,7 +237,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         ),
         Nil
       ),
-      snsMessagesToSend = List(SendSnsMessage(InformationObject, parentRef, Metadata, Created))
+      snsMessagesToSend = List(SendSnsMessage(parentRef))
     )
   }
 
@@ -283,10 +275,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
           s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
         )
       ),
-      snsMessagesToSend = List(
-        SendSnsMessage(ContentObject, id, Bitstream, Created),
-        SendSnsMessage(ContentObject, id, Metadata, Created)
-      )
+      snsMessagesToSend = List(SendSnsMessage(parentRef))
     )
   }
 
@@ -316,7 +305,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         ) // 2nd call to 'createObjects' with changedObjectsPaths arg
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(InformationObject, id, Metadata, Updated)
+        SendSnsMessage(id)
       )
     )
   }
@@ -349,7 +338,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         List()
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(InformationObject, id, Metadata, Created)
+        SendSnsMessage(id)
       )
     )
   }
@@ -381,7 +370,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         )
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(InformationObject, changedFileId, Metadata, Updated)
+        SendSnsMessage(changedFileId)
       )
     )
   }
@@ -430,7 +419,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         )
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(InformationObject, missingFileId, Metadata, Created)
+        SendSnsMessage(missingFileId)
       )
     )
   }

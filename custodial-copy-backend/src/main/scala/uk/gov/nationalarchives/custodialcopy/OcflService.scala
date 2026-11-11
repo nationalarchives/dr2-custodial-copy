@@ -86,44 +86,36 @@ class OcflService(ocflRepository: MutableOcflRepository, semaphoreMap: MapRef[IO
   def getMissingAndChangedObjects(
       objects: List[CustodialCopyObject]
   ): IO[MissingAndChangedObjects] = objects
-    .foldLeft(IO(List[CustodialCopyObject](), List[CustodialCopyObject]())) { case (missingAndChangedIO, obj) =>
+    .foldLeftM(MissingAndChangedObjects(Nil, Nil)) { (result, obj) =>
       val objectId = obj.id
-      missingAndChangedIO.flatMap { missingAndChanged =>
-        val (missingObjects, changedObjects) = missingAndChanged
-        IO.blocking(ocflRepository.getObject(objectId.toHeadVersion))
-          .flatMap { ocflObject =>
-            val potentialFile = Option(ocflObject.getFile(obj.destinationFilePath))
-            potentialFile match {
-              case Some(ocflFileObject) =>
-                isChecksumUnchanged(ocflFileObject.getFixity.asScala.toMap, obj.checksums).map { checksumUnchanged =>
-                  if checksumUnchanged then missingAndChanged else (missingObjects, obj :: changedObjects)
-                }
-              case None =>
-                IO(obj :: missingObjects, changedObjects) // Information Object exists but file doesn't
-            }
+      val missing = result.copy(missingObjects = obj :: result.missingObjects)
+      IO.blocking(ocflRepository.getObject(objectId.toHeadVersion))
+        .flatMap { ocflObject =>
+          Option(ocflObject.getFile(obj.destinationFilePath)) match {
+            case Some(ocflFileObject) =>
+              isChecksumUnchanged(ocflFileObject.getFixity.asScala.toMap, obj.checksums).map { checksumUnchanged =>
+                if checksumUnchanged then result else result.copy(changedObjects = obj :: result.changedObjects)
+              }
+            case None => IO.pure(missing)
           }
-          .handleErrorWith {
-            case _: NotFoundException        => IO.pure(obj :: missingObjects, changedObjects)
-            case coe: CorruptObjectException =>
-              purgeObject(objectId) >>
-                IO.raiseError(
-                  new Exception(
-                    s"Object $objectId is corrupt. The object has been purged and the error will be rethrown so the process can try again",
-                    coe
-                  )
-                )
-            case e: Throwable =>
+        }
+        .handleErrorWith {
+          case _: NotFoundException        => IO.pure(missing)
+          case coe: CorruptObjectException =>
+            purgeObject(objectId) >>
               IO.raiseError(
                 new Exception(
-                  s"'getObject' returned an unexpected error '$e' when called with object id $objectId"
+                  s"Object $objectId is corrupt. The object has been purged and the error will be rethrown so the process can try again",
+                  coe
                 )
               )
-          }
-      }
-    }
-    .map { missingAndChangedPair =>
-      val (missingObjects, changedObjects) = missingAndChangedPair
-      MissingAndChangedObjects(missingObjects, changedObjects)
+          case e: Throwable =>
+            IO.raiseError(
+              new Exception(
+                s"'getObject' returned an unexpected error '$e' when called with object id $objectId"
+              )
+            )
+        }
     }
 
   private def purgeObject(objectId: UUID) = {

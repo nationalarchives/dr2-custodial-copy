@@ -16,16 +16,14 @@ import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.CustodialCopyObject.*
 import uk.gov.nationalarchives.custodialcopy.Main.{Config, FileDownloadInfo, IntelligentCachingDownloads, IntelligentCachingInfo}
 import uk.gov.nationalarchives.custodialcopy.Message.*
-import uk.gov.nationalarchives.custodialcopy.Processor.{ObjectStatus, ProcessorOutput, Result}
+import uk.gov.nationalarchives.custodialcopy.Processor.{ProcessorOutput, Result}
 import uk.gov.nationalarchives.custodialcopy.Processor.Result.*
-import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Updated}
-import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Bitstream, Metadata}
 import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
 import uk.gov.nationalarchives.dp.client.Client.BitStreamInfo
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.*
-import uk.gov.nationalarchives.dp.client.Entities.{Entity, fromType}
+import uk.gov.nationalarchives.dp.client.Entities.{Entity, FullAsset, fromType}
 import uk.gov.nationalarchives.dp.client.ValidateXmlAgainstXsd.PreservicaSchema.XipXsdSchemaV7
 
 import java.util.UUID
@@ -154,11 +152,12 @@ class Processor(
 
   private def createMetadataFileName(entityTypeShort: String) = s"${entityTypeShort}_Metadata.xml"
 
-  private def getCoFileAndMetadataObjects(
+  private def getCoObjects(
       entity: Entity,
       parentRef: UUID,
       coRepTypes: Seq[String],
-      bitstreamInfoPerCo: Seq[BitStreamInfo]
+      bitstreamInfoPerCo: Seq[BitStreamInfo],
+      potentialMetadata: Option[EntityMetadata] = None
   ): IO[List[CustodialCopyObject]] =
     for {
       bitstreamIdentifiers <- IO.pure(bitstreamInfoPerCo.map(_.name).map(removeFileExtension).toSet)
@@ -168,8 +167,12 @@ class Processor(
       }
 
       representationTypeGroup = coRepTypes.headOption
+      entityMetadata = potentialMetadata match {
+        case Some(metadata) => IO(metadata)
+        case None           => entityClient.metadataForEntity(entity)
+      }
       metadataFileName = createMetadataFileName(ContentObject.entityTypeShort)
-      metadata <- entityClient.metadataForEntity(entity).flatMap { metadataFragments =>
+      metadata <- entityMetadata.flatMap { metadataFragments =>
         val destinationFilePath = createDestinationFilePath(
           parentRef,
           Some(entity.ref),
@@ -206,6 +209,37 @@ class Processor(
       )
     } ++ metadata
 
+  private def toCustodialCopyObject(receivedSnsMessage: ReceivedSnsMessage, fullAsset: FullAsset): IO[List[CustodialCopyObject]] = receivedSnsMessage match {
+    case IoReceivedSnsMessage(ref) =>
+      val entity = fullAsset.asset
+      val metadataFileName = createMetadataFileName(InformationObject.entityTypeShort)
+      createMetadataObject(
+        entity.ref,
+        entity.entityType.get,
+        fullAsset.metadata,
+        metadataFileName,
+        createDestinationFilePath(entity.ref, fileName = metadataFileName),
+        getSourceIdFromIdentifierNodes(fullAsset.metadata.identifiers)
+      )
+    case CoReceivedSnsMessage(ref) =>
+      for
+        fullCo <- IO.fromOption(fullAsset.contentObjects.find(_.bitstreams.headOption.exists(_.contentObjectRef == ref))) {
+          new Exception(s"Cannot find a content object with IO ref ${fullAsset.asset.ref} and CO ref $ref")
+        }
+        ccObjects <- getCoObjects(fullCo.entity, fullAsset.asset.ref, getRepTypes(ref, fullAsset), fullCo.bitstreams, fullCo.metadata.some)
+      yield ccObjects
+
+    case _ => IO.pure(Nil)
+  }
+
+  private def getRepTypes(ref: UUID, fullAsset: FullAsset) = {
+    fullAsset.metadata.representations.mapFilter { representation =>
+      val name = (representation \ "Name").text
+      val coRefs = (representation \ "ContentObjects" \ "ContentObject").map(_.text)
+      coRefs.find(_ == ref.toString).map(_ => name)
+    }
+  }
+
   private def toCustodialCopyObject(receivedSnsMessage: ReceivedSnsMessage): IO[List[CustodialCopyObject]] = receivedSnsMessage match {
     case IoReceivedSnsMessage(ref) =>
       for {
@@ -237,7 +271,7 @@ class Processor(
         parentRef <- IO.fromOption(entity.parent)(new Exception("Cannot get IO reference from CO"))
         urlsOfRepresentations <- entityClient.getUrlsToIoRepresentations(parentRef, None)
         coRepTypes <- urlsOfRepresentations.map(getRepresentationTypeOfCo(parentRef, _, entity.ref)).flatSequence
-        coFileAndMetadataObjects <- getCoFileAndMetadataObjects(entity, parentRef, coRepTypes, bitstreamInfoPerCo)
+        coFileAndMetadataObjects <- getCoObjects(entity, parentRef, coRepTypes, bitstreamInfoPerCo)
       } yield coFileAndMetadataObjects
 
     case _ => IO.pure(Nil)
@@ -303,39 +337,56 @@ class Processor(
     }
     .getOrElse("")
 
-  private def generateSnsMessage(
-      obj: CustodialCopyObject,
-      receivedSnsMessage: ReceivedSnsMessage,
-      status: ObjectStatus
-  ): Option[SendSnsMessage] = {
-    val objectType = obj match {
-      case _: FileObject     => Bitstream
-      case _: MetadataObject => Metadata
+  given Encoder[SendSnsMessage] = Encoder.forProduct1("ioRef")(_.ioRef.toString)
+
+  private def objectsForFullIo(ioObject: MetadataObject, fullAsset: FullAsset): IO[List[CustodialCopyObject]] =
+    fullAsset.contentObjects.toList
+      .flatTraverse { fullCo =>
+        getCoObjects(fullCo.entity, fullAsset.asset.ref, getRepTypes(fullCo.entity.ref, fullAsset), fullCo.bitstreams, fullCo.metadata.some)
+      }
+      .map(cos => cos :+ ioObject)
+
+  private def objectsForIo(ioObject: MetadataObject): IO[List[CustodialCopyObject]] =
+    for {
+      urlsOfRepresentations <- entityClient.getUrlsToIoRepresentations(ioObject.id, None)
+      cosAndRepType <- urlsOfRepresentations.flatTraverse(getCosPerRepresentationType(ioObject.id, _))
+      coAndRepTypesGroupedByCoRef = cosAndRepType.groupBy { case (co, _) => co.ref }.toList
+      coObjects <- coAndRepTypesGroupedByCoRef.flatTraverse { case (coRef, coAndRepTypes) =>
+        entityClient.getBitstreamInfo(coRef).flatMap { bitstreamInfoPerCo =>
+          val (entity, _) = coAndRepTypes.head
+          val repTypes = coAndRepTypes.map { case (_, repType) => repType }
+          getCoObjects(entity, ioObject.id, repTypes, bitstreamInfoPerCo)
+        }
+      }
+    } yield coObjects :+ ioObject
+
+  private def getPotentialIcDownloadInfo(allObjectPaths: List[FileDownloadInfo]): Option[IntelligentCachingDownloads] =
+    potentialIcDatabase.map { _ =>
+      val filesWithIcInfo = allObjectPaths.filter(_.potentialIcInfo.isDefined)
+      val (filesDownloadedViaIc, filesNotDownloadedViaIc) =
+        filesWithIcInfo.partition(_.potentialIcInfo.exists(_.downloadedLocally))
+
+      def idsAndSize(files: List[FileDownloadInfo]) =
+        (
+          files.flatMap(_.potentialIcInfo.map(_.id)),
+          files.flatMap(_.sourceNioFilePath.map(JFiles.size)).sum
+        )
+
+      val (localIds, localSize) = idsAndSize(filesDownloadedViaIc)
+      val (psIds, psSize) = idsAndSize(filesNotDownloadedViaIc)
+      IntelligentCachingDownloads(localIds, localSize, psIds, psSize)
     }
-
-    val potentialEntityType = receivedSnsMessage match
-      case _: IoReceivedSnsMessage => Option(InformationObject)
-      case _: CoReceivedSnsMessage => Option(ContentObject)
-      case _: SoReceivedSnsMessage => Option(StructuralObject)
-      case _                       => None
-
-    potentialEntityType.map(entityType => SendSnsMessage(entityType, obj.id, objectType, status))
-  }
-
-  given Encoder[SendSnsMessage] = (message: SendSnsMessage) => {
-    Encoder
-      .forProduct4("entityType", "ioRef", "objectType", "status")(_ =>
-        (message.entityType.toString, message.ioRef.toString, message.objectType.toString, message.status.toString)
-      )
-      .apply(message)
-  }
 
   private def processNonDeletedMessages(messageResponse: MessageResponse[ReceivedSnsMessage]): IO[ProcessorOutput] =
     val ioId = UUID.fromString(messageResponse.messageGroupId.get)
     val downloadFile = download(_, ioId)
     for {
       logger <- Slf4jLogger.create[IO]
-      custodialCopyObjects <- toCustodialCopyObject(messageResponse.message)
+      fullAsset <- entityClient.getFullAsset(ioId)
+      custodialCopyObjects <- toCustodialCopyObject(messageResponse.message, fullAsset).handleErrorWith { err =>
+        logger.error(err)(err.getMessage) >> toCustodialCopyObject(messageResponse.message)
+
+      }
 
       _ <- custodialCopyObjects.traverse(obj => logger.info(Map("sourceId" -> obj.tableItemIdentifier))(s"Processing object ${obj.id}"))
 
@@ -345,39 +396,19 @@ class Processor(
         case _                  => false
       }
 
-      missingIosAndCos <- missingIoObjects.flatTraverse { missingIoObject =>
-        for {
-          urlsOfRepresentations <- entityClient.getUrlsToIoRepresentations(missingIoObject.id, None)
-          cosAndRepType <- urlsOfRepresentations.flatTraverse { getCosPerRepresentationType(missingIoObject.id, _) }
-          coAndRepTypesGroupedByCoRef = cosAndRepType.groupBy { case (co, _) => co.ref }.toList
-
-          allCoObjectsOfIo <- coAndRepTypesGroupedByCoRef.flatTraverse { case (coRef, coAndRepTypes) =>
-            entityClient.getBitstreamInfo(coRef).flatMap { bitstreamInfoPerCo =>
-              val (entity, _) = coAndRepTypes.head
-              val repTypes = coAndRepTypes.map { case (_, repType) => repType }
-              getCoFileAndMetadataObjects(entity, missingIoObject.id, repTypes, bitstreamInfoPerCo)
-            }
+      missingObjectsToCreate <- missingIoObjects
+        .collect { case metadata: MetadataObject => metadata }
+        .flatTraverse { mo =>
+          objectsForFullIo(mo, fullAsset).handleErrorWith { err =>
+            logger.error(err)(err.getMessage) >> objectsForIo(mo)
           }
-        } yield allCoObjectsOfIo :+ missingIoObject
-      }
 
-      allMissingObjects: List[CustodialCopyObject] = missingIosAndCos ++ missingCoObjects
+        }
+      allMissingObjects = missingObjectsToCreate ++ missingCoObjects
       missingObjectsPaths <- allMissingObjects.traverse(downloadFile)
       changedObjectsPaths <- missingAndChangedObjects.changedObjects.traverse(downloadFile)
       allObjectPaths = missingObjectsPaths ++ changedObjectsPaths
-
-      potentialIcDownloadInfo = potentialIcDatabase.map { _ =>
-        def getIds(info: List[FileDownloadInfo]) = info.flatMap(_.potentialIcInfo.map(_.id))
-        def getSize(info: List[FileDownloadInfo]) = info.flatMap(_.sourceNioFilePath.map(JFiles.size)).sum
-        val allObjectFilePaths = allObjectPaths.filter(_.potentialIcInfo.isDefined)
-        val (filesDownloadedViaIc, filesNotDownloadedViaIc) = allObjectFilePaths.partition(_.potentialIcInfo.get.downloadedLocally)
-        IntelligentCachingDownloads(
-          getIds(filesDownloadedViaIc),
-          getSize(filesDownloadedViaIc),
-          getIds(filesNotDownloadedViaIc),
-          getSize(filesNotDownloadedViaIc)
-        )
-      }
+      potentialIcDownloadInfo = getPotentialIcDownloadInfo(allObjectPaths)
 
       _ <- ocflService.createObjects(ioId, missingObjectsPaths)
       _ <- logger.info(s"${missingObjectsPaths.length} objects created")
@@ -386,9 +417,9 @@ class Processor(
 
       _ <- allObjectPaths.flatMap(_.sourceNioFilePath).parTraverse(deleteObjectPath)
 
-      createdObjsSnsMessages = missingAndChangedObjects.missingObjects.flatMap(generateSnsMessage(_, messageResponse.message, Created))
-      updatedObjsSnsMessages = missingAndChangedObjects.changedObjects.flatMap(generateSnsMessage(_, messageResponse.message, Updated))
-    } yield ProcessorOutput(createdObjsSnsMessages ++ updatedObjsSnsMessages, potentialIcDownloadInfo)
+      hasChanges = missingAndChangedObjects.missingObjects.nonEmpty || missingAndChangedObjects.changedObjects.nonEmpty
+      snsMessages = if hasChanges then List(SendSnsMessage(ioId)) else Nil
+    } yield ProcessorOutput(snsMessages, potentialIcDownloadInfo)
 
   @tailrec
   private def deleteObjectPath(path: JPath): IO[Unit] = {
@@ -448,12 +479,6 @@ object Processor {
   )
 
   case class ProcessorOutput(snsMessages: List[SendSnsMessage], potentialIcDownloadInfo: Option[IntelligentCachingDownloads] = None)
-
-  enum ObjectStatus:
-    case Created, Updated
-
-  enum ObjectType:
-    case Bitstream, Metadata, MetadataAndPotentialBitstreams
 
   enum Result:
     def isSuccess: Boolean = this match
