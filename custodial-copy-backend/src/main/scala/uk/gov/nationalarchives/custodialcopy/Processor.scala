@@ -382,11 +382,15 @@ class Processor(
     val downloadFile = download(_, ioId)
     for {
       logger <- Slf4jLogger.create[IO]
-      fullAsset <- entityClient.getFullAsset(ioId)
-      custodialCopyObjects <- toCustodialCopyObject(messageResponse.message, fullAsset).handleErrorWith { err =>
-        logger.error(err)(err.getMessage) >> toCustodialCopyObject(messageResponse.message)
-
-      }
+      fullAssetAndObjects <- entityClient
+        .getFullAsset(ioId)
+        .flatMap { fullAsset =>
+          toCustodialCopyObject(messageResponse.message, fullAsset).map(objects => (Some(fullAsset), objects))
+        }
+        .handleErrorWith { err =>
+          logger.error(err)(err.getMessage) >> toCustodialCopyObject(messageResponse.message).map(objects => (None, objects))
+        }
+      (fullAsset, custodialCopyObjects) = fullAssetAndObjects
 
       _ <- custodialCopyObjects.traverse(obj => logger.info(Map("sourceId" -> obj.tableItemIdentifier))(s"Processing object ${obj.id}"))
 
@@ -399,10 +403,13 @@ class Processor(
       missingObjectsToCreate <- missingIoObjects
         .collect { case metadata: MetadataObject => metadata }
         .flatTraverse { mo =>
-          objectsForFullIo(mo, fullAsset).handleErrorWith { err =>
-            logger.error(err)(err.getMessage) >> objectsForIo(mo)
+          fullAsset match {
+            case Some(asset) =>
+              objectsForFullIo(mo, asset).handleErrorWith { err =>
+                logger.error(err)(err.getMessage) >> objectsForIo(mo)
+              }
+            case None => objectsForIo(mo)
           }
-
         }
       allMissingObjects = missingObjectsToCreate ++ missingCoObjects
       missingObjectsPaths <- allMissingObjects.traverse(downloadFile)

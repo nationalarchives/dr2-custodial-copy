@@ -512,6 +512,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
   "runCustodialCopy" should "return an error if there is an error fetching the metadata" in {
     val preservicaClient = mock[EntityClient[IO, Fs2Streams[IO]]]
     val utils = new MainTestUtils(objectVersion = 0)
+    when(preservicaClient.getFullAsset(any[UUID])).thenReturn(IO.raiseError(new RuntimeException("Error getting full asset")))
     when(preservicaClient.metadataForEntity(any[Entity])).thenThrow(new RuntimeException("Error getting metadata"))
 
     val processor =
@@ -816,6 +817,7 @@ class MainTest extends AnyFlatSpec with MockitoSugar with EitherValues with Befo
     val preservicaClient = mock[EntityClient[IO, Fs2Streams[IO]]]
     val utils = new MainTestUtils(List((ContentObject, false)), 0)
     val sqsClient = utils.sqsClient
+    when(preservicaClient.getFullAsset(any[UUID])).thenReturn(IO.raiseError(new RuntimeException("Error getting full asset")))
     when(preservicaClient.getBitstreamInfo(any[UUID])).thenThrow(new RuntimeException("Error getting bitstream info"))
 
     val processor =
