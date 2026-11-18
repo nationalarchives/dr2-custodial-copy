@@ -30,7 +30,9 @@ def tagScannedImage(imageName: String): Unit = {
 def setupDirectories(serviceName: String) =
   Cmd(
     "RUN",
-    s"""apk update && apk upgrade && apk update openssl && apk add curl openjdk21-jre && \\
+    s"""apk update && apk upgrade && apk update openssl && \\
+               |    wget https://corretto.aws/downloads/resources/21.0.13.1.2/amazon-corretto-21.0.13.1.2-alpine-linux-x64.tar.gz && \\
+               |    tar -xzf amazon-corretto-21.0.13.1.2-alpine-linux-x64.tar.gz && \\
                |    mkdir -p /poduser/work /poduser/repo /poduser/version /poduser/database /poduser/log-config && \\
                |    mkdir /poduser/logs && \\
                |    touch /poduser/logs/$serviceName.log && \\
@@ -254,7 +256,7 @@ lazy val commonSettings = Seq(
     Cmd("USER", "1002"),
     Cmd(
       "CMD",
-      s"[ -z $$DOWNLOAD_DIR ] || rm -rf $$DOWNLOAD_DIR && java -Xmx2g -Dlog4j.configurationFile=/poduser/log-config/log4j2.properties -jar /opt/${(assembly / assemblyJarName).value}"
+      s"[ -z $$DOWNLOAD_DIR ] || rm -rf $$DOWNLOAD_DIR && /amazon-corretto-21.0.13.1.2-alpine-linux-x64/bin/java -Xmx2g -Dlog4j.configurationFile=/poduser/log-config/log4j2.properties -jar /opt/${(assembly / assemblyJarName).value}"
     )
   )
 )
