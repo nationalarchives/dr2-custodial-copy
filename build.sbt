@@ -20,7 +20,7 @@ def tagDockerImage(imageName: String): Unit = {
 def getWizPath = Path(sys.env.getOrElse("WIZ_CLI_PATH", "./wizcli")).absolutePath
 
 def scanDockerImage(imageName: String): Unit = {
-  s"$getWizPath scan container-image $imageName:${sys.env("DOCKER_TAG")}".!!
+  s"$getWizPath scan container-image $imageName:${sys.env("DOCKER_TAG")} --projects=${sys.env("WIZ_PROJECT_ID")}".!!
 }
 
 def tagScannedImage(imageName: String): Unit = {
@@ -30,7 +30,9 @@ def tagScannedImage(imageName: String): Unit = {
 def setupDirectories(serviceName: String) =
   Cmd(
     "RUN",
-    s"""apk update && apk upgrade && apk update openssl && apk add curl openjdk21-jre && \\
+    s"""apk update && apk upgrade && apk update openssl && \\
+               |    wget https://corretto.aws/downloads/resources/21.0.13.1.2/amazon-corretto-21.0.13.1.2-alpine-linux-x64.tar.gz && \\
+               |    tar -xzf amazon-corretto-21.0.13.1.2-alpine-linux-x64.tar.gz && \\
                |    mkdir -p /poduser/work /poduser/repo /poduser/version /poduser/database /poduser/log-config && \\
                |    mkdir /poduser/logs && \\
                |    touch /poduser/logs/$serviceName.log && \\
@@ -190,7 +192,7 @@ lazy val mockTapeApi = (project in file("custodial-copy-mock-tape-api"))
 
     dockerCommands := Seq(
       Cmd("FROM", "alpine:latest"),
-      Cmd("RUN", "apk add --no-cache python3 && apk upgrade libcrypto3 libssl3"),
+      Cmd("RUN", "apk add --no-cache python3 && apk upgrade libcrypto3 libssl3","zlib"),
       Cmd("WORKDIR", "/app"),
       Cmd("COPY", "app/mock_tape_api.py", "/app/mock_tape_api.py"),
       ExecCmd("CMD", "python", "mock_tape_api.py")
@@ -254,7 +256,7 @@ lazy val commonSettings = Seq(
     Cmd("USER", "1002"),
     Cmd(
       "CMD",
-      s"[ -z $$DOWNLOAD_DIR ] || rm -rf $$DOWNLOAD_DIR && java -Xmx2g -Dlog4j.configurationFile=/poduser/log-config/log4j2.properties -jar /opt/${(assembly / assemblyJarName).value}"
+      s"[ -z $$DOWNLOAD_DIR ] || rm -rf $$DOWNLOAD_DIR && /amazon-corretto-21.0.13.1.2-alpine-linux-x64/bin/java -Xmx2g -Dlog4j.configurationFile=/poduser/log-config/log4j2.properties -jar /opt/${(assembly / assemblyJarName).value}"
     )
   )
 )

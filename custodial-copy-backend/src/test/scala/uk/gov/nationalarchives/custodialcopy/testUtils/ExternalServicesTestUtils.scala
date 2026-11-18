@@ -12,6 +12,10 @@ import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.lock.ObjectLockBuilder
 import io.ocfl.core.storage.OcflStorageBuilder
 import org.apache.commons.codec.digest.DigestUtils
+import org.apache.logging.log4j.LogManager
+import org.apache.logging.log4j.core.{LogEvent, LoggerContext}
+import org.apache.logging.log4j.core.appender.AbstractAppender
+import org.apache.logging.log4j.core.config.Property
 import org.h2.jdbcx.JdbcDataSource
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doReturn, spy, times, verify, when}
@@ -41,7 +45,7 @@ import uk.gov.nationalarchives.custodialcopy.OcflService.MissingAndChangedObject
 import uk.gov.nationalarchives.*
 import uk.gov.nationalarchives.custodialcopy.Processor.Result
 import uk.gov.nationalarchives.dp.client.Client.{BitStreamInfo, Fixity}
-import uk.gov.nationalarchives.dp.client.Entities.{Entity, fromType}
+import uk.gov.nationalarchives.dp.client.Entities.{Entity, FullAsset, FullContentObject, fromType}
 import uk.gov.nationalarchives.dp.client.{EntityClient, ValidateXmlAgainstXsd}
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
 import uk.gov.nationalarchives.dp.client.EntityClient.GenerationType.*
@@ -56,6 +60,7 @@ import java.nio.file.{Files, Path, Paths}
 import java.time.ZonedDateTime
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration.Duration
 import scala.jdk.CollectionConverters.ListHasAsScala
 import scala.util.{Failure, Success, Try}
@@ -89,6 +94,7 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       urlsToRepresentations: Seq[String]
   ) = {
     val preservicaClient = mock[EntityClient[IO, Fs2Streams[IO]]]
+    when(preservicaClient.getFullAsset(any[UUID])).thenReturn(IO.raiseError(new Exception("Full asset unavailable")))
     val entityType = Some(ContentObject)
     val contentObjectResponse =
       Entity(entityType, coId, None, None, deleted = false, entityType.map(_.entityPath), parent = Option(ioId))
@@ -454,7 +460,9 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       throwErrorInMissingAndChangedObjects: Boolean = false,
       bitstreamUrl: String = "url",
       cacheDir: Boolean = false,
-      fileChecksum: String = "fileChecksum"
+      fileChecksum: String = "fileChecksum",
+      useTestPreservicaClient: Boolean = false,
+      potentialFullAsset: Option[FullAsset] = None
   ) {
     val downloadDir: String = Files.createTempDirectory("downloads").toString
     val workDir: String = Files.createTempDirectory("work").toString
@@ -516,9 +524,6 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       generation,
       UUID.randomUUID
     )
-    val entityClient: EntityClient[IO, Fs2Streams[IO]] =
-      mockPreservicaClient(ioId, coId, bitstreamInfo1 = Seq(bitstreamFromApi), urlsToRepresentations = urlsToRepresentations)
-
     val bitstreamFromEndpoint: Seq[Elem] = Seq(
       <Bitstream><Filename>{bitstreamFromApi.name}</Filename> <FileSize>{
         bitstreamFromApi.fileSize
@@ -563,6 +568,43 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         <EventAction commandType="command_create"><Event type="Ingest"><Ref/><Date>2024-05-31T11:54:20.528Z</Date><User/></Event><Date>2024-05-31T11:54:20.528Z</Date><Entity>a9e1cae8-ea06-4157-8dd4-82d0525b031c</Entity><SerialisedCommand/></EventAction>,
         <EventAction commandType="command_download"></EventAction>
       )
+
+    def fullAsset: FullAsset = {
+      val asset = Entity(Some(InformationObject), ioId, None, None, deleted = false, Some(InformationObject.entityPath))
+      val contentObject = Entity(Some(ContentObject), coId, None, None, deleted = false, Some(ContentObject.entityPath), parent = Some(ioId))
+      val ioMetadata = IoMetadata(
+        entityFromApi,
+        Seq(
+          <Representation><InformationObject/><Name>Preservation_1</Name><Type/><ContentObjects><ContentObject>{
+            coId
+          }</ContentObject></ContentObjects><RepresentationFormats/><RepresentationProperties/></Representation>
+        ),
+        ioIdentifiersFromApi,
+        linksFromApi,
+        metadataFromApi,
+        eventActionFromApi
+      )
+      val coMetadata = CoMetadata(
+        entityFromApi,
+        generationFromApi,
+        bitstreamFromEndpoint,
+        coIdentifiersFromApi,
+        linksFromApi,
+        metadataFromApi,
+        eventActionFromApi
+      )
+      FullAsset(
+        asset,
+        ioMetadata,
+        Seq(FullContentObject(contentObject, Seq(bitstreamFromApi.copy(potentialUrl = None, contentObjectRef = coId)), coMetadata))
+      )
+    }
+
+    val testPreservicaClient: Option[TestPreservicaClient] =
+      Option.when(useTestPreservicaClient)(new TestPreservicaClient(potentialFullAsset.getOrElse(fullAsset)))
+    val entityClient: EntityClient[IO, Fs2Streams[IO]] = testPreservicaClient.getOrElse {
+      mockPreservicaClient(ioId, coId, bitstreamInfo1 = Seq(bitstreamFromApi), urlsToRepresentations = urlsToRepresentations)
+    }
 
     private val getBitstreamsCoIdCaptor: ArgumentCaptor[UUID] = ArgumentCaptor.forClass(classOf[UUID])
     private val metadataEntityCaptor: ArgumentCaptor[Entity] = ArgumentCaptor.forClass(classOf[Entity])
@@ -652,39 +694,41 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       ocflService
     }
 
-    urlsToRepresentations.foreach { url =>
-      val urlSegments = url.split("/").reverse
-      val repType = allRepresentationTypes(urlSegments(1))
-      val repIndex = urlSegments.head.toInt
-      when(entityClient.getContentObjectsFromRepresentation(ioId, repType, repIndex))
-        .thenReturn(fromType[IO]("CO", coId, None, None, deleted = false, parent = Some(ioId)).map(Seq(_)))
-    }
+    if testPreservicaClient.isEmpty then {
+      urlsToRepresentations.foreach { url =>
+        val urlSegments = url.split("/").reverse
+        val repType = allRepresentationTypes(urlSegments(1))
+        val repIndex = urlSegments.head.toInt
+        when(entityClient.getContentObjectsFromRepresentation(ioId, repType, repIndex))
+          .thenReturn(fromType[IO]("CO", coId, None, None, deleted = false, parent = Some(ioId)).map(Seq(_)))
+      }
 
-    doReturn(
-      IO.pure(
-        IoMetadata(
-          entityFromApi,
-          representationFromApi,
-          ioIdentifiersFromApi,
-          linksFromApi,
-          metadataFromApi,
-          eventActionFromApi
+      doReturn(
+        IO.pure(
+          IoMetadata(
+            entityFromApi,
+            representationFromApi,
+            ioIdentifiersFromApi,
+            linksFromApi,
+            metadataFromApi,
+            eventActionFromApi
+          )
         )
-      )
-    ).when(entityClient).metadataForEntity(ArgumentMatchers.argThat(new EntityWithSpecificType("IO")))
-    doReturn(
-      IO.pure(
-        CoMetadata(
-          entityFromApi,
-          generationFromApi,
-          bitstreamFromEndpoint,
-          coIdentifiersFromApi,
-          linksFromApi,
-          metadataFromApi,
-          eventActionFromApi
+      ).when(entityClient).metadataForEntity(ArgumentMatchers.argThat(new EntityWithSpecificType("IO")))
+      doReturn(
+        IO.pure(
+          CoMetadata(
+            entityFromApi,
+            generationFromApi,
+            bitstreamFromEndpoint,
+            coIdentifiersFromApi,
+            linksFromApi,
+            metadataFromApi,
+            eventActionFromApi
+          )
         )
-      )
-    ).when(entityClient).metadataForEntity(ArgumentMatchers.argThat(new EntityWithSpecificType("CO")))
+      ).when(entityClient).metadataForEntity(ArgumentMatchers.argThat(new EntityWithSpecificType("CO")))
+    }
 
     when(
       snsClient.publish(ArgumentMatchers.eq("topicArn"))(ArgumentMatchers.any[List[SendSnsMessage]]())(using
@@ -828,6 +872,36 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         xmlRequestsToValidate.map(trim)
       )
     }
+  }
+
+  class CapturingAppender extends AbstractAppender("processor-test-appender", null, null, true, Property.EMPTY_ARRAY) {
+    val messages: ListBuffer[String] = ListBuffer.empty[String]
+
+    override def append(event: LogEvent): Unit = messages += event.getMessage.getFormattedMessage
+  }
+
+  def createLogAppender(): CapturingAppender = {
+    val context = LogManager.getContext(false).asInstanceOf[LoggerContext]
+    val rootLogger = context.getConfiguration.getRootLogger
+
+    val appender = new CapturingAppender
+
+    appender.start()
+    rootLogger.addAppender(appender, null, null)
+    context.updateLoggers()
+    appender
+  }
+
+  def getLogMessages(appender: CapturingAppender): List[String] = {
+    val context = LogManager.getContext(false).asInstanceOf[LoggerContext]
+    val rootLogger = context.getConfiguration.getRootLogger
+    val messages = appender.messages.toList
+
+    rootLogger.removeAppender(appender.getName)
+    appender.stop()
+    context.updateLoggers()
+
+    messages
   }
 
   class TestProcessor(config: Config, sqsClient: DASQSClient[IO], fn: MessageResponse[ReceivedSnsMessage] => IO[Result])

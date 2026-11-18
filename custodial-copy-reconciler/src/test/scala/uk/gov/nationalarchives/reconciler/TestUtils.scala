@@ -10,7 +10,7 @@ import sttp.capabilities.fs2.Fs2Streams
 import fs2.Stream
 import uk.gov.nationalarchives.DAEventBridgeClient
 import uk.gov.nationalarchives.dp.client.Client.BitStreamInfo
-import uk.gov.nationalarchives.dp.client.Entities.Entity
+import uk.gov.nationalarchives.dp.client.Entities.{Entity, FullAsset}
 import uk.gov.nationalarchives.dp.client.EntityClient.EntitiesUpdated
 import uk.gov.nationalarchives.dp.client.{DataProcessor, Entities, EntityClient}
 import uk.gov.nationalarchives.reconciler.Database.CoRow
@@ -99,3 +99,5 @@ object TestUtils:
     override def bitstreamForAsset(entityRef: UUID): IO[Seq[BitStreamInfo]] = notImplemented
 
     override def getAllAssetIds(maxConcurrency: Int): fs2.Stream[IO, UUID] = Stream.empty
+
+    override def getFullAsset(ioRef: UUID): IO[FullAsset] = notImplemented

@@ -1,10 +1,10 @@
 package uk.gov.nationalarchives.custodialcopy
 
-import cats.syntax.all.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import cats.syntax.all.*
 import fs2.io.file.Path
-import org.mockito.ArgumentMatchers
+import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doReturn, times, verify}
 import org.scalatest.BeforeAndAfterEach
@@ -14,16 +14,19 @@ import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.nationalarchives.DASQSClient.MessageResponse
 import uk.gov.nationalarchives.custodialcopy.Main.{FileDownloadInfo, IntelligentCachingInfo}
 import uk.gov.nationalarchives.custodialcopy.Message.{IoReceivedSnsMessage, ReceivedSnsMessage, SendSnsMessage}
-import uk.gov.nationalarchives.custodialcopy.Processor.ObjectStatus.{Created, Updated}
-import uk.gov.nationalarchives.custodialcopy.Processor.ObjectType.{Bitstream, Metadata}
 import uk.gov.nationalarchives.custodialcopy.Processor.Result.{Failure, Success}
 import uk.gov.nationalarchives.custodialcopy.testUtils.ExternalServicesTestUtils.*
+import uk.gov.nationalarchives.dp.client.Client.BitStreamInfo
+import uk.gov.nationalarchives.dp.client.Entities.{Entity, FullAsset, FullContentObject}
 import uk.gov.nationalarchives.dp.client.EntityClient.EntityType.*
-import uk.gov.nationalarchives.dp.client.EntityClient.IoMetadata
+import uk.gov.nationalarchives.dp.client.EntityClient.GenerationType.Original
 import uk.gov.nationalarchives.dp.client.EntityClient.RepresentationType.*
+import uk.gov.nationalarchives.dp.client.EntityClient.{CoMetadata, Generation, IoMetadata}
 import uk.gov.nationalarchives.utils.TestUtils.{DatabaseUtils, DriFile}
 
+import java.time.ZonedDateTime
 import java.util.UUID
+import scala.jdk.CollectionConverters.*
 import scala.xml.Elem
 
 class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEach {
@@ -67,8 +70,62 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
       repTypes = Nil,
       repIndexes = Nil,
       createdFileDownloadInfo = List(Nil, List(FileDownloadInfo(id, Path(s"$id/IO_Metadata_changed.xml").toNioPath.some, "destinationPath", Nil))),
-      snsMessagesToSend = List(SendSnsMessage(InformationObject, id, Metadata, Updated))
+      snsMessagesToSend = List(SendSnsMessage(id))
     )
+  }
+
+  "process" should "use the full asset response when processing an Information Object" in {
+    val utils = new ProcessorTestUtils(InformationObject, useTestPreservicaClient = true)
+    val result = utils.processor.process(utils.ioMessageResponse).unsafeRunSync()
+
+    result.isSuccess should equal(true)
+
+    val createdFilesCaptor = ArgumentCaptor.forClass(classOf[List[FileDownloadInfo]])
+    verify(utils.ocflService, times(2)).createObjects(any(), createdFilesCaptor.capture())
+    createdFilesCaptor.getAllValues.asScala.toList.flatten.map(_.destinationPath) should contain allOf (
+      s"${utils.ioId}/Preservation_1/${utils.coId}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+      s"${utils.ioId}/Preservation_1/${utils.coId}/CO_Metadata.xml",
+      "destinationPath"
+    )
+  }
+
+  "process" should "use the full asset response when processing a Content Object" in {
+    val utils = new ProcessorTestUtils(ContentObject, bitstreamUrl = "", useTestPreservicaClient = true)
+    val result = utils.processor.process(utils.coMessageResponse).unsafeRunSync()
+
+    result.isSuccess should equal(true)
+
+    val objectsCaptor = ArgumentCaptor.forClass(classOf[List[CustodialCopyObject]])
+    verify(utils.ocflService).getMissingAndChangedObjects(objectsCaptor.capture())
+    objectsCaptor.getValue.map(_.destinationFilePath) should equal(
+      List(
+        s"${utils.ioId}/Preservation_1/${utils.coId}/original/g1/90dfb573-7419-4e89-8558-6cfa29f8fb16.testExt",
+        s"${utils.ioId}/Preservation_1/${utils.coId}/CO_Metadata.xml"
+      )
+    )
+  }
+
+  "process" should "raise an error if the ref from the CO message is not in the CO bitstream list in the full asset" in {
+    val assetRef = UUID.randomUUID
+    val coRef = UUID.randomUUID
+    val asset = Entity(Some(InformationObject), assetRef, None, None, deleted = false, Some(InformationObject.entityPath))
+    val contentObject = Entity(Some(ContentObject), UUID.randomUUID, None, None, deleted = false, Some(ContentObject.entityPath), parent = Some(assetRef))
+    val ioMetadata = IoMetadata(<A></A>, Nil, Nil, Nil, Nil, Nil)
+    val coMetadata = CoMetadata(<A></A>, Nil, Nil, Nil, Nil, Nil, Nil)
+    val bitstream = BitStreamInfo("", 1, None, Nil, None, None, Generation(ZonedDateTime.now, Original, 1), coRef)
+    val fullAsset = FullAsset(
+      asset,
+      ioMetadata,
+      Seq(FullContentObject(contentObject, Seq(bitstream), coMetadata))
+    )
+    val utils = new ProcessorTestUtils(ContentObject, bitstreamUrl = "", useTestPreservicaClient = true, potentialFullAsset = Option(fullAsset))
+
+    val appender = createLogAppender()
+
+    utils.processor.process(utils.coMessageResponse).unsafeRunSync()
+
+    getLogMessages(appender).head should equal(s"Cannot find a content object with IO ref $assetRef and CO ref ${utils.coMessageResponse.message.ref}")
+
   }
 
   "process" should "retrieve the bitstream info for a CO message" in {
@@ -105,10 +162,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
           s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
         )
       ),
-      snsMessagesToSend = List(
-        SendSnsMessage(ContentObject, id, Bitstream, Created),
-        SendSnsMessage(ContentObject, id, Metadata, Created)
-      )
+      snsMessagesToSend = List(SendSnsMessage(parentRef))
     )
   }
 
@@ -159,10 +213,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
           s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
         )
       ),
-      snsMessagesToSend = List(
-        SendSnsMessage(ContentObject, id, Bitstream, Created),
-        SendSnsMessage(ContentObject, id, Metadata, Created)
-      )
+      snsMessagesToSend = List(SendSnsMessage(parentRef))
     )
   }
 
@@ -245,7 +296,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         ),
         Nil
       ),
-      snsMessagesToSend = List(SendSnsMessage(InformationObject, parentRef, Metadata, Created))
+      snsMessagesToSend = List(SendSnsMessage(parentRef))
     )
   }
 
@@ -283,10 +334,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
           s"$parentRef/Preservation_1/$id/CO_Metadata.xml"
         )
       ),
-      snsMessagesToSend = List(
-        SendSnsMessage(ContentObject, id, Bitstream, Created),
-        SendSnsMessage(ContentObject, id, Metadata, Created)
-      )
+      snsMessagesToSend = List(SendSnsMessage(parentRef))
     )
   }
 
@@ -316,7 +364,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         ) // 2nd call to 'createObjects' with changedObjectsPaths arg
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(InformationObject, id, Metadata, Updated)
+        SendSnsMessage(id)
       )
     )
   }
@@ -349,7 +397,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         List()
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(InformationObject, id, Metadata, Created)
+        SendSnsMessage(id)
       )
     )
   }
@@ -381,7 +429,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         )
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(InformationObject, changedFileId, Metadata, Updated)
+        SendSnsMessage(changedFileId)
       )
     )
   }
@@ -430,7 +478,7 @@ class ProcessorTest extends AnyFlatSpec with MockitoSugar with BeforeAndAfterEac
         )
       ),
       snsMessagesToSend = List(
-        SendSnsMessage(InformationObject, missingFileId, Metadata, Created)
+        SendSnsMessage(missingFileId)
       )
     )
   }

@@ -51,13 +51,14 @@ Once all messages are processed, we commit the changes to that OCFL object which
 #### Handling Information Object (IO) messages
 
 * Create the metadata file name `IO_Metadata.xml`
-* Get the metadata from the Preservica API
+* Get the metadata from the Preservica API. We initially try to get this from the expanded IO `GET` request. This doesn't work if there are more than 1000 COs so if it fails, we fall back to the original process. 
 * Create the destination path for this metadata file `{IO_REF}/IO_Metadata.xml`
 * Wrap all returned metadata fragments in a `<AllMetadata/>` tag
 * Calculate the checksum of this metadata string
 * Use all of this information to create a `MetadataObject`
 
 #### Handling Content Object (CO) messages
+We initially try to get the CO details from the expanded IO `GET` request. This doesn't work if there are more than 1000 COs so if it fails, we fall back to the following process.
 
 * Get the bitstream information (which contains the parent ID) from the Preservica API
 * Verify that the parent ID is present

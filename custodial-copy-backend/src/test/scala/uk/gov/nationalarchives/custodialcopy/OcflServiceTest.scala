@@ -54,6 +54,32 @@ class OcflServiceTest extends AnyFlatSpec with MockitoSugar with TableDrivenProp
     when(ocflRepository.getObject(any[ObjectVersionId])).thenReturn(objectVersion)
   }
 
+  "getMissingAndChangedObjects" should "return empty lists without querying the repository for empty input" in {
+    val ocflRepository = mock[MutableOcflRepository]
+    val service = new OcflService(ocflRepository, semaphoreMap)
+
+    service.getMissingAndChangedObjects(Nil).unsafeRunSync() should equal(OcflService.MissingAndChangedObjects(Nil, Nil))
+    verifyNoInteractions(ocflRepository)
+  }
+
+  "getMissingAndChangedObjects" should "accumulate missing and changed objects in reverse input order and omit unchanged objects" in {
+    val id = UUID.randomUUID()
+    val ocflRepository = mock[MutableOcflRepository]
+    mockGetObjectResponse(ocflRepository, id, Some(sha256.fingerprint), destinationPath)
+    val service = new OcflService(ocflRepository, semaphoreMap)
+    val unchanged = FileObject(id, name, checksums, url, destinationPath, UUID.randomUUID.toString)
+    val firstMissing = unchanged.copy(destinationFilePath = "firstMissing")
+    val secondMissing = unchanged.copy(destinationFilePath = "secondMissing")
+    val firstChanged = unchanged.copy(checksums = List(Checksum("SHA256", "firstChanged")))
+    val secondChanged = unchanged.copy(checksums = List(Checksum("SHA256", "secondChanged")))
+
+    val result = service
+      .getMissingAndChangedObjects(List(firstMissing, firstChanged, unchanged, secondMissing, secondChanged))
+      .unsafeRunSync()
+
+    result should equal(OcflService.MissingAndChangedObjects(List(secondMissing, firstMissing), List(secondChanged, firstChanged)))
+  }
+
   "getMissingAndChangedObjects" should "return 1 missing DR object and 0 changed DR objects if the repository doesn't contain the OCFL object" in {
     val id = UUID.randomUUID()
     val ocflRepository = mock[MutableOcflRepository]
