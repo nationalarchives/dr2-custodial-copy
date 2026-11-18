@@ -36,6 +36,7 @@ jobs:
           WIZ_CLI_PATH: ./wizcli
           WIZ_CLIENT_ID: ${{ secrets.WIZ_CLIENT_ID }}
           WIZ_CLIENT_SECRET: ${{ secrets.WIZ_CLIENT_SECRET }}
+          WIZ_PROJECT_ID: ${{ secrets.WIZ_PROJECT_DR2 }}
       - name: Send failure message
         run: python .github/scripts/send_message.py
         if: failure()
