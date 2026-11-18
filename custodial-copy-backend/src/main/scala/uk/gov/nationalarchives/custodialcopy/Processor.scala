@@ -168,7 +168,7 @@ class Processor(
 
       representationTypeGroup = coRepTypes.headOption
       entityMetadata = potentialMetadata match {
-        case Some(metadata) => IO(metadata)
+        case Some(metadata) => IO.pure(metadata)
         case None           => entityClient.metadataForEntity(entity)
       }
       metadataFileName = createMetadataFileName(ContentObject.entityTypeShort)
@@ -339,14 +339,14 @@ class Processor(
 
   given Encoder[SendSnsMessage] = Encoder.forProduct1("ioRef")(_.ioRef.toString)
 
-  private def objectsForFullIo(ioObject: MetadataObject, fullAsset: FullAsset): IO[List[CustodialCopyObject]] =
+  private def objectsForAsset(ioObject: MetadataObject, fullAsset: FullAsset): IO[List[CustodialCopyObject]] =
     fullAsset.contentObjects.toList
       .flatTraverse { fullCo =>
         getCoObjects(fullCo.entity, fullAsset.asset.ref, getRepTypes(fullCo.entity.ref, fullAsset), fullCo.bitstreams, fullCo.metadata.some)
       }
       .map(cos => cos :+ ioObject)
 
-  private def objectsForIo(ioObject: MetadataObject): IO[List[CustodialCopyObject]] =
+  private def objectsForAsset(ioObject: MetadataObject): IO[List[CustodialCopyObject]] =
     for {
       urlsOfRepresentations <- entityClient.getUrlsToIoRepresentations(ioObject.id, None)
       cosAndRepType <- urlsOfRepresentations.flatTraverse(getCosPerRepresentationType(ioObject.id, _))
@@ -405,10 +405,10 @@ class Processor(
         .flatTraverse { mo =>
           fullAsset match {
             case Some(asset) =>
-              objectsForFullIo(mo, asset).handleErrorWith { err =>
-                logger.error(err)(err.getMessage) >> objectsForIo(mo)
+              objectsForAsset(mo, asset).handleErrorWith { err =>
+                logger.error(err)(err.getMessage) >> objectsForAsset(mo)
               }
-            case None => objectsForIo(mo)
+            case None => objectsForAsset(mo)
           }
         }
       allMissingObjects = missingObjectsToCreate ++ missingCoObjects

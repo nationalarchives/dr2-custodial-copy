@@ -12,6 +12,10 @@ import io.ocfl.core.extension.storage.layout.config.HashedNTupleLayoutConfig
 import io.ocfl.core.lock.ObjectLockBuilder
 import io.ocfl.core.storage.OcflStorageBuilder
 import org.apache.commons.codec.digest.DigestUtils
+import org.apache.logging.log4j.LogManager
+import org.apache.logging.log4j.core.{LogEvent, LoggerContext}
+import org.apache.logging.log4j.core.appender.AbstractAppender
+import org.apache.logging.log4j.core.config.Property
 import org.h2.jdbcx.JdbcDataSource
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doReturn, spy, times, verify, when}
@@ -56,6 +60,7 @@ import java.nio.file.{Files, Path, Paths}
 import java.time.ZonedDateTime
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration.Duration
 import scala.jdk.CollectionConverters.ListHasAsScala
 import scala.util.{Failure, Success, Try}
@@ -456,7 +461,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       bitstreamUrl: String = "url",
       cacheDir: Boolean = false,
       fileChecksum: String = "fileChecksum",
-      useTestPreservicaClient: Boolean = false
+      useTestPreservicaClient: Boolean = false,
+      potentialFullAsset: Option[FullAsset] = None
   ) {
     val downloadDir: String = Files.createTempDirectory("downloads").toString
     val workDir: String = Files.createTempDirectory("work").toString
@@ -594,7 +600,8 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
       )
     }
 
-    val testPreservicaClient: Option[TestPreservicaClient] = Option.when(useTestPreservicaClient)(new TestPreservicaClient(fullAsset))
+    val testPreservicaClient: Option[TestPreservicaClient] =
+      Option.when(useTestPreservicaClient)(new TestPreservicaClient(potentialFullAsset.getOrElse(fullAsset)))
     val entityClient: EntityClient[IO, Fs2Streams[IO]] = testPreservicaClient.getOrElse {
       mockPreservicaClient(ioId, coId, bitstreamInfo1 = Seq(bitstreamFromApi), urlsToRepresentations = urlsToRepresentations)
     }
@@ -865,6 +872,36 @@ object ExternalServicesTestUtils extends MockitoSugar with EitherValues {
         xmlRequestsToValidate.map(trim)
       )
     }
+  }
+
+  class CapturingAppender extends AbstractAppender("processor-test-appender", null, null, true, Property.EMPTY_ARRAY) {
+    val messages: ListBuffer[String] = ListBuffer.empty[String]
+
+    override def append(event: LogEvent): Unit = messages += event.getMessage.getFormattedMessage
+  }
+
+  def createLogAppender(): CapturingAppender = {
+    val context = LogManager.getContext(false).asInstanceOf[LoggerContext]
+    val rootLogger = context.getConfiguration.getRootLogger
+
+    val appender = new CapturingAppender
+
+    appender.start()
+    rootLogger.addAppender(appender, null, null)
+    context.updateLoggers()
+    appender
+  }
+
+  def getLogMessages(appender: CapturingAppender): List[String] = {
+    val context = LogManager.getContext(false).asInstanceOf[LoggerContext]
+    val rootLogger = context.getConfiguration.getRootLogger
+    val messages = appender.messages.toList
+
+    rootLogger.removeAppender(appender.getName)
+    appender.stop()
+    context.updateLoggers()
+
+    messages
   }
 
   class TestProcessor(config: Config, sqsClient: DASQSClient[IO], fn: MessageResponse[ReceivedSnsMessage] => IO[Result])

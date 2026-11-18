@@ -25,7 +25,7 @@ class TestPreservicaClient(fullAsset: FullAsset) extends EntityClient[IO, Fs2Str
 
   override def metadataForEntity(entity: Entity): IO[EntityMetadata] = IO.stub
   override def bitstreamForAsset(entityRef: UUID): IO[Seq[BitStreamInfo]] = IO.stub
-  override def getBitstreamInfo(contentRef: UUID): IO[Seq[BitStreamInfo]] = IO.stub
+  override def getBitstreamInfo(contentRef: UUID): IO[Seq[BitStreamInfo]] = IO.pure(Nil)
   override def getEntity(entityRef: UUID, entityType: EntityType): IO[Entity] = IO.stub
   override def getEntityIdentifiers(entity: Entity): IO[Seq[IdentifierResponse]] = IO.stub
   override def getUrlsToIoRepresentations(ioEntityRef: UUID, representationType: Option[RepresentationType]): IO[Seq[String]] = IO.stub
